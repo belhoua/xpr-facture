@@ -10,5 +10,58 @@
     "retry": "Retry",
     "save": "Save",
     "cancel": "Cancel"
+  },
+  "validation": {
+    "required": "This field is required",
+    "email": "Invalid email address",
+    "passwordMin": "Password must be at least 8 characters",
+    "tooLong": "This text is too long"
+  },
+  "auth": {
+    "common": {
+      "email": "Email address",
+      "password": "Password",
+      "submitting": "Submitting…"
+    },
+    "login": {
+      "title": "Sign in",
+      "description": "Access your invoicing workspace",
+      "remember": "Keep me signed in",
+      "forgot": "Forgot password?",
+      "submit": "Sign in",
+      "noAccount": "No account yet?"
+    },
+    "register": {
+      "title": "Create an account",
+      "description": "Your account and your company in a single step",
+      "name": "Full name",
+      "companyName": "Company legal name",
+      "legalForm": "Legal form",
+      "legalFormPlaceholder": "Choose a legal form",
+      "autoEntrepreneurTitle": "Auto-entrepreneur regime",
+      "autoEntrepreneurHint": "The \"VAT not applicable\" notice will be enabled automatically on your documents. You can change it later in settings.",
+      "submit": "Create my account",
+      "hasAccount": "Already have an account?"
+    },
+    "forgot": {
+      "title": "Forgot password",
+      "description": "Receive a reset link by email",
+      "submit": "Send the link",
+      "sent": "If an account exists for this address, a reset email has just been sent.",
+      "backToLogin": "Back to sign in"
+    },
+    "legalForms": {
+      "auto_entrepreneur": "Auto-entrepreneur",
+      "sarl": "SARL",
+      "sarl_au": "Single-member SARL",
+      "sa": "SA",
+      "sas": "SAS",
+      "snc": "SNC",
+      "cooperative": "Cooperative"
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "placeholder": "Welcome! Invoicing modules arrive with Phase 1."
   }
 }

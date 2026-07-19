@@ -127,4 +127,15 @@
   html {
     @apply font-sans;
   }
+
+  /* Typographie (CLAUDE.md §11) : Inter en latin, IBM Plex Sans Arabic en
+     arabe. Les variables --font-inter / --font-plex-arabic sont posées par
+     next/font dans app/[locale]/layout.tsx ; le thème lit --font-sans. */
+  :root {
+    --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  }
+  [dir="rtl"] {
+    --font-sans: var(--font-plex-arabic), var(--font-inter), ui-sans-serif,
+      system-ui, sans-serif;
+  }
 }

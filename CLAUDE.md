@@ -283,3 +283,19 @@ Contraintes de production :
 - Ne réécris jamais un fichier existant sans me montrer le diff.
 - Si tu hésites entre deux approches : présente-les avec le compromis, recommande-en une, laisse-moi trancher.
 - **Interdits** : mock, données factices en dehors des seeders/factories, `any`, `@ts-ignore`, code commenté laissé en place, dépendance ajoutée sans justification.
+
+---
+
+## 13. COMMANDES UTILISATEUR
+
+### `/goal` — tableau de bord d'avancement
+
+À chaque fois que l'utilisateur tape la commande `/goal`, tu dois interrompre tes
+tâches en cours pour afficher un tableau de bord d'avancement clair sous cette forme :
+
+- **[Objectif actuel]** : Ce sur quoi on travaille.
+- **[Complété]** : Les fonctionnalités validées et commitées.
+- **[En cours]** : Ce qui est en train d'être écrit.
+- **[Reste à faire]** : Les prochaines étapes de la phase.
+
+Après l'affichage, reprendre la tâche interrompue là où elle en était.

@@ -10,5 +10,58 @@
     "retry": "Réessayer",
     "save": "Enregistrer",
     "cancel": "Annuler"
+  },
+  "validation": {
+    "required": "Ce champ est obligatoire",
+    "email": "Adresse e-mail invalide",
+    "passwordMin": "Le mot de passe doit contenir au moins 8 caractères",
+    "tooLong": "Ce texte est trop long"
+  },
+  "auth": {
+    "common": {
+      "email": "Adresse e-mail",
+      "password": "Mot de passe",
+      "submitting": "Envoi en cours…"
+    },
+    "login": {
+      "title": "Connexion",
+      "description": "Accédez à votre espace de facturation",
+      "remember": "Rester connecté",
+      "forgot": "Mot de passe oublié ?",
+      "submit": "Se connecter",
+      "noAccount": "Pas encore de compte ?"
+    },
+    "register": {
+      "title": "Créer un compte",
+      "description": "Votre compte et votre société en une seule étape",
+      "name": "Nom complet",
+      "companyName": "Raison sociale de la société",
+      "legalForm": "Forme juridique",
+      "legalFormPlaceholder": "Choisir une forme juridique",
+      "autoEntrepreneurTitle": "Régime auto-entrepreneur",
+      "autoEntrepreneurHint": "La mention « TVA non applicable » sera activée automatiquement sur vos documents. Vous pourrez la modifier dans les paramètres.",
+      "submit": "Créer mon compte",
+      "hasAccount": "Déjà un compte ?"
+    },
+    "forgot": {
+      "title": "Mot de passe oublié",
+      "description": "Recevez un lien de réinitialisation par e-mail",
+      "submit": "Envoyer le lien",
+      "sent": "Si un compte existe pour cette adresse, un e-mail de réinitialisation vient d'être envoyé.",
+      "backToLogin": "Retour à la connexion"
+    },
+    "legalForms": {
+      "auto_entrepreneur": "Auto-entrepreneur",
+      "sarl": "SARL",
+      "sarl_au": "SARL à associé unique",
+      "sa": "SA",
+      "sas": "SAS",
+      "snc": "SNC",
+      "cooperative": "Coopérative"
+    }
+  },
+  "dashboard": {
+    "title": "Tableau de bord",
+    "placeholder": "Bienvenue ! Les modules de facturation arrivent avec la Phase 1."
   }
 }
