@@ -54,6 +54,10 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    // URL du SPA Next.js : cible des redirections (vérification e-mail) et
+    // des liens dans les notifications (réinitialisation de mot de passe)
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

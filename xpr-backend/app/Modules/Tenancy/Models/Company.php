@@ -18,6 +18,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  *
  * @property string $id uuid v7
  * @property string $legal_name
+ * @property string|null $trade_name
+ * @property string $legal_form
+ * @property string|null $ice
+ * @property bool $vat_exempt
+ * @property string $default_currency
+ * @property string $country
+ * @property string $timezone
  */
 final class Company extends Model
 {

@@ -7,28 +7,38 @@ namespace App\Modules\Authentication\Models;
 use App\Modules\Tenancy\Models\Company;
 use App\Modules\Tenancy\Models\CompanyUser;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Contracts\Translation\HasLocalePreference;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\Permission\Traits\HasRoles;
 
 /**
  * Compte global : un utilisateur peut appartenir à N sociétés (cabinets
  * comptables). Tout ce qui est tenant passe par la relation companies().
  *
  * @property string $id uuid v7
+ * @property string $name
+ * @property string $email
+ * @property string $locale
+ * @property Carbon|null $email_verified_at
+ * @property Carbon|null $created_at
  * @property string|null $default_company_id
  */
-final class User extends Authenticatable
+final class User extends Authenticatable implements HasLocalePreference, MustVerifyEmail
 {
     use HasApiTokens;
 
     /** @use HasFactory<UserFactory> */
     use HasFactory;
 
+    use HasRoles;
     use HasUuids;
     use Notifiable;
     use SoftDeletes;
@@ -58,6 +68,12 @@ final class User extends Authenticatable
     protected static function newFactory(): UserFactory
     {
         return UserFactory::new();
+    }
+
+    /** Notifications (reset, vérification) envoyées dans la langue du compte. */
+    public function preferredLocale(): string
+    {
+        return $this->locale;
     }
 
     /** @return BelongsToMany<Company, $this, CompanyUser> */
