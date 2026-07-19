@@ -1,0 +1,6 @@
+# Racine monorepo — chaque dépôt a aussi son .gitignore propre
+.DS_Store
+*.log
+.idea/
+.vscode/
+xpr-infrastructure/.env

@@ -1,0 +1,14 @@
+{
+  "app": {
+    "name": "XPR Invoice",
+    "tagline": "Compliant, fast, Moroccan invoicing"
+  },
+  "common": {
+    "loading": "Loading…",
+    "empty": "No items",
+    "error": "Something went wrong",
+    "retry": "Retry",
+    "save": "Save",
+    "cancel": "Cancel"
+  }
+}

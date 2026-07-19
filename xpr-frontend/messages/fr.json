@@ -1,0 +1,14 @@
+{
+  "app": {
+    "name": "XPR Facture",
+    "tagline": "Facturation conforme, rapide, marocaine"
+  },
+  "common": {
+    "loading": "Chargement…",
+    "empty": "Aucun élément",
+    "error": "Une erreur est survenue",
+    "retry": "Réessayer",
+    "save": "Enregistrer",
+    "cancel": "Annuler"
+  }
+}

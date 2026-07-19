@@ -1,0 +1,11 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    # Type $this dans les closures Pest (beforeEach, it) vers le TestCase lié
+    - vendor/pestphp/pest/extension.neon
+
+parameters:
+    level: 8
+    paths:
+        - app
+        - database
+        - tests
