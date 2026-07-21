@@ -12,8 +12,10 @@ use Illuminate\Support\Facades\Route;
 // Chargées par CashServiceProvider. Le front appelle `/cash/movements`
 // (cf. features/cash/api/cash.ts) ; `/cash` est conservé comme alias de lecture.
 //
-// Le binding implicite {movement} traverse le scope BelongsToCompany : un
-// mouvement d'une autre société renvoie 404 (§5).
+// {movement} est un simple paramètre de route, PAS un binding de modèle : le
+// contrôleur résout le mouvement sous le scope tenant, sans quoi
+// SubstituteBindings — qui s'exécute avant 'tenant' — le résoudrait hors
+// société (§5).
 Route::middleware(['api', 'auth:sanctum', 'tenant'])
     ->prefix('api/v1')
     ->group(function (): void {

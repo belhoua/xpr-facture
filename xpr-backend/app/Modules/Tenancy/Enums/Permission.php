@@ -23,6 +23,12 @@ enum Permission: string
     /** Annuler une facture VALIDÉE : acte fiscal, plus sensible qu'une édition. */
     case InvoicesCancel = 'invoices.cancel';
 
+    case PartnersView = 'partners.view';
+    case PartnersCreate = 'partners.create';
+    case PartnersUpdate = 'partners.update';
+    /** Archivage d'un tiers : il disparaît des listes sans perdre son historique. */
+    case PartnersDelete = 'partners.delete';
+
     case CashView = 'cash.view';
     case CashManage = 'cash.manage';
 

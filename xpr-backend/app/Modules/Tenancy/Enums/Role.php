@@ -48,6 +48,10 @@ enum Role: string
 
             self::Accountant => [
                 Permission::DashboardView,
+                Permission::PartnersView,
+                Permission::PartnersCreate,
+                Permission::PartnersUpdate,
+                Permission::PartnersDelete,
                 Permission::InvoicesView,
                 Permission::InvoicesCreate,
                 Permission::InvoicesUpdate,
@@ -65,6 +69,9 @@ enum Role: string
             // relèvent du comptable ou de la direction.
             self::Sales => [
                 Permission::DashboardView,
+                Permission::PartnersView,
+                Permission::PartnersCreate,
+                Permission::PartnersUpdate,
                 Permission::InvoicesView,
                 Permission::InvoicesCreate,
                 Permission::InvoicesUpdate,
@@ -77,6 +84,7 @@ enum Role: string
 
             self::Viewer => [
                 Permission::DashboardView,
+                Permission::PartnersView,
                 Permission::InvoicesView,
                 Permission::CashView,
                 Permission::UsersView,

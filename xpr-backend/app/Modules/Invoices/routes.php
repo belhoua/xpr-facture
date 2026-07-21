@@ -15,8 +15,11 @@ use Illuminate\Support\Facades\Route;
 // 'tenant' se place APRÈS 'auth:sanctum' : il résout la société depuis
 // l'utilisateur authentifié et arme le scope Eloquent + la RLS (§5).
 //
-// Le binding implicite {invoice} traverse le scope BelongsToCompany : une
-// facture d'une autre société renvoie 404 sans jamais atteindre le contrôleur.
+// {invoice} est un simple paramètre de route, PAS un binding de modèle : le
+// contrôleur reçoit l'identifiant et résout la facture lui-même. C'est
+// indispensable — SubstituteBindings s'exécute avant 'tenant', donc un binding
+// implicite résoudrait le modèle hors scope et exposerait la facture d'autrui.
+// Verrouillé par tests/Feature/Tenancy/RouteBindingScopeTest.php.
 // Chaque route porte sa permission, y compris en LECTURE (§10) : le middleware
 // 'permission' vient après 'tenant', qui a posé le périmètre Spatie.
 Route::middleware(['api', 'auth:sanctum', 'tenant'])
