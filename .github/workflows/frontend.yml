@@ -1,0 +1,47 @@
+name: Frontend
+
+# P0-05. Bloquant sur PR (§10). Vitest et Playwright relèvent de P0-18 et ne
+# sont pas encore installés : ils s'ajouteront ici à ce moment-là, pas avant —
+# une étape qui n'exécute rien donne une fausse assurance.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'xpr-frontend/**'
+      - '.github/workflows/frontend.yml'
+
+defaults:
+  run:
+    working-directory: xpr-frontend
+
+jobs:
+  quality:
+    name: ESLint · TypeScript
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: xpr-frontend/package-lock.json
+
+      # `npm ci` et non `npm install` : installe EXACTEMENT le lockfile et
+      # échoue s'il diverge de package.json, au lieu de le réécrire en silence.
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Lint
+        run: npx eslint .
+
+      # Le typage est une garantie du produit, pas une aide d'éditeur :
+      # `strict` + `noUncheckedIndexedAccess`, zéro `any` (§6).
+      - name: Vérifier les types
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build

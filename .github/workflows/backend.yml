@@ -1,0 +1,101 @@
+name: Backend
+
+# P0-05. Bloquant sur PR : lint, analyse statique et tests doivent passer
+# avant toute fusion (§10).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'xpr-backend/**'
+      - '.github/workflows/backend.yml'
+
+defaults:
+  run:
+    working-directory: xpr-backend
+
+jobs:
+  quality:
+    name: Pint · PHPStan · Pest
+    runs-on: ubuntu-latest
+
+    services:
+      # PostgreSQL RÉEL, jamais SQLite : le schéma repose sur des types et des
+      # fonctionnalités propres à PostgreSQL — uuid_generate_v7(), jsonb,
+      # contraintes d'exclusion GiST, Row Level Security. Tester ailleurs ne
+      # testerait pas le produit.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: xpr_test
+          POSTGRES_USER: xpr_owner
+          POSTGRES_PASSWORD: secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U xpr_owner -d xpr_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          # Mêmes extensions que xpr-infrastructure/docker/php/Dockerfile :
+          # la CI doit échouer là où le conteneur échouerait, pas ailleurs.
+          extensions: pdo_pgsql, intl, bcmath, zip, gd, pcntl, redis
+          # pcov et non xdebug : bien plus rapide pour de la seule couverture.
+          coverage: pcov
+          ini-values: memory_limit=512M
+
+      - name: Cache des dépendances Composer
+        uses: actions/cache@v4
+        with:
+          path: xpr-backend/vendor
+          key: composer-${{ hashFiles('xpr-backend/composer.lock') }}
+          restore-keys: composer-
+
+      - name: Installer les dépendances
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Préparer l'environnement
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      # Les hôtes de .env.example sont des noms de service Compose ; en CI les
+      # services sont publiés sur localhost. phpunit.xml surcharge la connexion
+      # de test, ces variables couvrent le reste (cache, sessions, queue).
+      - name: Vérifier le style (Pint, PSR-12)
+        run: ./vendor/bin/pint --test
+
+      - name: Analyse statique (PHPStan niveau 8)
+        run: ./vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
+      - name: Tests (Pest)
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: xpr_test
+          DB_USERNAME: xpr_owner
+          DB_PASSWORD: secret
+          REDIS_HOST: 127.0.0.1
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+        # Seuil du DoD §9.9. Mesuré à 94,3 % au moment de brancher la CI : la
+        # marge est réelle, le seuil n'est pas taillé pour l'état du jour.
+        run: php artisan test --coverage --min=80
