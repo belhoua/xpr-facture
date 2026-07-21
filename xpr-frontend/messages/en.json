@@ -270,7 +270,10 @@
       "amount": "Total incl. tax",
       "currency": "Currency",
       "submit": "Save invoice",
-      "submitting": "Saving…"
+      "submitting": "Saving…",
+      "partner": "Customer",
+      "partnerPlaceholder": "Pick a customer…",
+      "walkInClient": "Walk-in customer (free text)"
     },
     "actions": {
       "open": "Open actions",

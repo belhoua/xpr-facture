@@ -21,6 +21,8 @@ final class InvoiceResource extends JsonResource
         return [
             'id' => $this->id,
             'number' => $this->number,
+            'partnerId' => $this->partner_id,
+            // Nom FIGÉ à l'émission : il ne suit pas un renommage du tiers.
             'clientName' => $this->client_name,
             'issuedAt' => $this->issued_at?->toDateString(),
             'dueAt' => $this->due_at?->toDateString(),

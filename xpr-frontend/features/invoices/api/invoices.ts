@@ -38,7 +38,8 @@ export async function fetchInvoices(
  * deviennent des centimes entiers — aucun flottant ne circule au-delà (§7).
  */
 export interface InvoicePayload {
-  clientName: string;
+  partnerId: string | null;
+  clientName: string | null;
   issuedAt: string | null;
   dueAt: string | null;
   status: Invoice["status"];
@@ -47,8 +48,13 @@ export interface InvoicePayload {
 }
 
 export function toInvoicePayload(values: InvoiceFormValues): InvoicePayload {
+  const partnerId = values.partnerId === "" ? null : values.partnerId;
+
   return {
-    clientName: values.clientName.trim(),
+    partnerId,
+    // Avec un tiers, le nom vient du serveur (sa raison sociale) : on n'envoie
+    // pas une saisie résiduelle du formulaire, qui prendrait le pas.
+    clientName: partnerId === null ? values.clientName.trim() : null,
     issuedAt: values.issuedAt === "" ? null : values.issuedAt,
     dueAt: values.dueAt === "" ? null : values.dueAt,
     status: values.status,

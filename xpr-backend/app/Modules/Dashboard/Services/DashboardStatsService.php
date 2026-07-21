@@ -29,7 +29,7 @@ final class DashboardStatsService
      *     cashBalanceCents: int,
      *     cashInflowCents: int,
      *     cashOutflowCents: int,
-     *     topClients: list<array{name: string, totalCents: int, invoiceCount: int}>
+     *     topClients: list<array{name: string, partnerId: ?string, totalCents: int, invoiceCount: int}>
      * }
      */
     public function forPeriod(string $period): array
@@ -125,28 +125,44 @@ final class DashboardStatsService
     /**
      * Cinq premiers clients par chiffre d'affaires de la période.
      *
-     * Regroupé sur `client_name` faute de mieux : la facture ne porte pas
-     * encore de `partner_id`, ce lien viendra avec le moteur de documents. Deux
-     * orthographes du même client comptent donc pour deux — limite assumée et
-     * visible, plutôt qu'un chiffre faussement précis.
+     * Regroupé sur le TIERS quand la facture en porte un : le classement est
+     * alors exact, y compris si le client a été renommé entre deux factures —
+     * chaque document ayant figé le nom qu'il portait à l'émission (§3).
+     *
+     * Les factures sans tiers (clients de passage, données antérieures au
+     * rattachement) retombent sur leur `client_name`. Le préfixe de la clé
+     * évite qu'un nom libre ne fusionne par accident avec une fiche homonyme.
+     *
+     * `partnerId` est renvoyé pour que l'interface puisse pointer vers la fiche
+     * — null quand la ligne vient d'un nom libre.
      *
      * @param  Collection<int, Invoice>  $invoices
-     * @return list<array{name: string, totalCents: int, invoiceCount: int}>
+     * @return list<array{name: string, partnerId: ?string, totalCents: int, invoiceCount: int}>
      */
     private function topClients(Collection $invoices): array
     {
         $ranked = $invoices
-            ->groupBy('client_name')
-            ->map(fn (Collection $rows, string $name): array => [
-                'name' => $name,
-                'totalCents' => (int) $rows->sum('total_cents'),
-                'invoiceCount' => $rows->count(),
-            ])
+            ->groupBy(fn (Invoice $invoice): string => $invoice->partner_id !== null
+                ? 'p:'.$invoice->partner_id
+                : 'n:'.$invoice->client_name)
+            ->map(function (Collection $rows): array {
+                /** @var Invoice $first */
+                $first = $rows->first();
+
+                return [
+                    // Le nom vient du document, pas de la fiche : c'est celui
+                    // qui figure sur les factures agrégées.
+                    'name' => $first->client_name,
+                    'partnerId' => $first->partner_id,
+                    'totalCents' => (int) $rows->sum('total_cents'),
+                    'invoiceCount' => $rows->count(),
+                ];
+            })
             ->sortByDesc('totalCents')
             ->take(5)
             ->all();
 
-        // array_values garantit la `list` annoncée : groupBy indexe par nom.
+        // array_values garantit la `list` annoncée : groupBy indexe par clé.
         return array_values($ranked);
     }
 

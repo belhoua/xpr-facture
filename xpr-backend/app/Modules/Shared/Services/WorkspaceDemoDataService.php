@@ -75,25 +75,14 @@ final class WorkspaceDemoDataService
         $invoices = [
             ['client_name' => 'Société Immobilière Anfa', 'issued_at' => $this->daysAgo(60), 'due_at' => $today->copy()->subDays(30), 'status' => 'cancelled', 'total_cents' => 15000000],
             ['client_name' => 'Boulangerie Al Fath', 'issued_at' => $this->daysAgo(45), 'due_at' => $today->copy()->subDays(15), 'status' => 'paid', 'total_cents' => 980000],
-            ['client_name' => 'Atlas Distribution SARL', 'issued_at' => $this->daysAgo(25), 'due_at' => $today->copy()->subDays(5), 'status' => 'overdue', 'total_cents' => 4580000],
+            ['client_name' => 'Atlas Distribution S.A.R.L.', 'issued_at' => $this->daysAgo(25), 'due_at' => $today->copy()->subDays(5), 'status' => 'overdue', 'total_cents' => 4580000],
             ['client_name' => 'Café Maure', 'issued_at' => $this->daysAgo(18), 'due_at' => $today->copy()->addDays(12), 'status' => 'sent', 'total_cents' => 1250000],
-            ['client_name' => 'TechMaroc SARL', 'issued_at' => $this->daysAgo(12), 'due_at' => $today->copy()->subDays(2), 'status' => 'partial', 'total_cents' => 8900000],
+            ['client_name' => 'TechMaroc Solutions', 'issued_at' => $this->daysAgo(12), 'due_at' => $today->copy()->subDays(2), 'status' => 'partial', 'total_cents' => 8900000],
             ['client_name' => 'Riad Azur', 'issued_at' => $this->daysAgo(8), 'due_at' => $today->copy()->addDays(22), 'status' => 'paid', 'total_cents' => 3200000],
         ];
 
-        // Émises dans l'ordre chronologique : un numéro plus élevé correspond à
-        // une émission plus tardive, ce qu'un contrôle fiscal attend.
-        foreach ($invoices as $row) {
-            Invoice::create([
-                ...$row,
-                'number' => $this->numbers->allocate(DocumentType::Invoice, $row['issued_at']),
-                'currency' => $currency,
-            ]);
-        }
-
-        // Répertoire des tiers. Les raisons sociales reprennent celles des
-        // factures ci-dessus : le rattachement document ↔ tiers arrivera avec
-        // le moteur de documents, la cohérence des noms le prépare.
+        // Répertoire des tiers, créé AVANT les factures : chacune s'y rattache
+        // par `partner_id`, et fige la raison sociale correspondante.
         $partners = [
             ['type' => 'client', 'legal_name' => 'Société Immobilière Anfa', 'city' => 'Casablanca', 'terms' => 45],
             ['type' => 'client', 'legal_name' => 'Boulangerie Al Fath', 'city' => 'Fès', 'terms' => 0],
@@ -107,8 +96,10 @@ final class WorkspaceDemoDataService
             ['type' => 'both', 'legal_name' => 'Consulting RH Maghreb', 'city' => 'Casablanca', 'terms' => 60],
         ];
 
+        $partnersByName = [];
+
         foreach ($partners as $index => $row) {
-            Partner::create([
+            $partnersByName[$row['legal_name']] = Partner::create([
                 'type' => $row['type'],
                 'legal_name' => $row['legal_name'],
                 'city' => $row['city'],
@@ -116,6 +107,20 @@ final class WorkspaceDemoDataService
                 // ICE fictif mais valide (15 chiffres) et unique par société.
                 'ice' => str_pad((string) (100000000000 + $index), 15, '0', STR_PAD_LEFT),
                 'payment_terms_days' => $row['terms'],
+                'currency' => $currency,
+            ]);
+        }
+
+        // Émises dans l'ordre chronologique : un numéro plus élevé correspond à
+        // une émission plus tardive, ce qu'un contrôle fiscal attend.
+        foreach ($invoices as $row) {
+            Invoice::create([
+                ...$row,
+                // Le nom DOIT exister dans le répertoire construit juste au
+                // dessus : une divergence est un bug du jeu de données, pas un
+                // cas métier — on préfère l'exception au rattachement muet.
+                'partner_id' => $partnersByName[$row['client_name']]->id,
+                'number' => $this->numbers->allocate(DocumentType::Invoice, $row['issued_at']),
                 'currency' => $currency,
             ]);
         }

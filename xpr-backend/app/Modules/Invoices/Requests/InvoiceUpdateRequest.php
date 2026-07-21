@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Invoices\Requests;
 
+use App\Modules\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -26,7 +27,16 @@ final class InvoiceUpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'clientName' => ['required', 'string', 'min:2', 'max:255'],
+            // Mêmes règles qu'à la création : le tiers doit appartenir à la
+            // société active, et le nom n'est requis qu'en l'absence de tiers.
+            'partnerId' => [
+                'nullable',
+                'uuid',
+                Rule::exists('partners', 'id')
+                    ->where('company_id', app(TenantContext::class)->requireId())
+                    ->whereNull('deleted_at'),
+            ],
+            'clientName' => ['required_without:partnerId', 'nullable', 'string', 'min:2', 'max:255'],
             'issuedAt' => ['nullable', 'date'],
             'dueAt' => ['nullable', 'date', 'after_or_equal:issuedAt'],
             'status' => ['required', Rule::in(['draft', 'sent', 'partial', 'paid', 'overdue'])],

@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { applyProblemToForm } from "@/features/auth/hooks/use-auth";
+import { fetchPartners, partnerKeys } from "@/features/partners/api/partners";
 import { createInvoice, invoiceKeys, updateInvoice } from "@/features/invoices/api/invoices";
 import {
   INVOICE_FORM_STATUSES,
@@ -36,11 +37,15 @@ import {
 
 const CURRENCIES = ["MAD", "EUR", "USD"] as const;
 
+/** Valeur sentinelle du select : Radix refuse une SelectItem de valeur vide. */
+const WALK_IN = "__walk_in__";
+
 /** Champs mappables depuis une erreur de validation serveur (RFC 9457). */
-const SERVER_FIELDS = ["clientName", "issuedAt", "dueAt", "status", "currency"] as const;
+const SERVER_FIELDS = ["partnerId", "clientName", "issuedAt", "dueAt", "status", "currency"] as const;
 
 function emptyValues(): InvoiceFormValues {
   return {
+    partnerId: "",
     clientName: "",
     issuedAt: "",
     dueAt: "",
@@ -53,6 +58,7 @@ function emptyValues(): InvoiceFormValues {
 /** Pré-remplit le formulaire depuis une facture existante (mode édition). */
 function valuesFromInvoice(invoice: Invoice): InvoiceFormValues {
   return {
+    partnerId: invoice.partnerId ?? "",
     clientName: invoice.clientName,
     issuedAt: invoice.issuedAt ?? "",
     dueAt: invoice.dueAt ?? "",
@@ -89,6 +95,16 @@ export function InvoiceFormDialog({
   const queryClient = useQueryClient();
   const isEdit = Boolean(invoice);
 
+  // Répertoire des clients pour le sélecteur. `enabled: open` : on ne charge
+  // pas le répertoire tant que la boîte de dialogue est fermée.
+  const { data: partners } = useQuery({
+    queryKey: partnerKeys.list({ type: "client" }),
+    queryFn: () => fetchPartners({ type: "client" }),
+    enabled: open,
+  });
+
+  const clients = partners?.data ?? [];
+
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceFormSchema),
     defaultValues: emptyValues(),
@@ -116,6 +132,7 @@ export function InvoiceFormDialog({
     },
   });
 
+  const selectedPartnerId = form.watch("partnerId");
   const errors = form.formState.errors;
   const fieldError = (message?: string): string | undefined =>
     message?.startsWith("validation.") ? tRoot(message) : message;
@@ -144,17 +161,57 @@ export function InvoiceFormDialog({
             )}
 
             <Field>
-              <FieldLabel htmlFor="invoice-client">
-                {t("form.clientName")}
+              <FieldLabel htmlFor="invoice-partner">
+                {t("form.partner")}
               </FieldLabel>
-              <Input
-                id="invoice-client"
-                placeholder={t("form.clientPlaceholder")}
-                aria-invalid={Boolean(errors.clientName)}
-                {...form.register("clientName")}
+              <Controller
+                control={form.control}
+                name="partnerId"
+                render={({ field }) => (
+                  <Select
+                    value={field.value === "" ? WALK_IN : field.value}
+                    onValueChange={(value) =>
+                      field.onChange(value === WALK_IN ? "" : value)
+                    }
+                  >
+                    <SelectTrigger id="invoice-partner">
+                      <SelectValue placeholder={t("form.partnerPlaceholder")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {/* Radix interdit une SelectItem de valeur "" : on utilise
+                          une sentinelle, retraduite en "" à la sélection. */}
+                      <SelectItem value={WALK_IN}>
+                        {t("form.walkInClient")}
+                      </SelectItem>
+                      {clients.map((partner) => (
+                        <SelectItem key={partner.id} value={partner.id}>
+                          {partner.legalName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               />
-              <FieldError>{fieldError(errors.clientName?.message)}</FieldError>
+              <FieldError>{fieldError(errors.partnerId?.message)}</FieldError>
             </Field>
+
+            {/* Nom libre affiché UNIQUEMENT pour un client de passage : avec un
+                tiers, le serveur fige sa raison sociale et la saisie n'aurait
+                aucun effet — un champ inopérant induit en erreur. */}
+            {selectedPartnerId === "" && (
+              <Field>
+                <FieldLabel htmlFor="invoice-client">
+                  {t("form.clientName")}
+                </FieldLabel>
+                <Input
+                  id="invoice-client"
+                  placeholder={t("form.clientPlaceholder")}
+                  aria-invalid={Boolean(errors.clientName)}
+                  {...form.register("clientName")}
+                />
+                <FieldError>{fieldError(errors.clientName?.message)}</FieldError>
+              </Field>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>

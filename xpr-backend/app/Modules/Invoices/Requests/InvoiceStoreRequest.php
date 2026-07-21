@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Invoices\Requests;
 
+use App\Modules\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -26,7 +27,19 @@ final class InvoiceStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'clientName' => ['required', 'string', 'min:2', 'max:255'],
+            // Le tiers doit appartenir à la SOCIÉTÉ ACTIVE : sans ce filtre,
+            // un identifiant deviné rattacherait la facture au client d'une
+            // autre société (§5.3). Le company_id vient du contexte tenant.
+            'partnerId' => [
+                'nullable',
+                'uuid',
+                Rule::exists('partners', 'id')
+                    ->where('company_id', app(TenantContext::class)->requireId())
+                    ->whereNull('deleted_at'),
+            ],
+            // Requis seulement en l'absence de tiers : quand un tiers est
+            // choisi, le service recopie sa raison sociale sur le document.
+            'clientName' => ['required_without:partnerId', 'nullable', 'string', 'min:2', 'max:255'],
             'issuedAt' => ['nullable', 'date'],
             'dueAt' => ['nullable', 'date', 'after_or_equal:issuedAt'],
             'status' => ['required', Rule::in(['draft', 'sent', 'partial', 'paid', 'overdue'])],

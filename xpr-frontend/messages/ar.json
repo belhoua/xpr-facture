@@ -270,7 +270,10 @@
       "amount": "المبلغ شامل الضريبة",
       "currency": "العملة",
       "submit": "حفظ الفاتورة",
-      "submitting": "جارٍ الحفظ…"
+      "submitting": "جارٍ الحفظ…",
+      "partner": "العميل",
+      "partnerPlaceholder": "اختر عميلاً…",
+      "walkInClient": "عميل عابر (اسم حر)"
     },
     "actions": {
       "open": "فتح الإجراءات",

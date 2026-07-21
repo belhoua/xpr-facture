@@ -10,6 +10,9 @@ export const invoiceSchema = z.object({
   id: z.uuid(),
   /** Numéro attribué à la VALIDATION uniquement — nul tant que brouillon (§3). */
   number: z.string().nullable(),
+  /** Tiers rattaché, nul pour un client de passage. */
+  partnerId: z.uuid().nullable(),
+  /** Nom FIGÉ à l'émission : il ne suit pas un renommage du tiers (§3). */
   clientName: z.string(),
   issuedAt: z.iso.date().nullable(),
   dueAt: z.iso.date().nullable(),
@@ -63,7 +66,12 @@ export function isInvoiceCancellable(invoice: Invoice): boolean {
  */
 export const invoiceFormSchema = z
   .object({
-    clientName: z.string().trim().min(2, "validation.clientName").max(255),
+    /**
+     * "" = client de passage, non répertorié. Le select ne peut pas porter une
+     * valeur nulle, d'où la chaîne vide plutôt qu'un null.
+     */
+    partnerId: z.string(),
+    clientName: z.string().trim().max(255),
     issuedAt: z.string(),
     dueAt: z.string(),
     status: z.enum(INVOICE_FORM_STATUSES),
@@ -79,6 +87,13 @@ export const invoiceFormSchema = z
       values.dueAt === "" ||
       values.dueAt >= values.issuedAt,
     { path: ["dueAt"], message: "validation.dueBeforeIssued" },
+  )
+  // Le nom n'est exigé QUE sans tiers : avec un tiers, le serveur recopie sa
+  // raison sociale et le champ est masqué. Miroir de `required_without` côté
+  // FormRequest.
+  .refine(
+    (values) => values.partnerId !== "" || values.clientName.trim().length >= 2,
+    { path: ["clientName"], message: "validation.clientName" },
   );
 
 export type InvoiceFormValues = z.infer<typeof invoiceFormSchema>;

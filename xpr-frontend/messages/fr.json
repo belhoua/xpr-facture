@@ -270,7 +270,10 @@
       "amount": "Montant TTC",
       "currency": "Devise",
       "submit": "Enregistrer la facture",
-      "submitting": "Enregistrement…"
+      "submitting": "Enregistrement…",
+      "partner": "Client",
+      "partnerPlaceholder": "Choisir un client…",
+      "walkInClient": "Client de passage (nom libre)"
     },
     "actions": {
       "open": "Ouvrir les actions",

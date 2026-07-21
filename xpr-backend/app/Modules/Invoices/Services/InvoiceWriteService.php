@@ -7,6 +7,7 @@ namespace App\Modules\Invoices\Services;
 use App\Modules\Accounting\Enums\DocumentType;
 use App\Modules\Accounting\Services\DocumentNumberService;
 use App\Modules\Invoices\Models\Invoice;
+use App\Modules\Partners\Models\Partner;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -29,7 +30,7 @@ final class InvoiceWriteService
     public function __construct(private readonly DocumentNumberService $numbers) {}
 
     /**
-     * @param  array{clientName: string, issuedAt: ?string, dueAt: ?string, status: string, totalCents: int, currency: string}  $data
+     * @param  array{clientName?: string, partnerId?: ?string, issuedAt: ?string, dueAt: ?string, status: string, totalCents: int, currency: string}  $data
      */
     public function create(array $data): Invoice
     {
@@ -50,7 +51,7 @@ final class InvoiceWriteService
     }
 
     /**
-     * @param  array{clientName: string, issuedAt: ?string, dueAt: ?string, status: string, totalCents: int, currency: string}  $data
+     * @param  array{clientName?: string, partnerId?: ?string, issuedAt: ?string, dueAt: ?string, status: string, totalCents: int, currency: string}  $data
      */
     public function update(Invoice $invoice, array $data): Invoice
     {
@@ -140,18 +141,49 @@ final class InvoiceWriteService
     /**
      * Traduit le payload camelCase de l'API vers les colonnes snake_case.
      *
-     * @param  array{clientName: string, issuedAt: ?string, dueAt: ?string, status: string, totalCents: int, currency: string}  $data
+     * @param  array{clientName?: string, partnerId?: ?string, issuedAt: ?string, dueAt: ?string, status: string, totalCents: int, currency: string}  $data
      * @return array<string, mixed>
      */
     private function toColumns(array $data): array
     {
+        $partnerId = $data['partnerId'] ?? null;
+
         return [
-            'client_name' => $data['clientName'],
+            'partner_id' => $partnerId,
+            'client_name' => $this->resolveClientName($data, $partnerId),
             'issued_at' => $data['issuedAt'],
             'due_at' => $data['dueAt'],
             'status' => $data['status'],
             'total_cents' => $data['totalCents'],
             'currency' => strtoupper($data['currency']),
         ];
+    }
+
+    /**
+     * Nom du client À FIGER sur le document.
+     *
+     * Quand un tiers est choisi, c'est SA raison sociale qui est recopiée, et
+     * non son enseigne : le document commercial engage l'entité légale. Cette
+     * copie est délibérée — le nom ne doit plus bouger ensuite, même si la
+     * fiche du tiers est renommée (§3, immuabilité). Un nom saisi à la main
+     * reste accepté pour les clients de passage, non répertoriés.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function resolveClientName(array $data, ?string $partnerId): string
+    {
+        if ($partnerId !== null) {
+            // Le scope tenant s'applique : un tiers d'une autre société est
+            // introuvable, et la validation du FormRequest l'a déjà écarté.
+            $partner = Partner::query()->find($partnerId);
+
+            if ($partner instanceof Partner) {
+                return $partner->legal_name;
+            }
+        }
+
+        $name = $data['clientName'] ?? null;
+
+        return is_string($name) ? $name : '';
     }
 }

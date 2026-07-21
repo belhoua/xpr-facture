@@ -171,15 +171,15 @@ final class DemoSeeder extends Seeder
         // ── 2. Créer les utilisateurs et les rattacher à la société principale ─
         $this->createTeam($companyMain);
 
-        // ── 3. Factures pour Al Maghrib (société principale) ───────────────
-        $this->seedInvoices($companyMain->id);
-
-        // ── 4. Quelques factures pour AtlasTech (société secondaire) ──────
-        $this->seedInvoices($companySecond->id, 5);
-
-        // ── 4bis. Répertoire des tiers ────────────────────────────────────
+        // ── 3. Répertoire des tiers — AVANT les factures, qui s'y rattachent
         $this->seedPartners($companyMain->id, 18);
         $this->seedPartners($companySecond->id, 6);
+
+        // ── 4. Factures pour Al Maghrib (société principale) ───────────────
+        $this->seedInvoices($companyMain->id);
+
+        // ── 4bis. Quelques factures pour AtlasTech (société secondaire) ────
+        $this->seedInvoices($companySecond->id, 5);
 
         // ── 5. Mouvements de caisse pour Al Maghrib ───────────────────────
         $this->seedCashMovements($companyMain->id, 25);
@@ -544,11 +544,55 @@ final class DemoSeeder extends Seeder
             ? $factory->$status()->make()->toArray()
             : $factory->make()->toArray();
 
+        $partner = $this->pickClient($companyId);
+
         return array_merge($attrs, [
             'company_id' => $companyId,
+            'partner_id' => $partner['id'] ?? null,
+            // Nom FIGÉ depuis la raison sociale du tiers : c'est ce que fait
+            // InvoiceWriteService en production. Sans cette copie, la démo
+            // afficherait un nom sans rapport avec le tiers rattaché.
+            'client_name' => $partner['legal_name'] ?? $attrs['client_name'],
             'created_at' => $now,
             'updated_at' => $now,
         ]);
+    }
+
+    /**
+     * Un client au hasard parmi ceux de la société, pour rattacher une facture.
+     *
+     * Les fiches sont mises en cache par société : le seeder construit des
+     * dizaines de lignes et relire la table à chaque facture serait inutilement
+     * bavard. Retourne null si le répertoire est vide — la facture garde alors
+     * le nom libre de la factory.
+     *
+     * @var array<string, list<array{id: string, legal_name: string}>>
+     */
+    private array $clientCache = [];
+
+    /** @return array{id: string, legal_name: string}|null */
+    private function pickClient(string $companyId): ?array
+    {
+        if (! isset($this->clientCache[$companyId])) {
+            $rows = DB::table('partners')
+                ->where('company_id', $companyId)
+                ->whereNull('deleted_at')
+                ->whereIn('type', ['client', 'both'])
+                ->get(['id', 'legal_name']);
+
+            // array_values : `Collection::values()->all()` ne suffit pas à
+            // convaincre l'analyse statique qu'on obtient bien une `list`.
+            $this->clientCache[$companyId] = array_values($rows
+                ->map(fn (object $row): array => [
+                    'id' => (string) $row->id,
+                    'legal_name' => (string) $row->legal_name,
+                ])
+                ->all());
+        }
+
+        $clients = $this->clientCache[$companyId];
+
+        return $clients === [] ? null : $clients[array_rand($clients)];
     }
 
     /**
