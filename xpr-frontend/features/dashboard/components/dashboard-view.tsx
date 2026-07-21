@@ -3,8 +3,10 @@
 import {
   AlertCircle,
   BarChart3,
+  Coins,
   Plus,
   TrendingUp,
+  Users,
   Wallet,
 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
@@ -25,8 +27,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { RevenueChart } from "@/features/dashboard/components/revenue-chart";
 import { StatusBreakdownChart } from "@/features/dashboard/components/status-breakdown-chart";
+import { TopClientsChart } from "@/features/dashboard/components/top-clients-chart";
 import { useDashboardStats } from "@/features/dashboard/hooks/use-dashboard-stats";
-import { formatMoney, formatPercent } from "@/lib/format";
+import { formatMoney, formatNumber, formatPercent } from "@/lib/format";
 import { toApiProblem } from "@/lib/api/client";
 
 const PERIODS = ["last7", "last30", "last90", "year"] as const;
@@ -117,7 +120,7 @@ export function DashboardView() {
     <>
       {header}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
           label={t("kpi.revenue")}
           icon={TrendingUp}
@@ -158,6 +161,32 @@ export function DashboardView() {
           // Sur « en retard », une hausse est une mauvaise nouvelle.
           invertTrendColor
         />
+        <StatCard
+          label={t("kpi.activeClients")}
+          icon={Users}
+          loading={isPending}
+          // Un COMPTE, pas un montant : formatNumber, sans symbole monétaire.
+          value={data ? formatNumber(data.activeClients, locale) : "—"}
+          hint={
+            data
+              ? t("kpi.activeClientsHint", { count: data.activeSuppliers })
+              : undefined
+          }
+        />
+        <StatCard
+          label={t("kpi.cashBalance")}
+          icon={Coins}
+          loading={isPending}
+          value={data ? formatMoney(data.cashBalanceCents, locale) : "—"}
+          hint={
+            data
+              ? t("kpi.cashBalanceHint", {
+                  inflow: formatMoney(data.cashInflowCents, locale),
+                  outflow: formatMoney(data.cashOutflowCents, locale),
+                })
+              : undefined
+          }
+        />
       </div>
 
       <div className="mt-3 grid gap-3 lg:grid-cols-[1.6fr_1fr]">
@@ -171,6 +200,14 @@ export function DashboardView() {
             <RevenueChart data={data.revenueSeries} />
             <StatusBreakdownChart data={data.statusBreakdown} />
           </>
+        )}
+      </div>
+
+      <div className="mt-3">
+        {isPending || !data ? (
+          <Skeleton className="h-[360px] rounded-lg" />
+        ) : (
+          <TopClientsChart data={data.topClients} />
         )}
       </div>
     </>

@@ -34,7 +34,7 @@ export function StatusBreakdownChart({
   const locale = useLocale();
 
   return (
-    <div className="bg-card ring-border rounded-lg p-4 ring-1">
+    <div className="bg-card ring-border min-w-0 overflow-hidden rounded-lg p-4 ring-1">
       <div className="mb-4">
         <h2 className="font-heading text-sm font-medium">{t("title")}</h2>
         <p className="text-muted-foreground mt-0.5 text-xs">

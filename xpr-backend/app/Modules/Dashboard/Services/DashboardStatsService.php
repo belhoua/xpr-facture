@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Modules\Cash\Models\CashMovement;
 use App\Modules\Invoices\Models\Invoice;
+use App\Modules\Partners\Enums\PartnerType;
+use App\Modules\Partners\Models\Partner;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -20,7 +23,13 @@ final class DashboardStatsService
      *     overdueCents: int,
      *     overdueCount: int,
      *     revenueSeries: list<array{month: string, invoicedCents: int, collectedCents: int}>,
-     *     statusBreakdown: list<array{status: string, count: int, totalCents: int}>
+     *     statusBreakdown: list<array{status: string, count: int, totalCents: int}>,
+     *     activeClients: int,
+     *     activeSuppliers: int,
+     *     cashBalanceCents: int,
+     *     cashInflowCents: int,
+     *     cashOutflowCents: int,
+     *     topClients: list<array{name: string, totalCents: int, invoiceCount: int}>
      * }
      */
     public function forPeriod(string $period): array
@@ -69,7 +78,76 @@ final class DashboardStatsService
             'overdueCount' => $overdueCount,
             'revenueSeries' => $this->revenueSeries($invoices, $from, $to),
             'statusBreakdown' => $this->statusBreakdown($invoices),
+            // Le répertoire n'est PAS borné à la période : « clients actifs »
+            // désigne l'état courant du portefeuille, pas ceux qui ont facturé
+            // sur les 30 derniers jours.
+            'activeClients' => $this->countActive(PartnerType::Client),
+            'activeSuppliers' => $this->countActive(PartnerType::Supplier),
+            ...$this->cashFlow($from, $to),
+            'topClients' => $this->topClients($invoices),
         ];
+    }
+
+    /**
+     * Tiers actifs par rôle commercial. `ofType` fait remonter les fiches
+     * `both` dans les deux comptes : un tiers à la fois client et fournisseur
+     * est bien l'un ET l'autre, le compter une seule fois fausserait les deux.
+     */
+    private function countActive(PartnerType $type): int
+    {
+        return Partner::query()
+            ->ofType($type)
+            ->where('is_active', true)
+            ->count();
+    }
+
+    /**
+     * Trésorerie de la période. Mêmes bornes que le chiffre d'affaires pour que
+     * les deux cartes du dashboard parlent du même intervalle.
+     *
+     * @return array{cashBalanceCents: int, cashInflowCents: int, cashOutflowCents: int}
+     */
+    private function cashFlow(Carbon $from, Carbon $to): array
+    {
+        $movements = CashMovement::query()
+            ->whereBetween('occurred_at', [$from->toDateString(), $to->toDateString()])
+            ->get();
+
+        return [
+            'cashBalanceCents' => (int) $movements->sum('amount_cents'),
+            'cashInflowCents' => (int) $movements->where('amount_cents', '>', 0)->sum('amount_cents'),
+            // Valeur ABSOLUE : l'interface affiche « sorties » comme une
+            // grandeur positive, le signe est porté par le libellé.
+            'cashOutflowCents' => (int) abs((int) $movements->where('amount_cents', '<', 0)->sum('amount_cents')),
+        ];
+    }
+
+    /**
+     * Cinq premiers clients par chiffre d'affaires de la période.
+     *
+     * Regroupé sur `client_name` faute de mieux : la facture ne porte pas
+     * encore de `partner_id`, ce lien viendra avec le moteur de documents. Deux
+     * orthographes du même client comptent donc pour deux — limite assumée et
+     * visible, plutôt qu'un chiffre faussement précis.
+     *
+     * @param  Collection<int, Invoice>  $invoices
+     * @return list<array{name: string, totalCents: int, invoiceCount: int}>
+     */
+    private function topClients(Collection $invoices): array
+    {
+        $ranked = $invoices
+            ->groupBy('client_name')
+            ->map(fn (Collection $rows, string $name): array => [
+                'name' => $name,
+                'totalCents' => (int) $rows->sum('total_cents'),
+                'invoiceCount' => $rows->count(),
+            ])
+            ->sortByDesc('totalCents')
+            ->take(5)
+            ->all();
+
+        // array_values garantit la `list` annoncée : groupBy indexe par nom.
+        return array_values($ranked);
     }
 
     /**

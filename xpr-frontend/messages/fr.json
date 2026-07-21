@@ -205,7 +205,11 @@
       "paid": "Encaissé",
       "outstanding": "Restant dû",
       "overdue": "En retard",
-      "overdueHint": "{count} factures concernées"
+      "overdueHint": "{count} factures concernées",
+      "activeClients": "Clients actifs",
+      "activeClientsHint": "{count} fournisseur(s)",
+      "cashBalance": "Solde caisse",
+      "cashBalanceHint": "{inflow} entrées · {outflow} sorties"
     },
     "revenueChart": {
       "title": "Évolution du chiffre d'affaires",
@@ -223,6 +227,16 @@
     "empty": {
       "title": "Aucune donnée à afficher",
       "description": "Vos statistiques apparaîtront dès votre première facture validée."
+    },
+    "topClients": {
+      "title": "Top clients",
+      "description": "Chiffre d'affaires par client sur la période",
+      "tooltipLabel": "Chiffre d'affaires",
+      "invoiceCount": "{count} facture(s)",
+      "empty": {
+        "title": "Aucun client facturé",
+        "description": "Le classement apparaîtra dès la première facture émise."
+      }
     }
   },
   "invoices": {

@@ -27,6 +27,17 @@ export const statusBreakdownSchema = z.object({
   totalCents: centsSchema,
 });
 
+/**
+ * Un client du classement. `name` vient de `invoices.client_name`, encore un
+ * texte libre : deux orthographes du même client comptent pour deux lignes.
+ * Le regroupement deviendra exact quand la facture portera un `partnerId`.
+ */
+export const topClientSchema = z.object({
+  name: z.string(),
+  totalCents: centsSchema,
+  invoiceCount: z.int().nonnegative(),
+});
+
 export const dashboardStatsSchema = z.object({
   currency: z.string().length(3),
   revenueCents: centsSchema,
@@ -38,8 +49,24 @@ export const dashboardStatsSchema = z.object({
   overdueCount: z.int().nonnegative(),
   revenueSeries: z.array(revenuePointSchema),
   statusBreakdown: z.array(statusBreakdownSchema),
+
+  /**
+   * Portefeuille de tiers — état COURANT, non borné par la période : « clients
+   * actifs » désigne le répertoire, pas ceux qui ont facturé ce mois-ci.
+   * Une fiche à la fois client et fournisseur compte dans les deux.
+   */
+  activeClients: z.int().nonnegative(),
+  activeSuppliers: z.int().nonnegative(),
+
+  /** Trésorerie de la période. Les sorties sont une grandeur POSITIVE. */
+  cashBalanceCents: centsSchema,
+  cashInflowCents: centsSchema,
+  cashOutflowCents: centsSchema,
+
+  topClients: z.array(topClientSchema),
 });
 
 export type RevenuePoint = z.infer<typeof revenuePointSchema>;
 export type StatusBreakdown = z.infer<typeof statusBreakdownSchema>;
+export type TopClient = z.infer<typeof topClientSchema>;
 export type DashboardStats = z.infer<typeof dashboardStatsSchema>;

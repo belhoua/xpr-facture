@@ -205,7 +205,11 @@
       "paid": "المحصّل",
       "outstanding": "الباقي المستحق",
       "overdue": "المتأخرات",
-      "overdueHint": "{count} فواتير معنية"
+      "overdueHint": "{count} فواتير معنية",
+      "activeClients": "العملاء النشطون",
+      "activeClientsHint": "{count} مورّد",
+      "cashBalance": "رصيد الصندوق",
+      "cashBalanceHint": "{inflow} مداخيل · {outflow} مصاريف"
     },
     "revenueChart": {
       "title": "تطور رقم المعاملات",
@@ -223,6 +227,16 @@
     "empty": {
       "title": "لا توجد بيانات للعرض",
       "description": "ستظهر إحصائياتك بمجرد المصادقة على أول فاتورة."
+    },
+    "topClients": {
+      "title": "أبرز العملاء",
+      "description": "رقم المعاملات حسب العميل خلال الفترة",
+      "tooltipLabel": "رقم المعاملات",
+      "invoiceCount": "{count} فاتورة",
+      "empty": {
+        "title": "لا يوجد عميل مفوتر",
+        "description": "سيظهر الترتيب بمجرد إصدار أول فاتورة."
+      }
     }
   },
   "invoices": {

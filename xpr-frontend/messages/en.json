@@ -205,7 +205,11 @@
       "paid": "Collected",
       "outstanding": "Outstanding",
       "overdue": "Overdue",
-      "overdueHint": "{count} invoices affected"
+      "overdueHint": "{count} invoices affected",
+      "activeClients": "Active customers",
+      "activeClientsHint": "{count} supplier(s)",
+      "cashBalance": "Cash balance",
+      "cashBalanceHint": "{inflow} in · {outflow} out"
     },
     "revenueChart": {
       "title": "Revenue over time",
@@ -223,6 +227,16 @@
     "empty": {
       "title": "Nothing to display yet",
       "description": "Your statistics will appear as soon as you validate your first invoice."
+    },
+    "topClients": {
+      "title": "Top customers",
+      "description": "Revenue per customer over the period",
+      "tooltipLabel": "Revenue",
+      "invoiceCount": "{count} invoice(s)",
+      "empty": {
+        "title": "No customer invoiced yet",
+        "description": "The ranking appears with your first issued invoice."
+      }
     }
   },
   "invoices": {
