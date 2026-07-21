@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Tenancy\Services;
 
 use App\Modules\Tenancy\Exceptions\TenantContextMissing;
+use App\Modules\Tenancy\Models\Company;
+use Closure;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -46,6 +48,47 @@ final class TenantContext
         return $this->companyId;
     }
 
+    /**
+     * Exécute un traitement dans le contexte d'une société, puis restaure le
+     * contexte précédent.
+     *
+     * Nécessaire aux initialisations qui surviennent AVANT que le middleware
+     * n'ait activé une société — le provisioning à l'inscription, notamment :
+     * sans `app.company_id`, la RLS refuse les INSERT au rôle `xpr_app` et le
+     * trait BelongsToCompany lève TenantContextMissing.
+     *
+     * Ne touche pas à `app.user_id` : l'auteur de l'action reste le même.
+     *
+     * @template TReturn
+     *
+     * @param  Closure(): TReturn  $callback
+     * @return TReturn
+     */
+    public function runForCompany(string $companyId, Closure $callback): mixed
+    {
+        $previous = $this->companyId;
+        $this->activateCompany($companyId);
+
+        try {
+            return $callback();
+        } finally {
+            $previous === null
+                ? $this->releaseCompany()
+                : $this->activateCompany($previous);
+        }
+    }
+
+    /**
+     * Chaîne vide et NON NULL : les policies RLS lisent la GUC via
+     * NULLIF(current_setting(...), '')::uuid — un `''::uuid` casserait
+     * toute requête ultérieure de la connexion.
+     */
+    private function releaseCompany(): void
+    {
+        $this->companyId = null;
+        DB::statement("SELECT set_config('app.company_id', '', false)");
+    }
+
     /** Consommé par l'audit (P0-12) : qui agit, indépendamment de la société. */
     public function currentUserId(): ?string
     {
@@ -55,6 +98,11 @@ final class TenantContext
     public function requireId(): string
     {
         return $this->companyId ?? throw new TenantContextMissing;
+    }
+
+    public function requireCompany(): Company
+    {
+        return Company::query()->findOrFail($this->requireId());
     }
 
     /**

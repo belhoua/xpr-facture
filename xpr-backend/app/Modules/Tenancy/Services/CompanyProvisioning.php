@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Tenancy\Services;
 
 use App\Modules\Authentication\Models\User;
+use App\Modules\Shared\Services\WorkspaceDemoDataService;
 use App\Modules\Tenancy\Enums\LegalForm;
 use App\Modules\Tenancy\Models\Company;
 use Spatie\Permission\PermissionRegistrar;
@@ -20,7 +21,10 @@ use Spatie\Permission\PermissionRegistrar;
  */
 final class CompanyProvisioning
 {
-    public function __construct(private readonly PermissionRegistrar $permissions) {}
+    public function __construct(
+        private readonly PermissionRegistrar $permissions,
+        private readonly WorkspaceDemoDataService $demoData,
+    ) {}
 
     public function createFirstCompanyFor(User $user, string $legalName, LegalForm $legalForm): Company
     {
@@ -30,6 +34,12 @@ final class CompanyProvisioning
             // Règle métier : AE sous régime forfaitaire → TVA non applicable
             'vat_exempt' => $legalForm->defaultVatExempt(),
         ]);
+
+        // Recharge les colonnes dont la valeur par défaut est posée par
+        // PostgreSQL (default_currency = 'MAD', timezone) : l'instance issue
+        // de create() ne les connaît pas, et un consommateur qui lirait
+        // default_currency récupérerait null.
+        $company->refresh();
 
         $user->companies()->attach($company->id, ['joined_at' => now()]);
 
@@ -45,6 +55,8 @@ final class CompanyProvisioning
         }
 
         $user->forceFill(['default_company_id' => $company->id])->save();
+
+        $this->demoData->seedForCompany($company);
 
         return $company;
     }
