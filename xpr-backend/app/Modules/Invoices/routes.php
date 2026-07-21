@@ -7,6 +7,7 @@ use App\Modules\Invoices\Controllers\InvoiceDeleteController;
 use App\Modules\Invoices\Controllers\InvoiceListController;
 use App\Modules\Invoices\Controllers\InvoiceStoreController;
 use App\Modules\Invoices\Controllers\InvoiceUpdateController;
+use App\Modules\Tenancy\Enums\Permission;
 use Illuminate\Support\Facades\Route;
 
 // Chargées par InvoicesServiceProvider. Le groupe 'api' apporte statefulApi
@@ -16,13 +17,22 @@ use Illuminate\Support\Facades\Route;
 //
 // Le binding implicite {invoice} traverse le scope BelongsToCompany : une
 // facture d'une autre société renvoie 404 sans jamais atteindre le contrôleur.
+// Chaque route porte sa permission, y compris en LECTURE (§10) : le middleware
+// 'permission' vient après 'tenant', qui a posé le périmètre Spatie.
 Route::middleware(['api', 'auth:sanctum', 'tenant'])
     ->prefix('api/v1')
     ->group(function (): void {
-        Route::get('invoices', InvoiceListController::class);
-        Route::post('invoices', InvoiceStoreController::class);
-        Route::patch('invoices/{invoice}', InvoiceUpdateController::class);
-        Route::delete('invoices/{invoice}', InvoiceDeleteController::class);
+        Route::get('invoices', InvoiceListController::class)
+            ->middleware('permission:'.Permission::InvoicesView->value);
+        Route::post('invoices', InvoiceStoreController::class)
+            ->middleware('permission:'.Permission::InvoicesCreate->value);
+        Route::patch('invoices/{invoice}', InvoiceUpdateController::class)
+            ->middleware('permission:'.Permission::InvoicesUpdate->value);
+        Route::delete('invoices/{invoice}', InvoiceDeleteController::class)
+            ->middleware('permission:'.Permission::InvoicesDelete->value);
         // Annulation = seul changement d'état permis sur une facture validée (§3).
-        Route::post('invoices/{invoice}/cancel', InvoiceCancelController::class);
+        // Acte fiscal : permission distincte de la simple édition, le rôle
+        // `sales` ne l'a pas.
+        Route::post('invoices/{invoice}/cancel', InvoiceCancelController::class)
+            ->middleware('permission:'.Permission::InvoicesCancel->value);
     });

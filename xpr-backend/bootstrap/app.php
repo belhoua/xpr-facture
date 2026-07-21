@@ -7,6 +7,8 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Spatie\Permission\Middleware\PermissionMiddleware;
+use Spatie\Permission\Middleware\RoleMiddleware;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -25,8 +27,14 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // 'tenant' se place après auth:sanctum sur toute route métier :
         // il résout la société active et arme le scope Eloquent + la RLS.
+        //
+        // 'permission' se place APRÈS 'tenant' : le registre Spatie ignore quel
+        // périmètre interroger tant que SetTenantContext n'a pas posé le
+        // company_id, et refuserait alors tout le monde.
         $middleware->alias([
             'tenant' => SetTenantContext::class,
+            'permission' => PermissionMiddleware::class,
+            'role' => RoleMiddleware::class,
         ]);
 
         // Backend d'API pur : aucune page de login à servir. Sans ceci, une
