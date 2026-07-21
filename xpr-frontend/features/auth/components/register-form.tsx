@@ -69,7 +69,9 @@ export function RegisterForm() {
         // La langue au moment de la soumission (le switch FR/AR peut avoir changé)
         locale: locale as RegisterValues["locale"],
       });
-      router.push("/dashboard");
+      // Le compte est créé, mais le parcours ne s'arrête pas là : l'utilisateur
+      // choisit son pack avant d'accéder à l'application.
+      router.push("/subscribe");
     } catch (error) {
       applyProblemToForm(error, form.setError, [
         "name",

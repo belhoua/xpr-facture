@@ -1,12 +1,6 @@
-import { redirect } from "@/lib/i18n/navigation";
+import { LandingPage } from "@/features/marketing/components/landing-page";
 
-/** Racine : pas d'accueil public en Phase 0, on va directement à la connexion. */
-export default async function HomePage({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}) {
-  const { locale } = await params;
-
-  redirect({ href: "/login", locale });
+/** Racine publique : vitrine commerciale de XPR Facture (hero, features, prix). */
+export default function HomePage() {
+  return <LandingPage />;
 }
