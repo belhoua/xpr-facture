@@ -351,7 +351,9 @@ php artisan test --coverage --min=80                # seuil DoD §9.9
 Frontend : `http://localhost:3000` · API : `http://localhost:8080` · Mailpit : `http://localhost:8025` · MinIO console : `http://localhost:9001`.
 
 ### État de l'outillage (à ne pas supposer présent)
-Non encore installés malgré la charte : **CI GitHub Actions (P0-05)**, **Rector**, **Scramble/OpenAPI (P0-15)**, **Prettier**, **Vitest**, **Playwright (P0-18)**. Les installer relève des tâches P0 correspondantes, pas d'un ajout opportuniste.
+Non encore installés malgré la charte : **Rector**, **Scramble/OpenAPI (P0-15)**, **Prettier**, **Vitest**, **Playwright (P0-18)**. Les installer relève des tâches P0 correspondantes, pas d'un ajout opportuniste.
+
+La **CI GitHub Actions est en place** (`.github/workflows/`) : backend (Pint, PHPStan 8, Pest `--min=80`) et frontend (ESLint, `tsc`, build). Elle tourne sur PostgreSQL 16 en service, jamais SQLite.
 
 ---
 
@@ -366,7 +368,23 @@ app/Modules/<Domaine>/
   routes.php            → chargé par le ServiceProvider du module
 ```
 
-Modules existants : `Authentication`, `Tenancy`, `Shared` (transverse : `Concerns/`, `Database/`, `Exceptions/`, `Http/Middleware/`).
+Modules existants : `Authentication`, `Tenancy`, `Accounting`, `Partners`, `Invoices`, `Cash`, `Dashboard`, `AdminNotes`, `Shared` (transverse : `Concerns/`, `Database/`, `Exceptions/`, `Http/Middleware/`, `Services/`).
+
+`Accounting` n'a ni routes ni ServiceProvider : il ne porte aucun endpoint, seulement les référentiels comptables (exercices, séquences, taux de TVA) et `DocumentNumberService`. Un module n'a pas besoin de provider tant qu'il n'expose rien.
+
+### Numérotation des documents (règle fiscale la plus stricte du dépôt)
+`Accounting/Services/DocumentNumberService::allocate()` est le **seul** point d'attribution d'un numéro. À respecter :
+- l'appeler **dans la transaction** qui valide le document — il refuse d'opérer hors transaction, le verrou de ligne n'y tiendrait pas ;
+- le compteur vit dans `sequences`, **jamais** une `SEQUENCE` PostgreSQL (non-transactionnelle : un rollback laisserait un trou définitif) ;
+- la clé `(company_id, document_type, fiscal_year_id)` implémente la **remise à zéro annuelle** ;
+- le millésime affiché vient de l'**exercice**, pas de la date du jour (exercices décalés) ;
+- `invoices` porte un index unique partiel sur `(company_id, number)` : le doublon est impossible, pas seulement improbable.
+
+### RBAC (mode teams Spatie)
+Les rôles sont globaux, **attribués par société**. `SetTenantContext` pose `setPermissionsTeamId($companyId)` — sans quoi le registre interroge le périmètre `null` et refuse tout le monde ; son `terminate()` le remet à `null` (singleton réutilisé entre requêtes). La matrice fait autorité dans `Tenancy/Enums/Role`, consommée par `RoleSeeder` (`syncPermissions`, qui retire aussi les droits supprimés) et par les routes. **Chaque route porte sa permission, lecture comprise.**
+
+### Résolution des modèles tenant
+`SubstituteBindings` s'exécute **avant** le middleware `tenant` : un binding implicite (`Invoice $invoice`) résoudrait le modèle hors scope et exposerait la donnée d'une autre société. Les contrôleurs reçoivent donc un `string` et résolvent eux-mêmes sous le scope. Verrouillé par `tests/Feature/Tenancy/RouteBindingScopeTest.php`.
 
 Pour créer un module : un `<Domaine>ServiceProvider` qui fait `loadRoutesFrom(__DIR__.'/../routes.php')` (et déclare ses `RateLimiter`), enregistré dans `bootstrap/providers.php`. Les routes sont préfixées `api/v1/<domaine>` dans le fichier du module — `routes/api.php` reste quasi vide.
 
