@@ -122,15 +122,17 @@ Route → Middleware (auth, tenant, throttle)
       → FormRequest (validation)
       → Controller (orchestration, zéro logique métier)
       → Action / Service (logique métier, transaction DB)
-      → Repository (accès données via Interface)
       → Model (Eloquent, relations, scopes, casts)
       → Resource (sérialisation JSON)
       → Event → Listener → Job / Notification (asynchrone)
 ```
 
+Le code est découpé **par domaine métier**, pas par couche technique :
+`app/Modules/<Domaine>/{Controllers,DTO,Events,Models,Requests,Resources,Services,routes.php}`
+
 Règles :
 - Un **Controller** ne dépasse pas ~30 lignes par méthode et n'appelle jamais un Model directement.
-- Chaque **Repository** a une **Interface** liée dans un ServiceProvider (testabilité, substituabilité).
+- **Repository seulement quand il se justifie** : requête métier complexe, source de données externe, ou besoin réel de substitution. Un Repository qui ne fait qu'envelopper Eloquent est une couche morte — le module `Authentication` appelle Eloquent depuis son Service, et c'est assumé.
 - Les **DTO** sont des classes `readonly` typées, construites depuis les FormRequest.
 - Les **Policies** couvrent chaque action ; combinées à Spatie Permission pour les permissions granulaires.
 - Toute opération multi-tables passe par `DB::transaction()`.
@@ -156,6 +158,25 @@ Règles :
 - État serveur = TanStack Query. État UI global = Zustand. Jamais l'inverse.
 - Optimistic updates sur toutes les mutations de listes.
 - Gestion systématique des 4 états : loading (skeleton), empty, error, success.
+
+### Frontend — périmètre applicatif validé
+
+Parcours public : `/` → `register` → choix du pack (MAD) → paiement simulé →
+écran « Vos identifiants ont été envoyés par e-mail ».
+
+Espace client (`(app)/`), derrière l'AppShell :
+
+| Route | Écran | Phase |
+|---|---|---|
+| `/dashboard` | KPI + graphiques (CA, payées/impayées) | 1 |
+| `/invoices` | liste + filtres | 1 |
+| `/cash` | caisses, suivi des flux | 2 |
+| `/users` | collaborateurs + invitation | 0 (P0-10) |
+| `/admin-notes` | notes/tickets aux administrateurs | 3 |
+
+Les écrans se construisent **sur les primitives de P0-16** (AppShell, DataTable,
+StatusBadge, EmptyState, Skeleton). Aucune donnée factice : tant qu'un endpoint
+n'existe pas, l'écran affiche son état vide ou son état d'erreur.
 
 ---
 
@@ -299,3 +320,81 @@ tâches en cours pour afficher un tableau de bord d'avancement clair sous cette 
 - **[Reste à faire]** : Les prochaines étapes de la phase.
 
 Après l'affichage, reprendre la tâche interrompue là où elle en était.
+
+---
+
+## 14. COMMANDES
+
+Toutes depuis la **racine du monorepo** (cf. `Makefile`).
+
+| But | Commande |
+|---|---|
+| Démarrer l'infra (PG, Redis, Nginx, PHP, Horizon, Mailpit, MinIO, Gotenberg) | `make up` |
+| Arrêter / logs / état | `make down` · `make logs` · `make ps` |
+| Migrations | `make migrate` |
+| Rebuild base + seeders (**dev uniquement**) | `make fresh` |
+| Tests backend (Pest) | `make back-test` |
+| Lint backend (Pint, PSR-12) | `make back-lint` |
+| Analyse statique (PHPStan niveau 8 + Larastan) | `make back-analyse` |
+| Frontend dev (tourne **sur l'hôte**, pas en conteneur) | `make front-dev` |
+| Lint + types frontend | `make front-lint` |
+
+Granularité fine (depuis `xpr-backend/`) :
+
+```bash
+php artisan test --filter=TenantIsolation          # un fichier / un test
+php artisan test tests/Feature/Authentication       # un dossier
+php artisan test --coverage --min=80                # seuil DoD §9.9
+./vendor/bin/pint --test                            # vérifie sans corriger
+```
+
+Frontend : `http://localhost:3000` · API : `http://localhost:8080` · Mailpit : `http://localhost:8025` · MinIO console : `http://localhost:9001`.
+
+### État de l'outillage (à ne pas supposer présent)
+Non encore installés malgré la charte : **CI GitHub Actions (P0-05)**, **Rector**, **Scramble/OpenAPI (P0-15)**, **Prettier**, **Vitest**, **Playwright (P0-18)**. Les installer relève des tâches P0 correspondantes, pas d'un ajout opportuniste.
+
+---
+
+## 15. ARCHITECTURE RÉELLE DU CODE
+
+### Backend — monolithe modulaire par domaine
+Le découpage **n'est pas par couche technique mais par module métier** :
+
+```
+app/Modules/<Domaine>/
+  Controllers/ DTO/ Events/ Models/ Providers/ Requests/ Resources/ Services/
+  routes.php            → chargé par le ServiceProvider du module
+```
+
+Modules existants : `Authentication`, `Tenancy`, `Shared` (transverse : `Concerns/`, `Database/`, `Exceptions/`, `Http/Middleware/`).
+
+Pour créer un module : un `<Domaine>ServiceProvider` qui fait `loadRoutesFrom(__DIR__.'/../routes.php')` (et déclare ses `RateLimiter`), enregistré dans `bootstrap/providers.php`. Les routes sont préfixées `api/v1/<domaine>` dans le fichier du module — `routes/api.php` reste quasi vide.
+
+### La chaîne multi-tenant (le point le plus délicat du dépôt)
+Quatre pièces qui doivent rester cohérentes :
+
+1. `Tenancy/Services/TenantContext` — singleton par requête, source de vérité. Propage `app.company_id` / `app.user_id` à PostgreSQL via `set_config(..., false)`.
+2. `Tenancy/Middleware/SetTenantContext` (alias `tenant`) — résout la société **depuis l'utilisateur authentifié**, à placer **après `auth:sanctum`**. Son `terminate()` appelle `forget()`.
+3. `Shared/Concerns/BelongsToCompany` — global scope Eloquent + auto-remplissage de `company_id` à la création (`requireId()` lève si le contexte manque).
+4. `Shared/Database/RlsMigration::apply('table')` — policies RLS PostgreSQL, appelées depuis les migrations. Défense en profondeur derrière le scope.
+
+Pièges à connaître :
+- **`NULLIF(current_setting(...), '')::uuid` est impératif** dans les policies : après reset la GUC vaut `''`, pas `NULL`, et `''::uuid` casserait toute requête suivante de la connexion.
+- **Tout job tenant** doit exposer une propriété publique `$companyId` **et** déclarer le middleware `Tenancy/Jobs/Middleware/TenantAware` — un worker n'a pas d'utilisateur authentifié, et sa connexion est réutilisée d'un job à l'autre.
+- `set_config(..., false)` est en **portée session** : valable en php-fpm, à revoir si PgBouncer (mode transaction) ou Octane entrent dans la stack.
+- Le rôle applicatif PostgreSQL `xpr_app` est **sans `BYPASSRLS`** (créé par `xpr-infrastructure/docker/postgres/init`). Migrer avec le rôle owner, requêter avec `xpr_app`.
+
+### Erreurs & i18n backend
+Toutes les erreurs API sortent en **RFC 9457 Problem Details** via `Shared/Exceptions/ProblemDetailsRenderer` (branché dans `bootstrap/app.php`). `Shared/Http/Middleware/SetLocale` localise les réponses (compte connecté, sinon `Accept-Language`).
+
+### Tests
+Pest, `RefreshDatabase` sur `Feature`. `Tests\TestCase` fixe `$seed = true` (devises et rôles sont des **prérequis FK du schéma**) et injecte un header `Referer` — sans lui Sanctum n'active pas la session stateful et toute l'auth échoue. `tests/Feature/Tenancy/TenantIsolationTest.php` est le gabarit du test « société A ne voit pas B » exigé par §5.6.
+
+### Frontend
+- Routing localisé `app/[locale]/(auth|app)/…`, `middleware.ts` = next-intl (cookie `NEXT_LOCALE`). Locales FR/AR/EN dans `lib/i18n/routing.ts`, avec `isRtl()` qui pilote `dir`.
+- **Auth par cookies de session Sanctum**, pas par token Bearer : `lib/api/client.ts` expose `api` (baseURL `/api/v1`) et `ensureCsrfCookie()` — **à appeler avant toute mutation d'auth**. Personne n'importe `axios` ailleurs.
+- `toApiProblem(error)` normalise toute erreur vers la forme RFC 9457 (`errors` = champ → messages, à remonter dans React Hook Form).
+- Alias d'import `@/*` → racine de `xpr-frontend`.
+
+### Dette assumée à ce stade
+Le module `Authentication` n'a **pas de Repository ni d'Interface** (Service → Eloquent direct), contrairement à §6. Écart à trancher explicitement avant Phase 1 plutôt qu'à propager par mimétisme.
