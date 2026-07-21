@@ -42,6 +42,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "invoices": "Invoices",
+    "partners": "Partners",
     "cash": "Cash registers",
     "users": "Users",
     "adminNotes": "Admin notes",
@@ -273,6 +274,65 @@
       "title": "Cancel this invoice?",
       "description": "The invoice moves to the “Cancelled” status. By law, it is never deleted.",
       "confirm": "Cancel invoice"
+    }
+  },
+  "partners": {
+    "title": "Customers & Suppliers",
+    "description": "Company partner directory",
+    "create": "New partner",
+    "searchPlaceholder": "Search by name, trade name or ICE…",
+    "immediate": "Immediate",
+    "days": "{count} d",
+    "types": {
+      "client": "Customer",
+      "supplier": "Supplier",
+      "both": "Customer and supplier"
+    },
+    "columns": {
+      "name": "Name",
+      "type": "Type",
+      "ice": "ICE",
+      "city": "City",
+      "contact": "Contact",
+      "paymentTerms": "Terms",
+      "actions": "Actions"
+    },
+    "actions": {
+      "open": "Open menu",
+      "edit": "Edit",
+      "archive": "Archive"
+    },
+    "empty": {
+      "title": "No partners yet",
+      "description": "Add your customers and suppliers to reuse them on your documents."
+    },
+    "archive": {
+      "title": "Archive this partner?",
+      "description": "It will leave the lists, but documents referencing it stay readable.",
+      "confirm": "Archive"
+    },
+    "form": {
+      "createTitle": "New partner",
+      "editTitle": "Edit partner",
+      "createDescription": "Customer, supplier, or both at once.",
+      "editDescription": "Update this partner's details.",
+      "type": "Type",
+      "paymentTerms": "Payment terms (days)",
+      "legalName": "Legal name",
+      "legalNamePlaceholder": "Atlas Trading Ltd.",
+      "tradeName": "Trade name",
+      "tradeNamePlaceholder": "Trading name (optional)",
+      "ice": "ICE",
+      "ifNumber": "Tax ID",
+      "contactName": "Contact",
+      "email": "Email",
+      "phone": "Phone",
+      "city": "City",
+      "address": "Address",
+      "notes": "Notes",
+      "cancel": "Cancel",
+      "create": "Create",
+      "save": "Save"
     }
   },
   "cash": {

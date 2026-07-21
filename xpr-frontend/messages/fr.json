@@ -42,6 +42,7 @@
   "nav": {
     "dashboard": "Tableau de bord",
     "invoices": "Factures",
+    "partners": "Tiers",
     "cash": "Caisses",
     "users": "Utilisateurs",
     "adminNotes": "Notes admin",
@@ -273,6 +274,65 @@
       "title": "Annuler cette facture ?",
       "description": "La facture passe au statut « Annulée ». Conformément à la loi, elle n'est jamais supprimée.",
       "confirm": "Annuler la facture"
+    }
+  },
+  "partners": {
+    "title": "Clients & Fournisseurs",
+    "description": "Répertoire des tiers de la société",
+    "create": "Nouveau tiers",
+    "searchPlaceholder": "Rechercher par nom, enseigne ou ICE…",
+    "immediate": "Comptant",
+    "days": "{count} j",
+    "types": {
+      "client": "Client",
+      "supplier": "Fournisseur",
+      "both": "Client et fournisseur"
+    },
+    "columns": {
+      "name": "Nom",
+      "type": "Type",
+      "ice": "ICE",
+      "city": "Ville",
+      "contact": "Contact",
+      "paymentTerms": "Règlement",
+      "actions": "Actions"
+    },
+    "actions": {
+      "open": "Ouvrir le menu",
+      "edit": "Modifier",
+      "archive": "Archiver"
+    },
+    "empty": {
+      "title": "Aucun tiers enregistré",
+      "description": "Ajoutez vos clients et fournisseurs pour les retrouver sur vos documents."
+    },
+    "archive": {
+      "title": "Archiver ce tiers ?",
+      "description": "Il disparaîtra des listes, mais les documents qui le référencent resteront lisibles.",
+      "confirm": "Archiver"
+    },
+    "form": {
+      "createTitle": "Nouveau tiers",
+      "editTitle": "Modifier le tiers",
+      "createDescription": "Client, fournisseur, ou les deux à la fois.",
+      "editDescription": "Mettez à jour les informations de ce tiers.",
+      "type": "Type",
+      "paymentTerms": "Délai de règlement (jours)",
+      "legalName": "Raison sociale",
+      "legalNamePlaceholder": "Société Atlas S.A.R.L.",
+      "tradeName": "Enseigne",
+      "tradeNamePlaceholder": "Nom commercial (facultatif)",
+      "ice": "ICE",
+      "ifNumber": "Identifiant fiscal",
+      "contactName": "Contact",
+      "email": "E-mail",
+      "phone": "Téléphone",
+      "city": "Ville",
+      "address": "Adresse",
+      "notes": "Notes",
+      "cancel": "Annuler",
+      "create": "Créer",
+      "save": "Enregistrer"
     }
   },
   "cash": {

@@ -8,6 +8,7 @@ use App\Modules\Authentication\Models\User;
 use App\Modules\Tenancy\Models\Company;
 use Database\Factories\CashMovementFactory;
 use Database\Factories\InvoiceFactory;
+use Database\Factories\PartnerFactory;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -176,6 +177,10 @@ final class DemoSeeder extends Seeder
         // ── 4. Quelques factures pour AtlasTech (société secondaire) ──────
         $this->seedInvoices($companySecond->id, 5);
 
+        // ── 4bis. Répertoire des tiers ────────────────────────────────────
+        $this->seedPartners($companyMain->id, 18);
+        $this->seedPartners($companySecond->id, 6);
+
         // ── 5. Mouvements de caisse pour Al Maghrib ───────────────────────
         $this->seedCashMovements($companyMain->id, 25);
 
@@ -192,6 +197,8 @@ final class DemoSeeder extends Seeder
                 ['Utilisateurs', 'Al Maghrib', count(self::TEAM)],
                 ['Factures',     'Al Maghrib', array_sum(self::INVOICE_DISTRIBUTION)],
                 ['Factures',     'AtlasTech',  5],
+                ['Tiers',        'Al Maghrib', 18],
+                ['Tiers',        'AtlasTech',  6],
                 ['Mouvements',   'Al Maghrib', 25],
                 ['Mouvements',   'AtlasTech',  8],
                 ['Notes',        'Al Maghrib', count(self::ADMIN_NOTES)],
@@ -434,6 +441,52 @@ final class DemoSeeder extends Seeder
             ->value('id');
 
         return ['id' => (string) $id, 'year' => $label];
+    }
+
+    /**
+     * Répertoire de tiers d'une société : clients, fournisseurs, et quelques
+     * fiches à la fois l'un et l'autre — le cas est courant et l'écran doit le
+     * montrer.
+     *
+     * Même stratégie que les factures : query builder + SET LOCAL pour franchir
+     * la RLS hors requête HTTP, et non-réexécution si la société est déjà
+     * pourvue (`db:seed` doit rester rejouable).
+     */
+    private function seedPartners(string $companyId, int $count): void
+    {
+        if (DB::table('partners')->where('company_id', $companyId)->exists()) {
+            return;
+        }
+
+        $factory = PartnerFactory::new();
+        $now = now();
+        $rows = [];
+
+        for ($i = 0; $i < $count; $i++) {
+            // Un tiers sur six est client ET fournisseur.
+            $state = match (true) {
+                $i % 6 === 5 => $factory->both(),
+                $i % 3 === 2 => $factory->supplier(),
+                default => $factory->client(),
+            };
+
+            /** @var array<string, mixed> $attrs */
+            $attrs = $state->make()->toArray();
+
+            $rows[] = array_merge($attrs, [
+                'company_id' => $companyId,
+                // Code lisible, séquentiel par société : c'est ce que les
+                // cabinets utilisent pour retrouver une fiche au clavier.
+                'code' => sprintf('T-%03d', $i + 1),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }
+
+        DB::transaction(function () use ($companyId, $rows): void {
+            DB::statement("SET LOCAL app.company_id = '{$companyId}'");
+            DB::table('partners')->insert($rows);
+        });
     }
 
     /**

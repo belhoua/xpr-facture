@@ -108,23 +108,27 @@ it('remonte les tiers `both` dans les listes clients ET fournisseurs', function 
 it('recherche sur la raison sociale, l enseigne et l ICE', function (): void {
     [$user, $company] = workspaceAccount();
 
+    // Libellés volontairement absents du jeu de démo que sème workspaceAccount :
+    // le test doit prouver la recherche, pas compter des fiches préexistantes.
     app(TenantContext::class)->activateCompany($company->id);
     Partner::factory()->create([
-        'legal_name' => 'Atlas Distribution S.A.R.L.',
-        'trade_name' => 'Atlas Distrib',
-        'ice' => '001111111111111',
+        'legal_name' => 'Zellige Andalou S.A.R.L.',
+        'trade_name' => 'Zellige Andalou',
+        'ice' => '009191919191919',
     ]);
-    Partner::factory()->create(['legal_name' => 'Café Maure', 'trade_name' => null, 'ice' => '002222222222222']);
 
-    $search = fn (string $term): array => actingAs($user)
-        ->getJson('/api/v1/partners?search='.urlencode($term))
-        ->assertOk()
-        ->json('data');
+    $names = fn (string $term): array => array_column(
+        actingAs($user)
+            ->getJson('/api/v1/partners?search='.urlencode($term))
+            ->assertOk()
+            ->json('data'),
+        'legalName',
+    );
 
-    expect($search('atl'))->toHaveCount(1)
-        ->and($search('Distrib'))->toHaveCount(1)
-        ->and($search('002222'))->toHaveCount(1)
-        ->and($search('introuvable'))->toHaveCount(0);
+    expect($names('zell'))->toBe(['Zellige Andalou S.A.R.L.'])
+        ->and($names('Andalou'))->toBe(['Zellige Andalou S.A.R.L.'])
+        ->and($names('009191'))->toBe(['Zellige Andalou S.A.R.L.'])
+        ->and($names('introuvable-xyz'))->toBe([]);
 });
 
 it('met à jour un tiers sans écraser les champs non transmis', function (): void {
@@ -231,14 +235,21 @@ it('filtre sur les tiers actifs', function (): void {
     [$user, $company] = workspaceAccount();
 
     app(TenantContext::class)->activateCompany($company->id);
-    Partner::factory()->create(['legal_name' => 'Actif', 'ice' => null]);
-    Partner::factory()->inactive()->create(['legal_name' => 'Inactif', 'ice' => null]);
+    Partner::factory()->create(['legal_name' => 'Fiche Active', 'ice' => null]);
+    Partner::factory()->inactive()->create(['legal_name' => 'Fiche Inactive', 'ice' => null]);
 
-    $actifs = actingAs($user)->getJson('/api/v1/partners?active=1')->assertOk()->json('data');
-    $tous = actingAs($user)->getJson('/api/v1/partners')->assertOk()->json('data');
+    $names = function (string $query) use ($user): array {
+        return array_column(
+            actingAs($user)->getJson('/api/v1/partners'.$query)->assertOk()->json('data'),
+            'legalName',
+        );
+    };
 
-    expect(array_column($actifs, 'legalName'))->toBe(['Actif'])
-        ->and($tous)->toHaveCount(2);
+    // Assertions par appartenance, pas par comptage : le jeu de démo peuple
+    // déjà le répertoire, et un total figé casserait au moindre ajout.
+    expect($names('?active=1'))->toContain('Fiche Active')
+        ->and($names('?active=1'))->not->toContain('Fiche Inactive')
+        ->and($names(''))->toContain('Fiche Active', 'Fiche Inactive');
 });
 
 it('exige une authentification', function (): void {

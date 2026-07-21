@@ -8,6 +8,7 @@ use App\Modules\Accounting\Enums\DocumentType;
 use App\Modules\Accounting\Services\DocumentNumberService;
 use App\Modules\Cash\Models\CashMovement;
 use App\Modules\Invoices\Models\Invoice;
+use App\Modules\Partners\Models\Partner;
 use App\Modules\Tenancy\Models\Company;
 use App\Modules\Tenancy\Services\TenantContext;
 use Illuminate\Support\Carbon;
@@ -86,6 +87,35 @@ final class WorkspaceDemoDataService
             Invoice::create([
                 ...$row,
                 'number' => $this->numbers->allocate(DocumentType::Invoice, $row['issued_at']),
+                'currency' => $currency,
+            ]);
+        }
+
+        // Répertoire des tiers. Les raisons sociales reprennent celles des
+        // factures ci-dessus : le rattachement document ↔ tiers arrivera avec
+        // le moteur de documents, la cohérence des noms le prépare.
+        $partners = [
+            ['type' => 'client', 'legal_name' => 'Société Immobilière Anfa', 'city' => 'Casablanca', 'terms' => 45],
+            ['type' => 'client', 'legal_name' => 'Boulangerie Al Fath', 'city' => 'Fès', 'terms' => 0],
+            ['type' => 'client', 'legal_name' => 'Atlas Distribution S.A.R.L.', 'city' => 'Casablanca', 'terms' => 30],
+            ['type' => 'client', 'legal_name' => 'Café Maure', 'city' => 'Rabat', 'terms' => 15],
+            ['type' => 'client', 'legal_name' => 'TechMaroc Solutions', 'city' => 'Rabat', 'terms' => 30],
+            ['type' => 'client', 'legal_name' => 'Riad Azur', 'city' => 'Marrakech', 'terms' => 30],
+            ['type' => 'supplier', 'legal_name' => 'Imprimerie Rapide Fès', 'city' => 'Fès', 'terms' => 30],
+            ['type' => 'supplier', 'legal_name' => 'Fournitures Bureau Maroc', 'city' => 'Casablanca', 'terms' => 15],
+            // Cas fréquent : à la fois client et fournisseur.
+            ['type' => 'both', 'legal_name' => 'Consulting RH Maghreb', 'city' => 'Casablanca', 'terms' => 60],
+        ];
+
+        foreach ($partners as $index => $row) {
+            Partner::create([
+                'type' => $row['type'],
+                'legal_name' => $row['legal_name'],
+                'city' => $row['city'],
+                'rc_city' => $row['city'],
+                // ICE fictif mais valide (15 chiffres) et unique par société.
+                'ice' => str_pad((string) (100000000000 + $index), 15, '0', STR_PAD_LEFT),
+                'payment_terms_days' => $row['terms'],
                 'currency' => $currency,
             ]);
         }

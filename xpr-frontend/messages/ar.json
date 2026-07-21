@@ -42,6 +42,7 @@
   "nav": {
     "dashboard": "لوحة القيادة",
     "invoices": "الفواتير",
+    "partners": "الأطراف",
     "cash": "الصناديق",
     "users": "المستخدمون",
     "adminNotes": "ملاحظات الإدارة",
@@ -273,6 +274,65 @@
       "title": "إلغاء هذه الفاتورة؟",
       "description": "تنتقل الفاتورة إلى حالة «ملغاة». وفقًا للقانون، لا تُحذف أبدًا.",
       "confirm": "إلغاء الفاتورة"
+    }
+  },
+  "partners": {
+    "title": "العملاء والموردون",
+    "description": "دليل أطراف الشركة",
+    "create": "طرف جديد",
+    "searchPlaceholder": "ابحث بالاسم أو العلامة أو رقم ICE…",
+    "immediate": "نقداً",
+    "days": "{count} يوم",
+    "types": {
+      "client": "عميل",
+      "supplier": "مورّد",
+      "both": "عميل ومورّد"
+    },
+    "columns": {
+      "name": "الاسم",
+      "type": "النوع",
+      "ice": "ICE",
+      "city": "المدينة",
+      "contact": "جهة الاتصال",
+      "paymentTerms": "الأداء",
+      "actions": "إجراءات"
+    },
+    "actions": {
+      "open": "فتح القائمة",
+      "edit": "تعديل",
+      "archive": "أرشفة"
+    },
+    "empty": {
+      "title": "لا يوجد أي طرف",
+      "description": "أضف عملاءك ومورديك لاستعمالهم في وثائقك."
+    },
+    "archive": {
+      "title": "أرشفة هذا الطرف؟",
+      "description": "سيختفي من القوائم، لكن الوثائق المرتبطة به تبقى قابلة للقراءة.",
+      "confirm": "أرشفة"
+    },
+    "form": {
+      "createTitle": "طرف جديد",
+      "editTitle": "تعديل الطرف",
+      "createDescription": "عميل أو مورّد أو الاثنان معاً.",
+      "editDescription": "حدّث معلومات هذا الطرف.",
+      "type": "النوع",
+      "paymentTerms": "أجل الأداء (بالأيام)",
+      "legalName": "الاسم القانوني",
+      "legalNamePlaceholder": "شركة أطلس ش.م.م",
+      "tradeName": "العلامة التجارية",
+      "tradeNamePlaceholder": "الاسم التجاري (اختياري)",
+      "ice": "ICE",
+      "ifNumber": "المعرف الضريبي",
+      "contactName": "جهة الاتصال",
+      "email": "البريد الإلكتروني",
+      "phone": "الهاتف",
+      "city": "المدينة",
+      "address": "العنوان",
+      "notes": "ملاحظات",
+      "cancel": "إلغاء",
+      "create": "إنشاء",
+      "save": "حفظ"
     }
   },
   "cash": {

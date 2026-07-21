@@ -1,4 +1,5 @@
 import {
+  Contact,
   FileText,
   LayoutDashboard,
   MessageSquareText,
@@ -44,6 +45,7 @@ export const NAVIGATION: readonly NavGroup[] = [
     titleKey: "nav.groups.management",
     items: [
       { href: "/invoices", titleKey: "nav.invoices", icon: FileText, shortcut: "F" },
+      { href: "/partners", titleKey: "nav.partners", icon: Contact, shortcut: "T" },
       { href: "/cash", titleKey: "nav.cash", icon: Wallet, shortcut: "C" },
     ],
   },
