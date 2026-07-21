@@ -388,7 +388,11 @@ Pièges à connaître :
 Toutes les erreurs API sortent en **RFC 9457 Problem Details** via `Shared/Exceptions/ProblemDetailsRenderer` (branché dans `bootstrap/app.php`). `Shared/Http/Middleware/SetLocale` localise les réponses (compte connecté, sinon `Accept-Language`).
 
 ### Tests
-Pest, `RefreshDatabase` sur `Feature`. `Tests\TestCase` fixe `$seed = true` (devises et rôles sont des **prérequis FK du schéma**) et injecte un header `Referer` — sans lui Sanctum n'active pas la session stateful et toute l'auth échoue. `tests/Feature/Tenancy/TenantIsolationTest.php` est le gabarit du test « société A ne voit pas B » exigé par §5.6.
+Pest, `RefreshDatabase` sur `Feature`. `Tests\TestCase` fixe `$seed = true` (devises, rôles et taux de TVA sont des **prérequis FK du schéma**) et injecte un header `Referer` — sans lui Sanctum n'active pas la session stateful et toute l'auth échoue. `tests/Feature/Tenancy/TenantIsolationTest.php` est le gabarit du test « société A ne voit pas B » exigé par §5.6.
+
+> ⚠️ **La suite de tests n'exerce PAS la RLS.** `phpunit.xml` se connecte en `xpr_owner`, qui est SUPERUSER **et** `BYPASSRLS` : les policies ne s'appliquent jamais à lui, `FORCE ROW LEVEL SECURITY` compris. Les tests d'isolation existants prouvent donc le **scope Eloquent**, pas la seconde ligne de défense. Prouver la RLS demande un rôle de test non-superuser propriétaire de la base de test — c'est un reliquat de **P0-09**, à traiter avant la sortie de Phase 0 (jalon n°2).
+
+Deux gardes ne sont pas observables sous `RefreshDatabase`, qui ouvre une transaction autour de chaque test de `Feature` : tout ce qui teste `DB::transactionLevel() === 0` va dans `tests/Unit` (cf. `tests/Unit/Accounting/NumberingGuardTest.php`).
 
 ### Frontend
 - Routing localisé `app/[locale]/(auth|app)/…`, `middleware.ts` = next-intl (cookie `NEXT_LOCALE`). Locales FR/AR/EN dans `lib/i18n/routing.ts`, avec `isRtl()` qui pilote `dir`.
