@@ -28,6 +28,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'tenant' => SetTenantContext::class,
         ]);
+
+        // Backend d'API pur : aucune page de login à servir. Sans ceci, une
+        // requête non authentifiée dépourvue d'`Accept: application/json`
+        // fait chercher à Laravel la route nommée `login` — absente — et
+        // renvoie « Route [login] not defined » en 500 au lieu d'un 401.
+        // Retourner null laisse remonter l'AuthenticationException, que
+        // ProblemDetailsRenderer sérialise en 401 RFC 9457.
+        $middleware->redirectGuestsTo(fn (): ?string => null);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Toutes les erreurs API sortent en RFC 9457 (P0-14)
