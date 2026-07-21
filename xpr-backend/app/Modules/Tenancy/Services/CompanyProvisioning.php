@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Tenancy\Services;
 
+use App\Modules\Accounting\Services\CompanyAccountingProvisioning;
 use App\Modules\Authentication\Models\User;
 use App\Modules\Shared\Services\WorkspaceDemoDataService;
 use App\Modules\Tenancy\Enums\LegalForm;
@@ -12,9 +13,9 @@ use Spatie\Permission\PermissionRegistrar;
 
 /**
  * Point d'extension unique de la création d'une société : appartenance,
- * rôle owner, et — au fil des modules à venir — taux de TVA, exercice
- * fiscal, séquences, moyens de paiement. Toute nouvelle initialisation de
- * société s'ajoute ICI, jamais dans un contrôleur.
+ * rôle owner, exercice comptable et séquences, et — au fil des modules à
+ * venir — moyens de paiement. Toute nouvelle initialisation de société
+ * s'ajoute ICI, jamais dans un contrôleur.
  *
  * Doit être appelé dans une transaction ouverte par l'appelant : la création
  * du compte et celle de la société réussissent ou échouent ensemble.
@@ -24,6 +25,7 @@ final class CompanyProvisioning
     public function __construct(
         private readonly PermissionRegistrar $permissions,
         private readonly WorkspaceDemoDataService $demoData,
+        private readonly CompanyAccountingProvisioning $accounting,
     ) {}
 
     public function createFirstCompanyFor(User $user, string $legalName, LegalForm $legalForm): Company
@@ -55,6 +57,10 @@ final class CompanyProvisioning
         }
 
         $user->forceFill(['default_company_id' => $company->id])->save();
+
+        // Exercice courant + séquences : sans eux, aucune facture ne peut être
+        // validée. À faire avant tout jeu de données, qui numérote déjà.
+        $this->accounting->initialize($company);
 
         $this->demoData->seedForCompany($company);
 

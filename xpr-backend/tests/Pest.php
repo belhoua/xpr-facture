@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Accounting\Services\CompanyAccountingProvisioning;
 use App\Modules\Authentication\Models\User;
 use App\Modules\Shared\Services\WorkspaceDemoDataService;
 use App\Modules\Tenancy\Models\Company;
@@ -34,6 +35,9 @@ function workspaceAccount(): array
     app(PermissionRegistrar::class)->setPermissionsTeamId($company->id);
     $user->assignRole('owner');
 
+    // Exercice + séquences AVANT les données : les factures de démo sont
+    // numérotées par la séquence, comme de vraies factures validées.
+    app(CompanyAccountingProvisioning::class)->initialize($company);
     app(WorkspaceDemoDataService::class)->seedForCompany($company);
 
     return [$user, $company];

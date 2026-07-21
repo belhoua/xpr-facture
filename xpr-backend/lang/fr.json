@@ -19,6 +19,7 @@
     "Location": "Emplacement",
     "Login": "Connexion",
     "Logout": "Déconnexion",
+    "No fiscal year covers :date — open the matching fiscal year first.": "Aucun exercice comptable ne couvre le :date — ouvrez d'abord l'exercice correspondant.",
     "Not Found": "Non trouvé",
     "Page Expired": "Page expirée",
     "Pagination Navigation": "Pagination",

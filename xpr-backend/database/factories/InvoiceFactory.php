@@ -47,13 +47,18 @@ final class InvoiceFactory extends Factory
     public function definition(): array
     {
         $status = $this->faker->randomElement(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']);
-        $issuedAt = $this->faker->dateTimeBetween('-6 months', 'now');
+
+        // Borné à l'exercice courant : le provisioning n'ouvre que l'année
+        // civile en cours, et une facture datée hors exercice n'aurait aucune
+        // séquence à laquelle se rattacher.
+        $issuedAt = $this->faker->dateTimeBetween(now()->startOfYear(), 'now');
         $dueAt = (clone $issuedAt)->modify('+30 days');
 
-        // Les brouillons n'ont pas de numéro, les autres oui.
-        $number = $status === 'draft'
-            ? null
-            : sprintf('FAC-%d-%04d', now()->year, $this->faker->unique()->numberBetween(1, 9999));
+        // AUCUN numéro ici. La factory ne connaît pas la séquence de la
+        // société : inventer un numéro aléatoire produisait une numérotation
+        // trouée et désordonnée, et pouvait entrer en collision avec le
+        // compteur réel. C'est l'appelant (DemoSeeder) qui numérote, dans
+        // l'ordre chronologique, en consommant `sequences`.
 
         // Montant crédible : centimes, arrondi à 100 DH (= 10 000 centimes).
         $totalCents = $this->faker->randomElement([
@@ -63,7 +68,7 @@ final class InvoiceFactory extends Factory
         ])();
 
         return [
-            'number' => $number,
+            'number' => null,
             'client_name' => $this->faker->randomElement(self::CLIENTS),
             'issued_at' => $issuedAt->format('Y-m-d'),
             'due_at' => $dueAt->format('Y-m-d'),
@@ -103,11 +108,20 @@ final class InvoiceFactory extends Factory
     /** État : en retard (échéance dépassée, non réglée). */
     public function overdue(): static
     {
-        return $this->state(fn (array $a) => [
-            'status' => 'overdue',
-            'issued_at' => $this->faker->dateTimeBetween('-4 months', '-2 months')->format('Y-m-d'),
-            'due_at' => $this->faker->dateTimeBetween('-6 weeks', '-1 week')->format('Y-m-d'),
-        ]);
+        return $this->state(function (array $a): array {
+            // Comme dans definition() : on ne sort pas de l'exercice courant.
+            $earliest = now()->startOfYear();
+            $issuedAt = $this->faker->dateTimeBetween(
+                now()->subMonths(4)->max($earliest),
+                now()->subMonths(2)->max($earliest),
+            );
+
+            return [
+                'status' => 'overdue',
+                'issued_at' => $issuedAt->format('Y-m-d'),
+                'due_at' => (clone $issuedAt)->modify('+30 days')->format('Y-m-d'),
+            ];
+        });
     }
 
     /** État : annulée. */

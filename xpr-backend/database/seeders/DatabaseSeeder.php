@@ -12,7 +12,8 @@ use Illuminate\Database\Seeder;
  * Ordre d'exécution :
  *   1. CurrencySeeder  — référentiel des devises (requis par la FK companies.default_currency)
  *   2. RoleSeeder      — rôles Spatie (requis pour DemoSeeder.createTeam)
- *   3. DemoSeeder      — sociétés, utilisateurs, factures, mouvements de caisse
+ *   3. TaxRateSeeder   — catalogue TVA standard, partagé par toutes les sociétés
+ *   4. DemoSeeder      — sociétés, utilisateurs, factures, mouvements de caisse
  *
  * Usage :
  *   php artisan migrate:fresh --seed          ← recréer toute la base + peupler
@@ -24,10 +25,12 @@ final class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // Référentiels : prérequis du schéma (companies.default_currency est
-        // une FK, les rôles sont requis par le provisioning).
+        // une FK, les rôles sont requis par le provisioning) et catalogue TVA,
+        // que toute société consomme dès sa première ligne de facture.
         $this->call([
             CurrencySeeder::class,
             RoleSeeder::class,
+            TaxRateSeeder::class,
         ]);
 
         // Les données de DÉMO ne doivent pas peupler la base de test : les

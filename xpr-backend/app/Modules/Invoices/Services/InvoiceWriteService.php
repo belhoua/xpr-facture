@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Invoices\Services;
 
+use App\Modules\Accounting\Enums\DocumentType;
+use App\Modules\Accounting\Services\DocumentNumberService;
 use App\Modules\Invoices\Models\Invoice;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -14,8 +16,8 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
  * négociables de la charte (§3) que le contrôleur ne doit jamais rejouer :
  *
  *  1. Numérotation continue, sans trou, attribuée UNIQUEMENT à la validation
- *     (passage hors brouillon). Le format `FAC-{YYYY}-{0000}` est sérialisé
- *     par un verrou pessimiste pour résister à la concurrence.
+ *     (passage hors brouillon). Elle est déléguée à DocumentNumberService, qui
+ *     verrouille la ligne de séquence de l'exercice.
  *  2. Immuabilité : une facture validée ne se modifie ni ne se supprime — la
  *     correction se fait par annulation (statut `cancelled`), jamais un DELETE.
  *
@@ -24,6 +26,8 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
  */
 final class InvoiceWriteService
 {
+    public function __construct(private readonly DocumentNumberService $numbers) {}
+
     /**
      * @param  array{clientName: string, issuedAt: ?string, dueAt: ?string, status: string, totalCents: int, currency: string}  $data
      */
@@ -113,29 +117,24 @@ final class InvoiceWriteService
     }
 
     /**
-     * Attribue le prochain numéro de l'exercice pour la société courante.
+     * Attribue le prochain numéro de l'exercice couvrant la date d'émission.
      *
-     * `lockForUpdate()` verrouille les factures déjà numérotées de l'année le
-     * temps de la transaction : deux validations simultanées s'exécutent alors
-     * en série et ne peuvent pas réclamer le même numéro. Le scope tenant
-     * restreint déjà la requête à la société active.
+     * Déléguée à DocumentNumberService : le compteur vit dans `sequences` et
+     * son verrou de ligne tient même quand aucune facture n'existe encore.
+     * L'ancienne approche — MAX(number) + 1 sous lockForUpdate — avait deux
+     * défauts que ce remplacement corrige : `lockForUpdate()` sur une requête
+     * sans résultat ne verrouille rien, donc deux premières factures
+     * concurrentes prenaient toutes deux 0001 ; et un numéro libéré par une
+     * suppression était réattribué, ce que §3 interdit.
+     *
+     * Appelée depuis les transactions ouvertes par create() et update().
      */
     private function assignNumber(Invoice $invoice): void
     {
-        $year = ($invoice->issued_at ?? Carbon::now())->year;
-        $prefix = "FAC-{$year}-";
-
-        $lastNumber = Invoice::query()
-            ->where('number', 'like', $prefix.'%')
-            ->lockForUpdate()
-            ->orderByDesc('number')
-            ->value('number');
-
-        $lastSequence = is_string($lastNumber)
-            ? (int) substr($lastNumber, strlen($prefix))
-            : 0;
-
-        $invoice->number = $prefix.str_pad((string) ($lastSequence + 1), 4, '0', STR_PAD_LEFT);
+        $invoice->number = $this->numbers->allocate(
+            DocumentType::Invoice,
+            $invoice->issued_at ?? Carbon::today(),
+        );
     }
 
     /**

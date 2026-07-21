@@ -324,11 +324,116 @@ final class DemoSeeder extends Seeder
             }
         }
 
+        $rows = $this->numberChronologically($rows, $companyId);
+
         // Contournement RLS : SET LOCAL dans une transaction dédiée.
         DB::transaction(function () use ($companyId, $rows): void {
             DB::statement("SET LOCAL app.company_id = '{$companyId}'");
             DB::table('invoices')->insert($rows);
         });
+    }
+
+    /**
+     * Attribue les numéros dans l'ordre chronologique d'émission et avance la
+     * séquence d'autant.
+     *
+     * La factory ne numérote plus : elle ignore la séquence de la société. Ici
+     * on reproduit ce que fait une vraie validation — numéro croissant avec la
+     * date, aucun trou — puis on positionne `next_number` pour que la PREMIÈRE
+     * facture créée depuis l'interface enchaîne sans retomber sur un numéro
+     * déjà pris.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private function numberChronologically(array $rows, string $companyId): array
+    {
+        ['id' => $fiscalYearId, 'year' => $year] = $this->openFiscalYear($companyId);
+
+        // Les brouillons restent sans numéro (§3) et ne consomment rien.
+        $numbered = array_values(array_filter(
+            array_keys($rows),
+            static fn (int $index): bool => $rows[$index]['status'] !== 'draft',
+        ));
+
+        usort(
+            $numbered,
+            static fn (int $a, int $b): int => strcmp(
+                (string) $rows[$a]['issued_at'],
+                (string) $rows[$b]['issued_at'],
+            ),
+        );
+
+        foreach ($numbered as $rank => $index) {
+            $rows[$index]['number'] = sprintf('FAC-%s-%04d', $year, $rank + 1);
+        }
+
+        DB::table('sequences')
+            ->where('company_id', $companyId)
+            ->where('fiscal_year_id', $fiscalYearId)
+            ->where('document_type', 'invoice')
+            ->update(['next_number' => count($numbered) + 1, 'updated_at' => now()]);
+
+        return $rows;
+    }
+
+    /**
+     * Exercice courant de la société, créé avec ses séquences s'il n'existe pas.
+     * Les sociétés de démo sont insérées en SQL brut, sans passer par
+     * CompanyProvisioning : leur initialisation comptable se fait donc ici.
+     *
+     * @return array{id: string, year: string}
+     */
+    private function openFiscalYear(string $companyId): array
+    {
+        $now = now();
+        $label = $now->format('Y');
+
+        $existing = DB::table('fiscal_years')
+            ->where('company_id', $companyId)
+            ->where('label', $label)
+            ->value('id');
+
+        if (is_string($existing)) {
+            return ['id' => $existing, 'year' => $label];
+        }
+
+        DB::transaction(function () use ($companyId, $now): void {
+            DB::statement("SET LOCAL app.company_id = '{$companyId}'");
+
+            $fiscalYearId = DB::table('fiscal_years')->insertGetId([
+                'company_id' => $companyId,
+                'label' => $now->format('Y'),
+                'starts_on' => $now->copy()->startOfYear()->toDateString(),
+                'ends_on' => $now->copy()->endOfYear()->toDateString(),
+                'status' => 'open',
+                'created_at' => $now,
+                'updated_at' => $now,
+            ], 'id');
+
+            foreach (['invoice', 'quote', 'credit_note'] as $type) {
+                DB::table('sequences')->insert([
+                    'company_id' => $companyId,
+                    'fiscal_year_id' => $fiscalYearId,
+                    'document_type' => $type,
+                    'format' => match ($type) {
+                        'quote' => 'DEV-{YYYY}-{0000}',
+                        'credit_note' => 'AV-{YYYY}-{0000}',
+                        default => 'FAC-{YYYY}-{0000}',
+                    },
+                    'next_number' => 1,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
+        });
+
+        $id = DB::table('fiscal_years')
+            ->where('company_id', $companyId)
+            ->where('label', $label)
+            ->value('id');
+
+        return ['id' => (string) $id, 'year' => $label];
     }
 
     /**

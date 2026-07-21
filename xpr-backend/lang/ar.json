@@ -19,6 +19,7 @@
     "Location": "موقع",
     "Login": "تسجيل الدخول",
     "Logout": "تسجيل الخروج",
+    "No fiscal year covers :date — open the matching fiscal year first.": "لا توجد سنة محاسبية تغطي :date — افتح السنة المحاسبية المطابقة أولاً.",
     "Not Found": "غير متوفر",
     "Page Expired": "الصفحة منتهية الصلاحية",
     "Pagination Navigation": "التنقل بين الصفحات",

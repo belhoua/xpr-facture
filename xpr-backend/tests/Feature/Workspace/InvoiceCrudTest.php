@@ -10,7 +10,8 @@ use function Pest\Laravel\actingAs;
  * CRUD des factures. La règle centrale testée ici est l'immuabilité fiscale
  * (§3) : seul un brouillon se modifie ou se supprime ; une facture validée ne
  * peut qu'être annulée. `workspaceAccount()` est défini dans WorkspaceApiTest
- * et sème 7 factures (dont 1 brouillon, numéros FAC-2026-0001..0006).
+ * et sème 7 factures (dont 1 brouillon), numérotées 0001..0006 sur l'exercice
+ * courant.
  */
 it('crée une facture en brouillon sans numéro', function (): void {
     [$user] = workspaceAccount();
@@ -33,18 +34,21 @@ it('crée une facture en brouillon sans numéro', function (): void {
 it('attribue un numéro continu à la création d une facture validée', function (): void {
     [$user] = workspaceAccount();
 
-    // La démo va jusqu'à FAC-2026-0006 → la suivante prend 0007, sans trou (§3).
+    // La démo va jusqu'à 0006 → la suivante prend 0007, sans trou (§3). Le
+    // millésime suit l'exercice courant : pas d'année en dur, qui ferait
+    // échouer ce test au 1er janvier.
+    $year = now()->format('Y');
     actingAs($user)
         ->postJson('/api/v1/invoices', [
             'clientName' => 'Client Validé',
-            'issuedAt' => '2026-07-20',
-            'dueAt' => '2026-08-20',
+            'issuedAt' => now()->toDateString(),
+            'dueAt' => now()->addMonth()->toDateString(),
             'status' => 'sent',
             'totalCents' => 480000,
             'currency' => 'MAD',
         ])
         ->assertCreated()
-        ->assertJsonPath('number', 'FAC-2026-0007');
+        ->assertJsonPath('number', "FAC-{$year}-0007");
 });
 
 it('modifie une facture en brouillon', function (): void {
@@ -68,19 +72,20 @@ it('modifie une facture en brouillon', function (): void {
 it('numérote un brouillon lorsqu il est validé par une modification', function (): void {
     [$user] = workspaceAccount();
     $draft = Invoice::query()->where('status', 'draft')->firstOrFail();
+    $year = now()->format('Y');
 
     actingAs($user)
         ->patchJson("/api/v1/invoices/{$draft->id}", [
             'clientName' => 'Devenu Envoyé',
-            'issuedAt' => '2026-07-20',
-            'dueAt' => '2026-08-20',
+            'issuedAt' => now()->toDateString(),
+            'dueAt' => now()->addMonth()->toDateString(),
             'status' => 'sent',
             'totalCents' => 300000,
             'currency' => 'MAD',
         ])
         ->assertOk()
         ->assertJsonPath('status', 'sent')
-        ->assertJsonPath('number', 'FAC-2026-0007');
+        ->assertJsonPath('number', "FAC-{$year}-0007");
 });
 
 it('refuse de modifier une facture validée (immuabilité)', function (): void {
@@ -90,8 +95,8 @@ it('refuse de modifier une facture validée (immuabilité)', function (): void {
     actingAs($user)
         ->patchJson("/api/v1/invoices/{$sent->id}", [
             'clientName' => 'Tentative Interdite',
-            'issuedAt' => '2026-07-20',
-            'dueAt' => '2026-08-20',
+            'issuedAt' => now()->toDateString(),
+            'dueAt' => now()->addMonth()->toDateString(),
             'status' => 'sent',
             'totalCents' => 1,
             'currency' => 'MAD',
