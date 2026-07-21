@@ -10,6 +10,8 @@ import { routing } from "@/lib/i18n/routing";
 export default createMiddleware(routing);
 
 export const config = {
-  // Tout sauf les internes Next et les fichiers statiques
-  matcher: "/((?!_next|_vercel|.*\\..*).*)",
+  // Tout sauf : les chemins proxifiés vers le backend (api, sanctum — ils ne
+  // portent pas de langue et ne doivent PAS être redirigés vers /fr/...), les
+  // internes Next et les fichiers statiques.
+  matcher: "/((?!api|sanctum|_next|_vercel|.*\\..*).*)",
 };

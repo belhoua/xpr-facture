@@ -6,8 +6,11 @@ import axios, { AxiosError, type AxiosInstance } from "axios";
  * - `withXSRFToken` : axios renvoie le cookie XSRF-TOKEN posé par Sanctum.
  * - Accept-Language : le backend localise ses messages (SetLocale, testé).
  */
-const backendUrl =
-  process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8080";
+// Par défaut, chemins RELATIFS ("" → /api/v1, /sanctum/...) : les requêtes
+// partent vers l'origine qui sert le front et sont relayées au backend par le
+// reverse-proxy Next (cf. next.config.ts). Même origine → pas de CORS, et le
+// front reste joignable derrière Ngrok. On garde l'override absolu au cas où.
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
 
 function configure(instance: AxiosInstance): AxiosInstance {
   instance.interceptors.request.use((config) => {
