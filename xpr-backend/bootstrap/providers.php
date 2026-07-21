@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\AdminNotes\Providers\AdminNotesServiceProvider;
 use App\Modules\Authentication\Providers\AuthenticationServiceProvider;
 use App\Modules\Cash\Providers\CashServiceProvider;
 use App\Modules\Dashboard\Providers\DashboardServiceProvider;
@@ -14,4 +15,5 @@ return [
     InvoicesServiceProvider::class,
     CashServiceProvider::class,
     DashboardServiceProvider::class,
+    AdminNotesServiceProvider::class,
 ];
