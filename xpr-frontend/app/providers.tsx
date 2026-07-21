@@ -1,11 +1,13 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ThemeProvider } from "next-themes";
 import { useState } from "react";
 
 /**
- * État serveur global (TanStack Query). Instancié dans un useState pour ne
- * jamais partager de cache entre deux rendus serveur/clients différents.
+ * État serveur global (TanStack Query) + thème clair/sombre.
+ * Le QueryClient est instancié dans un useState pour ne jamais partager de
+ * cache entre deux rendus serveur/clients différents.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -18,6 +20,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      {/* attribute="class" : la classe .dark de globals.css est la source du
+          thème. defaultTheme="system" respecte la préférence de l'OS. */}
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        disableTransitionOnChange
+      >
+        {children}
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }

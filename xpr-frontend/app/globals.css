@@ -23,6 +23,16 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+
+  /* Statuts documentaires (CLAUDE.md §11) : une couleur = un sens, partout.
+     Le cycle de vie d'une facture est brouillon → envoyée → payée, avec
+     deux sorties possibles : en retard, annulée. */
+  --color-status-draft: var(--status-draft);
+  --color-status-sent: var(--status-sent);
+  --color-status-paid: var(--status-paid);
+  --color-status-partial: var(--status-partial);
+  --color-status-overdue: var(--status-overdue);
+  --color-status-cancelled: var(--status-cancelled);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -48,73 +58,102 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Palette : neutres FROIDS (teinte 258, chroma quasi nul) + UNE accent
+   (CLAUDE.md §11). Le bleu 258 est la seule couleur saturée de l'interface
+   hors sémantique de statut — tout le reste est neutre. */
 :root {
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: oklch(0.21 0.015 258);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.21 0.015 258);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --popover-foreground: oklch(0.21 0.015 258);
+  --primary: oklch(0.54 0.192 258);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.968 0.006 258);
+  --secondary-foreground: oklch(0.29 0.018 258);
+  --muted: oklch(0.972 0.005 258);
+  --muted-foreground: oklch(0.53 0.017 258);
+  --accent: oklch(0.955 0.012 258);
+  --accent-foreground: oklch(0.34 0.06 258);
+  --destructive: oklch(0.577 0.222 27.3);
+  --border: oklch(0.922 0.008 258);
+  --input: oklch(0.922 0.008 258);
+  --ring: oklch(0.54 0.192 258);
+
+  /* Rampe de graphiques : dégradé de l'accent vers le neutre froid, pour que
+     plusieurs séries restent lisibles sans introduire de seconde couleur. */
+  --chart-1: oklch(0.54 0.192 258);
+  --chart-2: oklch(0.64 0.145 252);
+  --chart-3: oklch(0.72 0.1 248);
+  --chart-4: oklch(0.8 0.06 250);
+  --chart-5: oklch(0.87 0.03 254);
+
+  --status-draft: oklch(0.55 0.02 258);
+  --status-sent: oklch(0.55 0.16 258);
+  --status-paid: oklch(0.55 0.13 158);
+  --status-partial: oklch(0.62 0.14 75);
+  --status-overdue: oklch(0.57 0.2 27);
+  --status-cancelled: oklch(0.6 0.015 258);
+
+  /* §11 : rayons discrets 6–8px. 0.5rem = 8px sur --radius-lg. */
+  --radius: 0.5rem;
+
+  --sidebar: oklch(0.985 0.004 258);
+  --sidebar-foreground: oklch(0.21 0.015 258);
+  --sidebar-primary: oklch(0.54 0.192 258);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.955 0.012 258);
+  --sidebar-accent-foreground: oklch(0.29 0.03 258);
+  --sidebar-border: oklch(0.922 0.008 258);
+  --sidebar-ring: oklch(0.54 0.192 258);
 }
 
+/* Dark mode RÉEL (§11) : ce n'est pas l'inverse du clair. Le fond est un
+   bleu-nuit désaturé, les surfaces s'ÉLÈVENT (card plus clair que background,
+   l'inverse du mode clair), et l'accent est remonté en luminosité car un bleu
+   à L=0.54 devient illisible sur fond sombre. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
+  --background: oklch(0.165 0.014 258);
+  --foreground: oklch(0.955 0.005 258);
+  --card: oklch(0.208 0.016 258);
+  --card-foreground: oklch(0.955 0.005 258);
+  --popover: oklch(0.225 0.017 258);
+  --popover-foreground: oklch(0.955 0.005 258);
+  --primary: oklch(0.68 0.165 258);
+  --primary-foreground: oklch(0.16 0.02 258);
+  --secondary: oklch(0.27 0.018 258);
+  --secondary-foreground: oklch(0.955 0.005 258);
+  --muted: oklch(0.262 0.016 258);
+  --muted-foreground: oklch(0.71 0.02 258);
+  --accent: oklch(0.3 0.035 258);
+  --accent-foreground: oklch(0.9 0.04 258);
+  --destructive: oklch(0.68 0.18 25);
+  --border: oklch(1 0 0 / 11%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --ring: oklch(0.68 0.165 258);
+
+  --chart-1: oklch(0.68 0.165 258);
+  --chart-2: oklch(0.6 0.14 252);
+  --chart-3: oklch(0.52 0.11 248);
+  --chart-4: oklch(0.43 0.07 250);
+  --chart-5: oklch(0.35 0.04 254);
+
+  --status-draft: oklch(0.68 0.02 258);
+  --status-sent: oklch(0.7 0.145 258);
+  --status-paid: oklch(0.72 0.14 158);
+  --status-partial: oklch(0.78 0.14 75);
+  --status-overdue: oklch(0.7 0.17 27);
+  --status-cancelled: oklch(0.6 0.015 258);
+
+  --sidebar: oklch(0.192 0.015 258);
+  --sidebar-foreground: oklch(0.955 0.005 258);
+  --sidebar-primary: oklch(0.68 0.165 258);
+  --sidebar-primary-foreground: oklch(0.16 0.02 258);
+  --sidebar-accent: oklch(0.28 0.03 258);
+  --sidebar-accent-foreground: oklch(0.95 0.01 258);
+  --sidebar-border: oklch(1 0 0 / 9%);
+  --sidebar-ring: oklch(0.68 0.165 258);
 }
 
 @layer base {
@@ -137,5 +176,22 @@
   [dir="rtl"] {
     --font-sans: var(--font-plex-arabic), var(--font-inter), ui-sans-serif,
       system-ui, sans-serif;
+  }
+}
+
+@layer utilities {
+  /* Les montants s'alignent en colonne dans les tableaux : chiffres à chasse
+     fixe, et jamais de bascule RTL sur un nombre (un montant se lit toujours
+     de gauche à droite, même en arabe). */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+  .amount {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    direction: ltr;
+    unicode-bidi: isolate;
+    display: inline-block;
   }
 }

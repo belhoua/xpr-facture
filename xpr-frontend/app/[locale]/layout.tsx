@@ -50,7 +50,13 @@ export default async function LocaleLayout({
   return (
     // dir= : TOUT l'arbre passe en RTL pour l'arabe — les propriétés
     // logiques de Tailwind v4 (ms-*, me-*, text-start…) suivent seules.
-    <html lang={locale} dir={isRtl(locale) ? "rtl" : "ltr"}>
+    // suppressHydrationWarning : next-themes écrit la classe .dark sur <html>
+    // avant l'hydratation, ce qui crée un écart serveur/client attendu.
+    <html
+      lang={locale}
+      dir={isRtl(locale) ? "rtl" : "ltr"}
+      suppressHydrationWarning
+    >
       <body
         className={`${inter.variable} ${plexArabic.variable} ${geistMono.variable} font-sans antialiased`}
       >

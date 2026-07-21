@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FieldValues, Path, UseFormSetError } from "react-hook-form";
 
 import { toApiProblem, type ApiProblem } from "@/lib/api/client";
@@ -10,6 +10,23 @@ import { authKeys } from "../api/auth";
 
 export function useLogin() {
   return useMutation({ mutationFn: authApi.login });
+}
+
+/**
+ * Déconnexion : détruit la session Sanctum côté serveur puis PURGE le cache
+ * TanStack Query. Sans ce `clear()`, les données de l'utilisateur sortant
+ * (dont /auth/me) resteraient en mémoire et pourraient s'afficher au compte
+ * suivant. La redirection est laissée à l'appelant (il connaît le routeur
+ * localisé). On vide le cache même si la requête réseau échoue : l'intention
+ * de l'utilisateur est de partir.
+ */
+export function useLogout() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: authApi.logout,
+    onSettled: () => queryClient.clear(),
+  });
 }
 
 export function useRegister() {

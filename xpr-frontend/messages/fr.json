@@ -9,13 +9,67 @@
     "error": "Une erreur est survenue",
     "retry": "Réessayer",
     "save": "Enregistrer",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "search": "Rechercher",
+    "filters": "Filtres",
+    "all": "Tous",
+    "export": "Exporter",
+    "actions": "Actions",
+    "noData": "Les données seront disponibles dès la connexion au serveur.",
+    "period": {
+      "last7": "7 derniers jours",
+      "last30": "30 derniers jours",
+      "last90": "90 derniers jours",
+      "year": "Exercice en cours"
+    },
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "create": "Créer",
+    "confirm": "Confirmer",
+    "saving": "Enregistrement…",
+    "close": "Fermer"
   },
   "validation": {
     "required": "Ce champ est obligatoire",
     "email": "Adresse e-mail invalide",
     "passwordMin": "Le mot de passe doit contenir au moins 8 caractères",
-    "tooLong": "Ce texte est trop long"
+    "tooLong": "Ce texte est trop long",
+    "minLength": "Ce texte est trop court",
+    "clientName": "Le nom du client est requis",
+    "amount": "Montant invalide",
+    "dueBeforeIssued": "L'échéance doit suivre la date d'émission"
+  },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "invoices": "Factures",
+    "cash": "Caisses",
+    "users": "Utilisateurs",
+    "adminNotes": "Notes admin",
+    "groups": {
+      "overview": "Pilotage",
+      "management": "Gestion",
+      "organisation": "Organisation",
+      "preferences": "Préférences"
+    },
+    "collapse": "Replier le menu",
+    "expand": "Déplier le menu",
+    "openMenu": "Ouvrir le menu",
+    "searchPlaceholder": "Rechercher ou naviguer…",
+    "commandPalette": "Palette de commandes",
+    "commandPaletteHint": "Naviguez et agissez au clavier",
+    "commandPalettePlaceholder": "Tapez une commande ou un écran…",
+    "toggleTheme": "Changer de thème",
+    "account": "Mon compte",
+    "settings": "Paramètres",
+    "logout": "Se déconnecter"
+  },
+  "status": {
+    "draft": "Brouillon",
+    "sent": "Envoyée",
+    "partial": "Partielle",
+    "paid": "Payée",
+    "overdue": "En retard",
+    "cancelled": "Annulée"
   },
   "auth": {
     "common": {
@@ -60,8 +114,363 @@
       "cooperative": "Coopérative"
     }
   },
+  "pricing": {
+    "title": "Choisissez votre pack",
+    "description": "Tous les packs incluent la conformité DGI, la facturation en dirhams et le support en français et en arabe.",
+    "monthly": "Mensuel",
+    "yearly": "Annuel",
+    "yearlyHint": "2 mois offerts",
+    "perMonth": "/ mois",
+    "billedYearly": "facturé {amount} par an",
+    "free": "Gratuit",
+    "mostPopular": "Le plus choisi",
+    "choose": "Choisir {plan}",
+    "current": "Pack actuel",
+    "vatNote": "Prix hors taxes, en dirhams marocains (MAD). TVA 20 % applicable.",
+    "steps": {
+      "account": "Compte",
+      "plan": "Pack",
+      "payment": "Paiement",
+      "done": "Confirmation"
+    },
+    "plans": {
+      "free": {
+        "name": "Gratuit",
+        "tagline": "Pour tester la facturation conforme",
+        "features": [
+          "10 factures par mois",
+          "1 utilisateur",
+          "1 société",
+          "Modèle de facture standard",
+          "Export PDF",
+          "Support par e-mail"
+        ]
+      },
+      "standard": {
+        "name": "Standard",
+        "tagline": "Pour les TPE et auto-entrepreneurs actifs",
+        "features": [
+          "Factures illimitées",
+          "5 utilisateurs",
+          "Devis et avoirs",
+          "Gestion des caisses",
+          "Relances automatiques d'impayés",
+          "Modèles de documents personnalisables",
+          "Support prioritaire"
+        ]
+      },
+      "pro": {
+        "name": "Pro",
+        "tagline": "Pour les PME et cabinets comptables",
+        "features": [
+          "Tout le pack Standard",
+          "Utilisateurs illimités",
+          "Multi-société",
+          "Rôles et permissions fins",
+          "Exports comptables DGI",
+          "API et webhooks",
+          "Support téléphonique dédié"
+        ]
+      }
+    },
+    "payment": {
+      "title": "Paiement",
+      "description": "Réglez votre abonnement {plan} en toute sécurité.",
+      "simulated": "Environnement de démonstration",
+      "simulatedHint": "Aucun paiement réel n'est effectué et aucune carte n'est enregistrée. L'intégration CMI arrive en Phase 3.",
+      "cardNumber": "Numéro de carte",
+      "cardHolder": "Titulaire de la carte",
+      "expiry": "Expiration",
+      "cvc": "Cryptogramme",
+      "total": "Total à régler",
+      "submit": "Payer {amount}",
+      "submitting": "Traitement du paiement…",
+      "back": "Revenir aux packs"
+    },
+    "success": {
+      "title": "Vos identifiants ont été envoyés par e-mail",
+      "description": "Votre compte est actif. Consultez votre boîte de réception pour vous connecter et commencer à facturer.",
+      "checkSpam": "Pensez à vérifier vos courriers indésirables si l'e-mail n'apparaît pas dans les prochaines minutes.",
+      "goToLogin": "Aller à la connexion"
+    }
+  },
   "dashboard": {
     "title": "Tableau de bord",
-    "placeholder": "Bienvenue ! Les modules de facturation arrivent avec la Phase 1."
+    "description": "Vue d'ensemble de votre activité",
+    "newInvoice": "Nouvelle facture",
+    "kpi": {
+      "revenue": "Chiffre d'affaires",
+      "revenueHint": "vs période précédente",
+      "paid": "Encaissé",
+      "outstanding": "Restant dû",
+      "overdue": "En retard",
+      "overdueHint": "{count} factures concernées"
+    },
+    "revenueChart": {
+      "title": "Évolution du chiffre d'affaires",
+      "description": "Facturé et encaissé, par mois"
+    },
+    "statusChart": {
+      "title": "Répartition des factures",
+      "description": "Par statut, sur la période"
+    },
+    "recent": {
+      "title": "Factures récentes",
+      "description": "Les 5 derniers documents émis",
+      "seeAll": "Voir toutes les factures"
+    },
+    "empty": {
+      "title": "Aucune donnée à afficher",
+      "description": "Vos statistiques apparaîtront dès votre première facture validée."
+    }
+  },
+  "invoices": {
+    "title": "Factures",
+    "description": "Toutes vos factures, devis et avoirs",
+    "create": "Nouvelle facture",
+    "searchPlaceholder": "Numéro, client, montant…",
+    "columns": {
+      "number": "Numéro",
+      "client": "Client",
+      "issuedAt": "Émise le",
+      "dueAt": "Échéance",
+      "status": "Statut",
+      "total": "Total TTC",
+      "actions": "Actions"
+    },
+    "empty": {
+      "title": "Aucune facture",
+      "description": "Créez votre première facture conforme en moins d'une minute."
+    },
+    "form": {
+      "createTitle": "Nouvelle facture",
+      "editTitle": "Modifier le brouillon",
+      "createDescription": "Renseignez le client et le montant. Le numéro est attribué à la validation.",
+      "editDescription": "Seuls les brouillons sont modifiables (immuabilité fiscale).",
+      "clientName": "Client",
+      "clientPlaceholder": "Nom du client ou de la société",
+      "issuedAt": "Date d'émission",
+      "dueAt": "Échéance",
+      "status": "Statut",
+      "amount": "Montant TTC",
+      "currency": "Devise",
+      "submit": "Enregistrer la facture",
+      "submitting": "Enregistrement…"
+    },
+    "actions": {
+      "open": "Ouvrir les actions",
+      "edit": "Modifier",
+      "cancel": "Annuler la facture",
+      "delete": "Supprimer",
+      "locked": "Facture validée — verrouillée"
+    },
+    "delete": {
+      "title": "Supprimer ce brouillon ?",
+      "description": "Cette action est définitive. Seuls les brouillons peuvent être supprimés.",
+      "confirm": "Supprimer"
+    },
+    "cancelConfirm": {
+      "title": "Annuler cette facture ?",
+      "description": "La facture passe au statut « Annulée ». Conformément à la loi, elle n'est jamais supprimée.",
+      "confirm": "Annuler la facture"
+    }
+  },
+  "cash": {
+    "title": "Caisses",
+    "description": "Suivi des encaissements et des décaissements",
+    "newEntry": "Nouveau mouvement",
+    "balance": "Solde actuel",
+    "inflow": "Encaissements",
+    "outflow": "Décaissements",
+    "net": "Flux net",
+    "columns": {
+      "date": "Date",
+      "label": "Libellé",
+      "method": "Mode",
+      "register": "Caisse",
+      "amount": "Montant",
+      "actions": "Actions"
+    },
+    "empty": {
+      "title": "Aucun mouvement de caisse",
+      "description": "Les règlements enregistrés sur vos factures alimenteront automatiquement cette vue."
+    },
+    "methods": {
+      "cash": "Espèces",
+      "cheque": "Chèque",
+      "transfer": "Virement",
+      "card": "Carte",
+      "effect": "Effet"
+    },
+    "form": {
+      "createTitle": "Nouveau mouvement",
+      "editTitle": "Modifier le mouvement",
+      "createDescription": "Enregistrez un encaissement ou un décaissement.",
+      "editDescription": "Corrigez les informations de ce mouvement de caisse.",
+      "date": "Date",
+      "label": "Libellé",
+      "labelPlaceholder": "Ex. Encaissement facture, achat fournitures…",
+      "method": "Mode de règlement",
+      "register": "Caisse",
+      "registerPlaceholder": "Caisse principale",
+      "direction": "Sens",
+      "amount": "Montant",
+      "currency": "Devise",
+      "submit": "Enregistrer le mouvement",
+      "submitting": "Enregistrement…"
+    },
+    "direction": {
+      "inflow": "Encaissement",
+      "outflow": "Décaissement"
+    },
+    "actions": {
+      "open": "Ouvrir les actions",
+      "edit": "Modifier",
+      "delete": "Supprimer"
+    },
+    "delete": {
+      "title": "Supprimer ce mouvement ?",
+      "description": "Cette action est définitive.",
+      "confirm": "Supprimer"
+    }
+  },
+  "users": {
+    "title": "Utilisateurs",
+    "description": "Collaborateurs ayant accès à votre société",
+    "invite": "Ajouter un utilisateur",
+    "columns": {
+      "user": "Collaborateur",
+      "role": "Rôle",
+      "status": "État",
+      "lastActive": "Dernière activité"
+    },
+    "roles": {
+      "owner": "Propriétaire",
+      "admin": "Administrateur",
+      "accountant": "Comptable",
+      "sales": "Commercial",
+      "viewer": "Lecture seule"
+    },
+    "state": {
+      "active": "Actif",
+      "invited": "Invitation envoyée"
+    },
+    "empty": {
+      "title": "Aucun collaborateur",
+      "description": "Invitez vos collègues et attribuez-leur un rôle adapté à leur métier."
+    },
+    "dialog": {
+      "title": "Ajouter un utilisateur",
+      "description": "Il recevra une invitation par e-mail pour rejoindre votre société.",
+      "email": "Adresse e-mail",
+      "name": "Nom complet",
+      "role": "Rôle",
+      "rolePlaceholder": "Choisir un rôle",
+      "submit": "Envoyer l'invitation",
+      "submitting": "Envoi de l'invitation…"
+    }
+  },
+  "adminNotes": {
+    "title": "Notes admin",
+    "description": "Adressez une demande ou signalez un problème à notre équipe",
+    "compose": {
+      "title": "Nouvelle note",
+      "subject": "Objet",
+      "subjectPlaceholder": "Résumez votre demande en une ligne",
+      "body": "Message",
+      "bodyPlaceholder": "Décrivez votre demande le plus précisément possible…",
+      "priority": "Priorité",
+      "submit": "Envoyer la note",
+      "submitting": "Envoi en cours…"
+    },
+    "priorities": {
+      "low": "Basse",
+      "normal": "Normale",
+      "high": "Haute"
+    },
+    "history": {
+      "title": "Vos notes",
+      "description": "Historique de vos échanges avec l'équipe"
+    },
+    "empty": {
+      "title": "Aucune note envoyée",
+      "description": "Utilisez le formulaire pour poser une question ou signaler un incident."
+    }
+  },
+  "calculator": {
+    "title": "Calculatrice",
+    "open": "Ouvrir la calculatrice",
+    "clear": "Effacer"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "description": "Gérez votre profil, votre société et vos préférences.",
+    "profile": {
+      "title": "Profil",
+      "description": "Vos informations personnelles.",
+      "name": "Nom",
+      "email": "Adresse e-mail",
+      "emailStatus": "Statut de l'e-mail",
+      "verified": "Vérifié",
+      "unverified": "Non vérifié"
+    },
+    "company": {
+      "title": "Société active",
+      "description": "La société sur laquelle vous travaillez.",
+      "legalName": "Raison sociale",
+      "ice": "ICE",
+      "legalForm": "Forme juridique",
+      "none": "Aucune société active."
+    },
+    "preferences": {
+      "title": "Préférences",
+      "description": "Langue et apparence de l'interface.",
+      "language": "Langue",
+      "theme": "Thème"
+    }
+  },
+  "landing": {
+    "nav": {
+      "login": "Se connecter",
+      "register": "Créer un compte"
+    },
+    "hero": {
+      "badge": "Conformité DGI native",
+      "title": "La facturation marocaine, enfin rapide et conforme",
+      "subtitle": "XPR Facture réunit devis, factures, encaissements et caisse dans une interface pensée pour les TPE, PME et auto-entrepreneurs au Maroc. Une facture conforme en moins de 60 secondes.",
+      "ctaPrimary": "Créer un compte",
+      "ctaSecondary": "Se connecter"
+    },
+    "features": {
+      "title": "Tout ce qu'il faut pour facturer sereinement",
+      "subtitle": "Des outils précis, conformes à la réglementation marocaine, sans complexité inutile.",
+      "items": [
+        {
+          "title": "Factures et devis",
+          "description": "Créez, envoyez en PDF et suivez vos factures et devis avec une numérotation continue et conforme."
+        },
+        {
+          "title": "Caisse et encaissements",
+          "description": "Suivez vos flux de trésorerie, enregistrez les règlements et rapprochez vos caisses."
+        },
+        {
+          "title": "Conformité DGI",
+          "description": "ICE, IF, TVA par taux, montant en toutes lettres : la conformité fiscale est intégrée nativement."
+        },
+        {
+          "title": "Bilingue FR / AR",
+          "description": "Interface complète en français et en arabe, avec support RTL soigné à chaque écran."
+        }
+      ]
+    },
+    "pricing": {
+      "title": "Des tarifs clairs, en dirhams",
+      "subtitle": "Choisissez le pack adapté à votre activité. Changez ou résiliez à tout moment."
+    },
+    "cta": {
+      "title": "Prêt à émettre votre première facture ?",
+      "subtitle": "Créez votre compte en quelques minutes et facturez dès aujourd'hui, en toute conformité.",
+      "button": "Commencer maintenant"
+    }
   }
 }

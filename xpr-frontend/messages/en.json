@@ -9,13 +9,67 @@
     "error": "Something went wrong",
     "retry": "Retry",
     "save": "Save",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "search": "Search",
+    "filters": "Filters",
+    "all": "All",
+    "export": "Export",
+    "actions": "Actions",
+    "noData": "Data will be available once the server is connected.",
+    "period": {
+      "last7": "Last 7 days",
+      "last30": "Last 30 days",
+      "last90": "Last 90 days",
+      "year": "Current fiscal year"
+    },
+    "edit": "Edit",
+    "delete": "Delete",
+    "create": "Create",
+    "confirm": "Confirm",
+    "saving": "Saving…",
+    "close": "Close"
   },
   "validation": {
     "required": "This field is required",
     "email": "Invalid email address",
     "passwordMin": "Password must be at least 8 characters",
-    "tooLong": "This text is too long"
+    "tooLong": "This text is too long",
+    "minLength": "This text is too short",
+    "clientName": "Client name is required",
+    "amount": "Invalid amount",
+    "dueBeforeIssued": "Due date must be on or after the issue date"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "invoices": "Invoices",
+    "cash": "Cash registers",
+    "users": "Users",
+    "adminNotes": "Admin notes",
+    "groups": {
+      "overview": "Overview",
+      "management": "Management",
+      "organisation": "Organisation",
+      "preferences": "Preferences"
+    },
+    "collapse": "Collapse menu",
+    "expand": "Expand menu",
+    "openMenu": "Open menu",
+    "searchPlaceholder": "Search or navigate…",
+    "commandPalette": "Command palette",
+    "commandPaletteHint": "Navigate and act from the keyboard",
+    "commandPalettePlaceholder": "Type a command or a screen…",
+    "toggleTheme": "Toggle theme",
+    "account": "My account",
+    "settings": "Settings",
+    "logout": "Sign out"
+  },
+  "status": {
+    "draft": "Draft",
+    "sent": "Sent",
+    "partial": "Partial",
+    "paid": "Paid",
+    "overdue": "Overdue",
+    "cancelled": "Cancelled"
   },
   "auth": {
     "common": {
@@ -27,7 +81,7 @@
       "title": "Sign in",
       "description": "Access your invoicing workspace",
       "remember": "Keep me signed in",
-      "forgot": "Forgot password?",
+      "forgot": "Forgot your password?",
       "submit": "Sign in",
       "noAccount": "No account yet?"
     },
@@ -38,8 +92,8 @@
       "companyName": "Company legal name",
       "legalForm": "Legal form",
       "legalFormPlaceholder": "Choose a legal form",
-      "autoEntrepreneurTitle": "Auto-entrepreneur regime",
-      "autoEntrepreneurHint": "The \"VAT not applicable\" notice will be enabled automatically on your documents. You can change it later in settings.",
+      "autoEntrepreneurTitle": "Auto-entrepreneur scheme",
+      "autoEntrepreneurHint": "The \"VAT not applicable\" notice will be enabled automatically on your documents. You can change it in settings.",
       "submit": "Create my account",
       "hasAccount": "Already have an account?"
     },
@@ -60,8 +114,363 @@
       "cooperative": "Cooperative"
     }
   },
+  "pricing": {
+    "title": "Choose your plan",
+    "description": "Every plan includes DGI compliance, invoicing in dirhams, and support in French and Arabic.",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "yearlyHint": "2 months free",
+    "perMonth": "/ month",
+    "billedYearly": "billed {amount} per year",
+    "free": "Free",
+    "mostPopular": "Most popular",
+    "choose": "Choose {plan}",
+    "current": "Current plan",
+    "vatNote": "Prices excluding tax, in Moroccan dirhams (MAD). 20% VAT applies.",
+    "steps": {
+      "account": "Account",
+      "plan": "Plan",
+      "payment": "Payment",
+      "done": "Confirmation"
+    },
+    "plans": {
+      "free": {
+        "name": "Free",
+        "tagline": "To try compliant invoicing",
+        "features": [
+          "10 invoices per month",
+          "1 user",
+          "1 company",
+          "Standard invoice template",
+          "PDF export",
+          "Email support"
+        ]
+      },
+      "standard": {
+        "name": "Standard",
+        "tagline": "For active micro-businesses and auto-entrepreneurs",
+        "features": [
+          "Unlimited invoices",
+          "5 users",
+          "Quotes and credit notes",
+          "Cash register management",
+          "Automatic payment reminders",
+          "Customisable document templates",
+          "Priority support"
+        ]
+      },
+      "pro": {
+        "name": "Pro",
+        "tagline": "For SMEs and accounting firms",
+        "features": [
+          "Everything in Standard",
+          "Unlimited users",
+          "Multi-company",
+          "Fine-grained roles and permissions",
+          "DGI accounting exports",
+          "API and webhooks",
+          "Dedicated phone support"
+        ]
+      }
+    },
+    "payment": {
+      "title": "Payment",
+      "description": "Pay for your {plan} subscription securely.",
+      "simulated": "Demonstration environment",
+      "simulatedHint": "No real payment is processed and no card is stored. The CMI integration arrives in Phase 3.",
+      "cardNumber": "Card number",
+      "cardHolder": "Cardholder name",
+      "expiry": "Expiry",
+      "cvc": "Security code",
+      "total": "Total due",
+      "submit": "Pay {amount}",
+      "submitting": "Processing payment…",
+      "back": "Back to plans"
+    },
+    "success": {
+      "title": "Your credentials have been sent by email",
+      "description": "Your account is active. Check your inbox to sign in and start invoicing.",
+      "checkSpam": "Check your spam folder if the email does not arrive within a few minutes.",
+      "goToLogin": "Go to sign in"
+    }
+  },
   "dashboard": {
     "title": "Dashboard",
-    "placeholder": "Welcome! Invoicing modules arrive with Phase 1."
+    "description": "An overview of your activity",
+    "newInvoice": "New invoice",
+    "kpi": {
+      "revenue": "Revenue",
+      "revenueHint": "vs previous period",
+      "paid": "Collected",
+      "outstanding": "Outstanding",
+      "overdue": "Overdue",
+      "overdueHint": "{count} invoices affected"
+    },
+    "revenueChart": {
+      "title": "Revenue over time",
+      "description": "Invoiced and collected, by month"
+    },
+    "statusChart": {
+      "title": "Invoice breakdown",
+      "description": "By status, over the period"
+    },
+    "recent": {
+      "title": "Recent invoices",
+      "description": "The last 5 documents issued",
+      "seeAll": "See all invoices"
+    },
+    "empty": {
+      "title": "Nothing to display yet",
+      "description": "Your statistics will appear as soon as you validate your first invoice."
+    }
+  },
+  "invoices": {
+    "title": "Invoices",
+    "description": "All your invoices, quotes and credit notes",
+    "create": "New invoice",
+    "searchPlaceholder": "Number, client, amount…",
+    "columns": {
+      "number": "Number",
+      "client": "Client",
+      "issuedAt": "Issued",
+      "dueAt": "Due",
+      "status": "Status",
+      "total": "Total incl. VAT",
+      "actions": "Actions"
+    },
+    "empty": {
+      "title": "No invoices",
+      "description": "Create your first compliant invoice in under a minute."
+    },
+    "form": {
+      "createTitle": "New invoice",
+      "editTitle": "Edit draft",
+      "createDescription": "Enter the client and amount. The number is assigned on validation.",
+      "editDescription": "Only drafts can be edited (fiscal immutability).",
+      "clientName": "Client",
+      "clientPlaceholder": "Client or company name",
+      "issuedAt": "Issue date",
+      "dueAt": "Due date",
+      "status": "Status",
+      "amount": "Total incl. tax",
+      "currency": "Currency",
+      "submit": "Save invoice",
+      "submitting": "Saving…"
+    },
+    "actions": {
+      "open": "Open actions",
+      "edit": "Edit",
+      "cancel": "Cancel invoice",
+      "delete": "Delete",
+      "locked": "Validated invoice — locked"
+    },
+    "delete": {
+      "title": "Delete this draft?",
+      "description": "This action is permanent. Only drafts can be deleted.",
+      "confirm": "Delete"
+    },
+    "cancelConfirm": {
+      "title": "Cancel this invoice?",
+      "description": "The invoice moves to the “Cancelled” status. By law, it is never deleted.",
+      "confirm": "Cancel invoice"
+    }
+  },
+  "cash": {
+    "title": "Cash registers",
+    "description": "Tracking of money in and money out",
+    "newEntry": "New entry",
+    "balance": "Current balance",
+    "inflow": "Money in",
+    "outflow": "Money out",
+    "net": "Net flow",
+    "columns": {
+      "date": "Date",
+      "label": "Description",
+      "method": "Method",
+      "register": "Register",
+      "amount": "Amount",
+      "actions": "Actions"
+    },
+    "empty": {
+      "title": "No cash movements",
+      "description": "Payments recorded against your invoices will feed this view automatically."
+    },
+    "methods": {
+      "cash": "Cash",
+      "cheque": "Cheque",
+      "transfer": "Transfer",
+      "card": "Card",
+      "effect": "Bill of exchange"
+    },
+    "form": {
+      "createTitle": "New movement",
+      "editTitle": "Edit movement",
+      "createDescription": "Record an inflow or an outflow.",
+      "editDescription": "Correct the details of this cash movement.",
+      "date": "Date",
+      "label": "Description",
+      "labelPlaceholder": "e.g. Invoice payment, office supplies…",
+      "method": "Payment method",
+      "register": "Register",
+      "registerPlaceholder": "Main register",
+      "direction": "Direction",
+      "amount": "Amount",
+      "currency": "Currency",
+      "submit": "Save movement",
+      "submitting": "Saving…"
+    },
+    "direction": {
+      "inflow": "Inflow",
+      "outflow": "Outflow"
+    },
+    "actions": {
+      "open": "Open actions",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "delete": {
+      "title": "Delete this movement?",
+      "description": "This action is permanent.",
+      "confirm": "Delete"
+    }
+  },
+  "users": {
+    "title": "Users",
+    "description": "Colleagues with access to your company",
+    "invite": "Add a user",
+    "columns": {
+      "user": "Colleague",
+      "role": "Role",
+      "status": "State",
+      "lastActive": "Last active"
+    },
+    "roles": {
+      "owner": "Owner",
+      "admin": "Administrator",
+      "accountant": "Accountant",
+      "sales": "Sales",
+      "viewer": "Read only"
+    },
+    "state": {
+      "active": "Active",
+      "invited": "Invitation sent"
+    },
+    "empty": {
+      "title": "No colleagues yet",
+      "description": "Invite your colleagues and give each of them a role that fits their job."
+    },
+    "dialog": {
+      "title": "Add a user",
+      "description": "They will receive an email invitation to join your company.",
+      "email": "Email address",
+      "name": "Full name",
+      "role": "Role",
+      "rolePlaceholder": "Choose a role",
+      "submit": "Send invitation",
+      "submitting": "Sending invitation…"
+    }
+  },
+  "adminNotes": {
+    "title": "Admin notes",
+    "description": "Send a request or report an issue to our team",
+    "compose": {
+      "title": "New note",
+      "subject": "Subject",
+      "subjectPlaceholder": "Summarise your request in one line",
+      "body": "Message",
+      "bodyPlaceholder": "Describe your request as precisely as possible…",
+      "priority": "Priority",
+      "submit": "Send note",
+      "submitting": "Sending…"
+    },
+    "priorities": {
+      "low": "Low",
+      "normal": "Normal",
+      "high": "High"
+    },
+    "history": {
+      "title": "Your notes",
+      "description": "History of your exchanges with the team"
+    },
+    "empty": {
+      "title": "No notes sent",
+      "description": "Use the form to ask a question or report an incident."
+    }
+  },
+  "calculator": {
+    "title": "Calculator",
+    "open": "Open calculator",
+    "clear": "Clear"
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "Manage your profile, company and preferences.",
+    "profile": {
+      "title": "Profile",
+      "description": "Your personal information.",
+      "name": "Name",
+      "email": "Email address",
+      "emailStatus": "Email status",
+      "verified": "Verified",
+      "unverified": "Not verified"
+    },
+    "company": {
+      "title": "Active company",
+      "description": "The company you are working on.",
+      "legalName": "Legal name",
+      "ice": "ICE",
+      "legalForm": "Legal form",
+      "none": "No active company."
+    },
+    "preferences": {
+      "title": "Preferences",
+      "description": "Interface language and appearance.",
+      "language": "Language",
+      "theme": "Theme"
+    }
+  },
+  "landing": {
+    "nav": {
+      "login": "Sign in",
+      "register": "Create account"
+    },
+    "hero": {
+      "badge": "Native DGI compliance",
+      "title": "Moroccan invoicing, finally fast and compliant",
+      "subtitle": "XPR Invoice brings quotes, invoices, payments and cash management into one interface built for Moroccan small and medium businesses. A compliant invoice in under 60 seconds.",
+      "ctaPrimary": "Create account",
+      "ctaSecondary": "Sign in"
+    },
+    "features": {
+      "title": "Everything you need to invoice with confidence",
+      "subtitle": "Precise tools, compliant with Moroccan regulations, without needless complexity.",
+      "items": [
+        {
+          "title": "Invoices and quotes",
+          "description": "Create, send as PDF and track your invoices and quotes with continuous, compliant numbering."
+        },
+        {
+          "title": "Cash and payments",
+          "description": "Track your cash flow, record payments and reconcile your registers."
+        },
+        {
+          "title": "DGI compliance",
+          "description": "ICE, IF, VAT per rate, amount in words: tax compliance is built in natively."
+        },
+        {
+          "title": "Bilingual FR / AR",
+          "description": "Full interface in French and Arabic, with polished RTL support on every screen."
+        }
+      ]
+    },
+    "pricing": {
+      "title": "Clear pricing, in dirhams",
+      "subtitle": "Pick the pack that fits your business. Change or cancel anytime."
+    },
+    "cta": {
+      "title": "Ready to issue your first invoice?",
+      "subtitle": "Create your account in minutes and start invoicing today, fully compliant.",
+      "button": "Get started now"
+    }
   }
 }
