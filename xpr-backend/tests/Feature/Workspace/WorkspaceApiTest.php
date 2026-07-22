@@ -28,24 +28,40 @@ it('expose les statistiques du dashboard pour la société active', function ():
         ->assertJsonPath('currency', 'MAD');
 });
 
-it('liste les factures de la société active avec pagination', function (): void {
+it('liste les documents de la société active avec pagination', function (): void {
     [$user] = workspaceAccount();
 
+    // Sans filtre de type : les 7 factures ET le devis. La table est unique,
+    // la liste par défaut l'est aussi — c'est l'écran qui restreint.
     actingAs($user)
-        ->getJson('/api/v1/invoices')
+        ->getJson('/api/v1/documents')
         ->assertOk()
         ->assertJsonStructure([
-            'data' => [['id', 'clientName', 'status', 'totalCents', 'currency']],
+            'data' => [['id', 'type', 'clientName', 'status', 'totalCents', 'currency']],
             'meta' => ['total', 'page', 'perPage'],
         ])
-        ->assertJsonPath('meta.total', 7);
+        ->assertJsonPath('meta.total', 8);
 });
 
-it('filtre les factures par statut', function (): void {
+it('filtre les documents par type', function (): void {
     [$user] = workspaceAccount();
 
     actingAs($user)
-        ->getJson('/api/v1/invoices?status=draft')
+        ->getJson('/api/v1/documents?type=invoice')
+        ->assertOk()
+        ->assertJsonPath('meta.total', 7);
+
+    actingAs($user)
+        ->getJson('/api/v1/documents?type=quote')
+        ->assertOk()
+        ->assertJsonPath('meta.total', 1);
+});
+
+it('filtre les documents par statut', function (): void {
+    [$user] = workspaceAccount();
+
+    actingAs($user)
+        ->getJson('/api/v1/documents?type=invoice&status=draft')
         ->assertOk()
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.status', 'draft');
@@ -93,23 +109,23 @@ it('permet d inviter un collaborateur', function (): void {
         ->assertJsonPath('state', 'invited');
 });
 
-it('isole les factures entre deux sociétés', function (): void {
+it('isole les documents entre deux sociétés', function (): void {
     [$userA, $companyA] = workspaceAccount();
     [$userB] = workspaceAccount();
 
     actingAs($userA)
-        ->getJson('/api/v1/invoices')
+        ->getJson('/api/v1/documents')
         ->assertOk()
-        ->assertJsonPath('meta.total', 7);
+        ->assertJsonPath('meta.total', 8);
 
     actingAs($userB)
-        ->getJson('/api/v1/invoices')
+        ->getJson('/api/v1/documents')
         ->assertOk()
-        ->assertJsonPath('meta.total', 7);
+        ->assertJsonPath('meta.total', 8);
 
     expect($companyA->id)->not->toBe($userB->resolveActiveCompany()?->id);
 });
 
 it('refuse les routes applicatives sans authentification', function (): void {
-    getJson('/api/v1/invoices')->assertUnauthorized();
+    getJson('/api/v1/documents')->assertUnauthorized();
 });

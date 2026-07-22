@@ -16,12 +16,24 @@ enum Permission: string
 {
     case DashboardView = 'dashboard.view';
 
-    case InvoicesView = 'invoices.view';
-    case InvoicesCreate = 'invoices.create';
-    case InvoicesUpdate = 'invoices.update';
-    case InvoicesDelete = 'invoices.delete';
-    /** Annuler une facture VALIDÉE : acte fiscal, plus sensible qu'une édition. */
-    case InvoicesCancel = 'invoices.cancel';
+    // Documents commerciaux — devis, factures, avoirs et les types dérivés.
+    // Nommés `documents.*` et non `invoices.*` depuis que les 8 types partagent
+    // un moteur unique : un droit qui autorise à créer un devis ne peut pas
+    // s'appeler « invoices.create » sans tromper la lecture d'un audit.
+    case DocumentsView = 'documents.view';
+    case DocumentsCreate = 'documents.create';
+    case DocumentsUpdate = 'documents.update';
+    case DocumentsDelete = 'documents.delete';
+    /** Émettre : attribue le numéro fiscal et gèle le document. Acte engageant. */
+    case DocumentsIssue = 'documents.issue';
+    /** Annuler un document VALIDÉ : acte fiscal, plus sensible qu'une édition. */
+    case DocumentsCancel = 'documents.cancel';
+
+    case CatalogView = 'catalog.view';
+    case CatalogCreate = 'catalog.create';
+    case CatalogUpdate = 'catalog.update';
+    /** Archivage d'un article : il quitte les listes, les documents le gardent. */
+    case CatalogDelete = 'catalog.delete';
 
     case PartnersView = 'partners.view';
     case PartnersCreate = 'partners.create';

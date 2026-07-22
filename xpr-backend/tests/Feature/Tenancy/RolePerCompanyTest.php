@@ -50,7 +50,7 @@ it('accorde les droits du rôle détenu dans la société active', function (): 
     $company = companyWithAccounting();
     memberOf($user, $company, Role::Owner, default: true);
 
-    actingAs($user)->getJson('/api/v1/invoices')->assertOk();
+    actingAs($user)->getJson('/api/v1/documents')->assertOk();
     actingAs($user)->getJson('/api/v1/users')->assertOk();
 });
 
@@ -64,18 +64,15 @@ it('n exporte PAS un rôle d une société vers une autre', function (): void {
     memberOf($user, $companyB, Role::Viewer, default: true);
 
     // Lecture : accordée par le rôle viewer
-    actingAs($user)->getJson('/api/v1/invoices')->assertOk();
+    actingAs($user)->getJson('/api/v1/documents')->assertOk();
 
     // Écriture : refusée. Si le team id fuyait, le rôle owner détenu chez A
     // autoriserait la création chez B — c'est exactement le bug recherché.
     actingAs($user)
-        ->postJson('/api/v1/invoices', [
+        ->postJson('/api/v1/documents', [
+            'type' => 'invoice',
             'clientName' => 'Client Interdit',
-            'issuedAt' => null,
-            'dueAt' => null,
-            'status' => 'draft',
-            'totalCents' => 100000,
-            'currency' => 'MAD',
+            'items' => [['label' => 'Prestation', 'quantity' => '1', 'unitPriceCents' => 100_000]],
         ])
         ->assertForbidden();
 });
@@ -85,22 +82,25 @@ it('refuse à un commercial d annuler une facture', function (): void {
     $company = companyWithAccounting();
     memberOf($user, $company, Role::Sales, default: true);
 
-    // Création autorisée…
-    $invoice = actingAs($user)
-        ->postJson('/api/v1/invoices', [
+    // Création ET émission autorisées : un commercial doit pouvoir envoyer sa
+    // facture sans attendre une validation comptable.
+    $document = actingAs($user)
+        ->postJson('/api/v1/documents', [
+            'type' => 'invoice',
             'clientName' => 'Client Commercial',
             'issuedAt' => now()->toDateString(),
-            'dueAt' => now()->addMonth()->toDateString(),
-            'status' => 'sent',
-            'totalCents' => 250000,
-            'currency' => 'MAD',
+            'items' => [['label' => 'Prestation', 'quantity' => '1', 'unitPriceCents' => 250_000]],
         ])
         ->assertCreated()
         ->json('id');
 
-    // … mais l'annulation est un acte fiscal réservé (§3)
-    actingAs($user)->postJson("/api/v1/invoices/{$invoice}/cancel")->assertForbidden();
-    actingAs($user)->deleteJson("/api/v1/invoices/{$invoice}")->assertForbidden();
+    actingAs($user)->postJson("/api/v1/documents/{$document}/issue")->assertOk();
+
+    // … mais l'annulation est un acte fiscal réservé (§3), la suppression aussi
+    actingAs($user)->postJson("/api/v1/documents/{$document}/cancel")->assertForbidden();
+    actingAs($user)->deleteJson("/api/v1/documents/{$document}")->assertForbidden();
+    // L'avoir défait une facture émise : même permission que l'annulation.
+    actingAs($user)->postJson("/api/v1/documents/{$document}/credit-note")->assertForbidden();
 });
 
 it('cantonne un lecteur à la lecture', function (): void {
@@ -134,7 +134,7 @@ it('réserve la modification des paramètres au propriétaire', function (): voi
         ->and(Role::Owner->permissionValues())->toContain(Permission::SettingsUpdate->value)
         // …mais l'admin garde tout le reste
         ->and(Role::Admin->permissionValues())->toContain(Permission::UsersInvite->value)
-        ->and(Role::Admin->permissionValues())->toContain(Permission::InvoicesCancel->value);
+        ->and(Role::Admin->permissionValues())->toContain(Permission::DocumentsCancel->value);
 });
 
 it('ne laisse aucune permission orpheline', function (): void {

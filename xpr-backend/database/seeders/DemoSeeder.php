@@ -5,21 +5,23 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Modules\Authentication\Models\User;
+use App\Modules\Documents\Services\DocumentCalculator;
 use App\Modules\Tenancy\Models\Company;
 use Database\Factories\CashMovementFactory;
-use Database\Factories\InvoiceFactory;
+use Database\Factories\DocumentFactory;
 use Database\Factories\PartnerFactory;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
  * Seed de démonstration complet.
  *
- * Stratégie RLS : les tables `invoices` et `cash_movements` ont le Row Level
+ * Stratégie RLS : les tables `documents` et `cash_movements` ont le Row Level
  * Security activé. Laravel se connecte en superuser (seeder), donc FORCE RLS
  * s'applique. On contourne en posant `SET LOCAL app.company_id = '...'` dans
  * une transaction avant chaque lot d'insertions — exactement comme le fait le
@@ -175,19 +177,23 @@ final class DemoSeeder extends Seeder
         $this->seedPartners($companyMain->id, 18);
         $this->seedPartners($companySecond->id, 6);
 
-        // ── 4. Factures pour Al Maghrib (société principale) ───────────────
-        $this->seedInvoices($companyMain->id);
+        // ── 4. Catalogue — AVANT les documents, dont les lignes le référencent
+        $this->seedCatalog($companyMain->id);
+        $this->seedCatalog($companySecond->id);
 
-        // ── 4bis. Quelques factures pour AtlasTech (société secondaire) ────
-        $this->seedInvoices($companySecond->id, 5);
+        // ── 5. Documents pour Al Maghrib (société principale) ──────────────
+        $this->seedDocuments($companyMain->id);
 
-        // ── 5. Mouvements de caisse pour Al Maghrib ───────────────────────
+        // ── 5bis. Quelques documents pour AtlasTech (société secondaire) ───
+        $this->seedDocuments($companySecond->id, 5);
+
+        // ── 6. Mouvements de caisse pour Al Maghrib ───────────────────────
         $this->seedCashMovements($companyMain->id, 25);
 
-        // ── 6. Quelques mouvements pour AtlasTech ─────────────────────────
+        // ── 7. Quelques mouvements pour AtlasTech ─────────────────────────
         $this->seedCashMovements($companySecond->id, 8);
 
-        // ── 7. Notes adressées au support ─────────────────────────────────
+        // ── 8. Notes adressées au support ─────────────────────────────────
         $this->seedAdminNotes($companyMain->id);
 
         $this->command->info('✅ DemoSeeder terminé.');
@@ -298,45 +304,193 @@ final class DemoSeeder extends Seeder
     }
 
     /**
-     * Insère `$total` factures pour une société donnée en contournant le RLS.
+     * Catalogue de la société : catégories puis articles.
+     *
+     * Seedé AVANT les documents, dont chaque ligne référence un article et en
+     * recopie le libellé, l'unité, le prix et le taux de TVA — exactement comme
+     * le fait DocumentItemBuilder en production.
+     *
+     * @return list<array{id: string, name: string, unit: string, price: int, tax_rate_id: ?string, tax_rate: string}>
+     */
+    private function seedCatalog(string $companyId): array
+    {
+        $now = now();
+
+        // Deux taux différents dans le catalogue, délibérément : sans cela le
+        // récapitulatif de TVA par taux du pied de facture (§3) n'aurait qu'une
+        // seule ligne et ne prouverait rien.
+        $standard = $this->globalTaxRate('20.00');
+        $reduced = $this->globalTaxRate('10.00');
+
+        $catalog = [
+            ['category' => 'Prestations', 'color' => '#2563EB', 'name' => 'Journée de conseil', 'reference' => 'CONS-J', 'type' => 'service', 'unit' => 'jour', 'price' => 450_000, 'cost' => 200_000, 'tax' => $standard],
+            ['category' => 'Prestations', 'color' => '#2563EB', 'name' => 'Développement sur mesure', 'reference' => 'DEV-H', 'type' => 'service', 'unit' => 'heure', 'price' => 60_000, 'cost' => 28_000, 'tax' => $standard],
+            ['category' => 'Prestations', 'color' => '#2563EB', 'name' => 'Formation utilisateurs', 'reference' => 'FORM-J', 'type' => 'service', 'unit' => 'jour', 'price' => 380_000, 'cost' => 160_000, 'tax' => $standard],
+            ['category' => 'Licences & abonnements', 'color' => '#7C3AED', 'name' => 'Licence XPR Facture', 'reference' => 'LIC-XPR', 'type' => 'service', 'unit' => 'an', 'price' => 1_200_000, 'cost' => null, 'tax' => $standard],
+            ['category' => 'Licences & abonnements', 'color' => '#7C3AED', 'name' => 'Hébergement mutualisé', 'reference' => 'HEB-M', 'type' => 'service', 'unit' => 'mois', 'price' => 45_000, 'cost' => 18_000, 'tax' => $reduced],
+            ['category' => 'Maintenance', 'color' => '#4B5563', 'name' => 'Maintenance applicative', 'reference' => 'MNT-M', 'type' => 'service', 'unit' => 'mois', 'price' => 350_000, 'cost' => 150_000, 'tax' => $standard],
+            ['category' => 'Matériel informatique', 'color' => '#059669', 'name' => 'Ordinateur portable 14"', 'reference' => 'MAT-PC14', 'type' => 'good', 'unit' => 'unité', 'price' => 950_000, 'cost' => 780_000, 'tax' => $standard],
+            ['category' => 'Matériel informatique', 'color' => '#059669', 'name' => 'Écran 27" 4K', 'reference' => 'MAT-E27', 'type' => 'good', 'unit' => 'unité', 'price' => 320_000, 'cost' => 245_000, 'tax' => $standard],
+            ['category' => 'Fournitures de bureau', 'color' => '#D97706', 'name' => 'Ramette papier A4', 'reference' => 'FRN-A4', 'type' => 'good', 'unit' => 'ramette', 'price' => 5_500, 'cost' => 3_800, 'tax' => $standard],
+        ];
+
+        // Idempotence : une société déjà pourvue n'est pas re-seedée, on relit
+        // simplement son catalogue pour composer les lignes de documents.
+        if (DB::table('products')->where('company_id', $companyId)->exists()) {
+            return $this->readCatalog($companyId);
+        }
+
+        $categoryIds = [];
+        $categoryRows = [];
+        $productRows = [];
+
+        foreach ($catalog as $article) {
+            if (! isset($categoryIds[$article['category']])) {
+                $categoryIds[$article['category']] = Str::uuid7()->toString();
+                $categoryRows[] = [
+                    'id' => $categoryIds[$article['category']],
+                    'company_id' => $companyId,
+                    'name' => $article['category'],
+                    'color' => $article['color'],
+                    'is_active' => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+
+            $productRows[] = [
+                'id' => Str::uuid7()->toString(),
+                'company_id' => $companyId,
+                'category_id' => $categoryIds[$article['category']],
+                'type' => $article['type'],
+                'reference' => $article['reference'],
+                'name' => $article['name'],
+                'unit' => $article['unit'],
+                'unit_price_cents' => $article['price'],
+                'cost_price_cents' => $article['cost'],
+                'currency' => 'MAD',
+                'tax_rate_id' => $article['tax']['id'] ?? null,
+                // Seuls les biens sont suivis : la contrainte CHECK
+                // `products_stock_goods_only_check` refuserait un service coché.
+                'track_stock' => $article['type'] === 'good',
+                'is_active' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        // Contournement RLS : SET LOCAL dans une transaction dédiée.
+        DB::transaction(function () use ($companyId, $categoryRows, $productRows): void {
+            DB::statement("SET LOCAL app.company_id = '{$companyId}'");
+            DB::table('categories')->insert($categoryRows);
+            DB::table('products')->insert($productRows);
+        });
+
+        return $this->readCatalog($companyId);
+    }
+
+    /**
+     * Relit le catalogue d'une société, joint à son taux de TVA.
+     *
+     * Le taux est ramené ICI plutôt que sur chaque ligne de document : les
+     * lignes en ont besoin pour figer `tax_rate`, et faire une requête par
+     * ligne sur une cinquantaine de documents serait absurde.
+     *
+     * @return list<array{id: string, name: string, unit: string, price: int, tax_rate_id: ?string, tax_rate: string}>
+     */
+    private function readCatalog(string $companyId): array
+    {
+        $rows = DB::table('products')
+            ->leftJoin('tax_rates', 'tax_rates.id', '=', 'products.tax_rate_id')
+            ->where('products.company_id', $companyId)
+            ->whereNull('products.deleted_at')
+            ->orderBy('products.name')
+            ->get([
+                'products.id',
+                'products.name',
+                'products.unit',
+                'products.unit_price_cents',
+                'products.tax_rate_id',
+                'tax_rates.rate',
+            ]);
+
+        return array_values($rows->map(fn (object $row): array => [
+            'id' => (string) $row->id,
+            'name' => (string) $row->name,
+            'unit' => (string) $row->unit,
+            'price' => (int) $row->unit_price_cents,
+            'tax_rate_id' => $row->tax_rate_id === null ? null : (string) $row->tax_rate_id,
+            // Sans taux rattaché, la ligne est à 0 % — une décision, pas un vide.
+            'tax_rate' => $row->rate === null ? '0.00' : (string) $row->rate,
+        ])->all());
+    }
+
+    /** @return array{id: string}|null */
+    private function globalTaxRate(string $rate): ?array
+    {
+        $id = DB::table('tax_rates')
+            ->whereNull('company_id')
+            ->where('kind', 'standard')
+            ->where('rate', $rate)
+            ->value('id');
+
+        return is_string($id) ? ['id' => $id] : null;
+    }
+
+    /**
+     * Insère `$total` documents pour une société donnée en contournant le RLS.
      *
      * La répartition par statut suit INVOICE_DISTRIBUTION pour la société
      * principale ; pour les sociétés secondaires on génère aléatoirement.
+     *
+     * Chaque document porte de VRAIES lignes, calculées par DocumentCalculator.
+     * Les totaux de l'en-tête en découlent — jamais l'inverse : un jeu de démo
+     * dont le TTC ne serait pas la somme de ses lignes rendrait le pied de
+     * facture incohérent dès le premier écran ouvert.
      */
-    private function seedInvoices(string $companyId, int $total = 0): void
+    private function seedDocuments(string $companyId, int $total = 0): void
     {
         // Idempotence (cf. docblock de DatabaseSeeder : `db:seed` doit pouvoir
-        // être relancé sans gonfler le jeu de données). Les factures n'ont pas
+        // être relancé sans gonfler le jeu de données). Les documents n'ont pas
         // de clé naturelle stable ici : on ne re-seede pas une société déjà
         // pourvue plutôt que de dupliquer.
-        if (DB::table('invoices')->where('company_id', $companyId)->exists()) {
+        if (DB::table('documents')->where('company_id', $companyId)->exists()) {
             return;
         }
 
-        $factory = InvoiceFactory::new();
+        $catalog = $this->readCatalog($companyId);
+
+        if ($catalog === []) {
+            return;
+        }
+
+        $factory = DocumentFactory::new();
         $rows = [];
+        $items = [];
         $now = now();
 
-        if ($total === 0) {
-            // Société principale : distribution contrôlée.
-            foreach (self::INVOICE_DISTRIBUTION as $status => $count) {
-                for ($i = 0; $i < $count; $i++) {
-                    $rows[] = $this->buildInvoiceRow($factory, $companyId, $status, $now);
-                }
-            }
-        } else {
-            // Sociétés secondaires : distribution aléatoire.
-            for ($i = 0; $i < $total; $i++) {
-                $rows[] = $this->buildInvoiceRow($factory, $companyId, null, $now);
-            }
+        $statuses = $total === 0
+            ? array_merge(...array_map(
+                static fn (string $status, int $count): array => array_fill(0, $count, $status),
+                array_keys(self::INVOICE_DISTRIBUTION),
+                array_values(self::INVOICE_DISTRIBUTION),
+            ))
+            // Sociétés secondaires : distribution aléatoire, laissée à la factory.
+            : array_fill(0, $total, null);
+
+        foreach ($statuses as $status) {
+            [$row, $rowItems] = $this->buildDocument($factory, $companyId, $status, $catalog, $now);
+            $rows[] = $row;
+            $items = [...$items, ...$rowItems];
         }
 
         $rows = $this->numberChronologically($rows, $companyId);
 
         // Contournement RLS : SET LOCAL dans une transaction dédiée.
-        DB::transaction(function () use ($companyId, $rows): void {
+        DB::transaction(function () use ($companyId, $rows, $items): void {
             DB::statement("SET LOCAL app.company_id = '{$companyId}'");
-            DB::table('invoices')->insert($rows);
+            DB::table('documents')->insert($rows);
+            DB::table('document_items')->insert($items);
         });
     }
 
@@ -528,15 +682,22 @@ final class DemoSeeder extends Seeder
     }
 
     /**
-     * Construit un tableau de données brutes pour une facture.
+     * Construit l'en-tête ET les lignes d'un document.
+     *
+     * L'identifiant est généré ici, en UUID v7 comme le fait la base : les
+     * lignes doivent pointer vers leur document AVANT que l'insertion groupée
+     * n'ait lieu, et une insertion ligne à ligne pour récupérer les clés
+     * multiplierait les allers-retours par cinquante.
      *
      * @param  string|null  $status  NULL = aléatoire via definition()
-     * @return array<string, mixed>
+     * @param  list<array{id: string, name: string, unit: string, price: int, tax_rate_id: ?string, tax_rate: string}>  $catalog
+     * @return array{0: array<string, mixed>, 1: list<array<string, mixed>>}
      */
-    private function buildInvoiceRow(
-        InvoiceFactory $factory,
+    private function buildDocument(
+        DocumentFactory $factory,
         string $companyId,
         ?string $status,
+        array $catalog,
         Carbon $now,
     ): array {
         /** @var array<string,mixed> $attrs */
@@ -544,18 +705,92 @@ final class DemoSeeder extends Seeder
             ? $factory->$status()->make()->toArray()
             : $factory->make()->toArray();
 
+        $documentId = Str::uuid7()->toString();
         $partner = $this->pickClient($companyId);
 
-        return array_merge($attrs, [
-            'company_id' => $companyId,
-            'partner_id' => $partner['id'] ?? null,
-            // Nom FIGÉ depuis la raison sociale du tiers : c'est ce que fait
-            // InvoiceWriteService en production. Sans cette copie, la démo
-            // afficherait un nom sans rapport avec le tiers rattaché.
-            'client_name' => $partner['legal_name'] ?? $attrs['client_name'],
-            'created_at' => $now,
-            'updated_at' => $now,
-        ]);
+        [$items, $totals] = $this->buildDocumentItems($documentId, $companyId, $catalog, $now);
+
+        return [
+            array_merge($attrs, [
+                'id' => $documentId,
+                'company_id' => $companyId,
+                'partner_id' => $partner['id'] ?? null,
+                // Nom FIGÉ depuis la raison sociale du tiers : c'est ce que fait
+                // DocumentWriteService en production. Sans cette copie, la démo
+                // afficherait un nom sans rapport avec le tiers rattaché.
+                'client_name' => $partner['legal_name'] ?? $attrs['client_name'],
+                // Les totaux de la factory sont ÉCRASÉS : ceux qui font foi
+                // sont la somme des lignes qu'on vient de composer.
+                'subtotal_cents' => $totals['subtotalCents'],
+                'discount_cents' => $totals['discountCents'],
+                'tax_cents' => $totals['taxCents'],
+                'total_cents' => $totals['totalCents'],
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]),
+            $items,
+        ];
+    }
+
+    /**
+     * Compose 1 à 4 lignes tirées du catalogue et en calcule les montants.
+     *
+     * Le calcul passe par DocumentCalculator, le même service que la
+     * production : si la règle d'arrondi change un jour, le jeu de démo suit
+     * sans qu'on ait à y penser.
+     *
+     * @param  list<array{id: string, name: string, unit: string, price: int, tax_rate_id: ?string, tax_rate: string}>  $catalog
+     * @return array{0: list<array<string, mixed>>, 1: array{subtotalCents: int, discountCents: int, taxCents: int, totalCents: int}}
+     */
+    private function buildDocumentItems(string $documentId, string $companyId, array $catalog, Carbon $now): array
+    {
+        $calculator = app(DocumentCalculator::class);
+
+        $picked = (array) array_rand($catalog, min(random_int(1, 4), count($catalog)));
+        $items = [];
+        $lines = [];
+
+        foreach ($picked as $position => $index) {
+            /** @var array{id: string, name: string, unit: string, price: int, tax_rate_id: ?string, tax_rate: numeric-string} $article */
+            $article = $catalog[$index];
+
+            $quantity = number_format((float) random_int(1, 20), 3, '.', '');
+            // Une ligne sur cinq porte une remise : assez pour que la colonne
+            // « remise » ne soit pas systématiquement vide à l'écran.
+            $discount = random_int(1, 5) === 1 ? '10.00' : '0.00';
+
+            $amounts = $calculator->line($quantity, $article['price'], $discount, $article['tax_rate']);
+
+            $items[] = [
+                'id' => Str::uuid7()->toString(),
+                'company_id' => $companyId,
+                'document_id' => $documentId,
+                'product_id' => $article['id'],
+                'position' => $position,
+                'label' => $article['name'],
+                'quantity' => $quantity,
+                'unit' => $article['unit'],
+                'unit_price_cents' => $article['price'],
+                'discount_percent' => $discount,
+                'tax_rate_id' => $article['tax_rate_id'],
+                'tax_rate' => $article['tax_rate'],
+                'subtotal_cents' => $amounts['subtotalCents'],
+                'discount_cents' => $amounts['discountCents'],
+                'tax_cents' => $amounts['taxCents'],
+                'total_cents' => $amounts['totalCents'],
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            $lines[] = [
+                'subtotalCents' => $amounts['subtotalCents'],
+                'discountCents' => $amounts['discountCents'],
+                'taxCents' => $amounts['taxCents'],
+                'totalCents' => $amounts['totalCents'],
+            ];
+        }
+
+        return [$items, $calculator->totals($lines)];
     }
 
     /**
@@ -600,7 +835,7 @@ final class DemoSeeder extends Seeder
      */
     private function seedCashMovements(string $companyId, int $count): void
     {
-        // Même garde d'idempotence que seedInvoices().
+        // Même garde d'idempotence que seedDocuments().
         if (DB::table('cash_movements')->where('company_id', $companyId)->exists()) {
             return;
         }

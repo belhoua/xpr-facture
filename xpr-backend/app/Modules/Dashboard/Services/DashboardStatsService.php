@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Modules\Accounting\Enums\DocumentType;
 use App\Modules\Cash\Models\CashMovement;
-use App\Modules\Invoices\Models\Invoice;
+use App\Modules\Documents\Enums\DocumentStatus;
+use App\Modules\Documents\Models\Document;
 use App\Modules\Partners\Enums\PartnerType;
 use App\Modules\Partners\Models\Partner;
 use Illuminate\Support\Carbon;
@@ -37,7 +39,7 @@ final class DashboardStatsService
         [$from, $to] = $this->resolvePeriod($period);
         [$previousFrom, $previousTo] = $this->previousPeriod($from, $to);
 
-        $invoices = Invoice::query()
+        $invoices = Document::query()->ofType(DocumentType::Invoice)
             ->where('status', '!=', 'cancelled')
             ->where(function ($query) use ($from, $to): void {
                 $query
@@ -50,7 +52,7 @@ final class DashboardStatsService
             })
             ->get();
 
-        $previousInvoices = Invoice::query()
+        $previousInvoices = Document::query()->ofType(DocumentType::Invoice)
             ->where('status', '!=', 'cancelled')
             ->whereBetween('issued_at', [$previousFrom->toDateString(), $previousTo->toDateString()])
             ->get();
@@ -58,9 +60,9 @@ final class DashboardStatsService
         $revenueCents = (int) $invoices->sum('total_cents');
         $previousRevenueCents = (int) $previousInvoices->sum('total_cents');
 
-        $collectedCents = (int) $invoices->whereIn('status', ['paid', 'partial'])->sum('total_cents');
-        $outstandingCents = (int) $invoices->whereIn('status', ['sent', 'partial', 'overdue'])->sum('total_cents');
-        $overdueRows = $invoices->where('status', 'overdue');
+        $collectedCents = (int) $invoices->whereIn('status', [DocumentStatus::Paid, DocumentStatus::Partial])->sum('total_cents');
+        $outstandingCents = (int) $invoices->whereIn('status', [DocumentStatus::Sent, DocumentStatus::Partial, DocumentStatus::Overdue])->sum('total_cents');
+        $overdueRows = $invoices->where('status', DocumentStatus::Overdue);
         $overdueCents = (int) $overdueRows->sum('total_cents');
         $overdueCount = $overdueRows->count();
 
@@ -69,7 +71,7 @@ final class DashboardStatsService
         $firstInvoice = $invoices->first();
 
         return [
-            'currency' => $firstInvoice instanceof Invoice ? $firstInvoice->currency : 'MAD',
+            'currency' => $firstInvoice instanceof Document ? $firstInvoice->currency : 'MAD',
             'revenueCents' => $revenueCents,
             'revenueTrend' => $this->trend($revenueCents, $previousRevenueCents),
             'collectedCents' => $collectedCents,
@@ -136,17 +138,17 @@ final class DashboardStatsService
      * `partnerId` est renvoyé pour que l'interface puisse pointer vers la fiche
      * — null quand la ligne vient d'un nom libre.
      *
-     * @param  Collection<int, Invoice>  $invoices
+     * @param  Collection<int, Document>  $invoices
      * @return list<array{name: string, partnerId: ?string, totalCents: int, invoiceCount: int}>
      */
     private function topClients(Collection $invoices): array
     {
         $ranked = $invoices
-            ->groupBy(fn (Invoice $invoice): string => $invoice->partner_id !== null
+            ->groupBy(fn (Document $invoice): string => $invoice->partner_id !== null
                 ? 'p:'.$invoice->partner_id
                 : 'n:'.$invoice->client_name)
             ->map(function (Collection $rows): array {
-                /** @var Invoice $first */
+                /** @var Document $first */
                 $first = $rows->first();
 
                 return [
@@ -167,7 +169,7 @@ final class DashboardStatsService
     }
 
     /**
-     * @param  Collection<int, Invoice>  $invoices
+     * @param  Collection<int, Document>  $invoices
      * @return list<array{month: string, invoicedCents: int, collectedCents: int}>
      */
     private function revenueSeries(Collection $invoices, Carbon $from, Carbon $to): array
@@ -178,14 +180,14 @@ final class DashboardStatsService
         while ($cursor->lte($to)) {
             $monthKey = $cursor->format('Y-m');
             $monthRows = $invoices->filter(
-                fn (Invoice $invoice): bool => $invoice->issued_at?->format('Y-m') === $monthKey,
+                fn (Document $invoice): bool => $invoice->issued_at?->format('Y-m') === $monthKey,
             );
 
             $series[] = [
                 'month' => $monthKey,
                 'invoicedCents' => (int) $monthRows->sum('total_cents'),
                 'collectedCents' => (int) $monthRows
-                    ->whereIn('status', ['paid', 'partial'])
+                    ->whereIn('status', [DocumentStatus::Paid, DocumentStatus::Partial])
                     ->sum('total_cents'),
             ];
 
@@ -196,7 +198,7 @@ final class DashboardStatsService
     }
 
     /**
-     * @param  Collection<int, Invoice>  $invoices
+     * @param  Collection<int, Document>  $invoices
      * @return list<array{status: string, count: int, totalCents: int}>
      */
     private function statusBreakdown(Collection $invoices): array
