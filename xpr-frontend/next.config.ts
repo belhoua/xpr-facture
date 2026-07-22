@@ -10,6 +10,16 @@ const backendOrigin = process.env.BACKEND_ORIGIN ?? "http://localhost:8080";
 
 const nextConfig: NextConfig = {
   /**
+   * Masque la pastille « N » que Next affiche en bas de page en développement.
+   *
+   * Ce n'est PAS un composant du layout : Next l'injecte lui-même sous
+   * `next dev`, et elle n'a jamais existé en production. On la désactive parce
+   * qu'elle se superpose au bouton « Replier le menu » de la sidebar, donc
+   * masque une commande réelle de l'application pendant qu'on la développe.
+   */
+  devIndicators: false,
+
+  /**
    * Reverse-proxy : le navigateur n'appelle QUE l'origine qui sert le front
    * (localhost:3000 en local, l'URL Ngrok en démo). Next relaie ces requêtes
    * vers le backend depuis le serveur. Conséquence : même origine pour tout →

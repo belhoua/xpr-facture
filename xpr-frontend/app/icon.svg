@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="XPR Facture">
+  <!--
+    Favicon de l'application, servi par la convention Next `app/icon.svg`.
+
+    Reprend l'identité DÉJÀ posée dans la sidebar (components/layout/app-sidebar.tsx) :
+    le carré arrondi `bg-primary` et le glyphe Sparkles de lucide. Le bleu est la
+    conversion exacte en sRGB de la variable CSS `primary` en thème clair,
+    oklch(0.54 0.192 258) dans globals.css : un attribut SVG `fill` ne peut pas
+    lire une variable CSS de la page.
+
+    Le glyphe est REMPLI ici alors qu'il est tracé dans la sidebar : à 16 px, un
+    trait de 2 unités disparaît. Une masse pleine reste lisible dans l'onglet,
+    ce qui est la seule chose que doit réussir un favicon.
+
+    Attention : un commentaire XML ne peut PAS contenir de double tiret, sinon le
+    fichier entier devient invalide et rien ne s'affiche.
+  -->
+  <rect width="32" height="32" rx="7" fill="#0E68DB" />
+  <g transform="translate(5 5) scale(0.9167)" fill="#FFFFFF">
+    <path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z" />
+    <circle cx="4" cy="20" r="2" />
+  </g>
+</svg>
