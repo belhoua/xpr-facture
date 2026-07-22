@@ -26,13 +26,17 @@
 
   /* Statuts documentaires (CLAUDE.md §11) : une couleur = un sens, partout.
      Le cycle de vie d'une facture est brouillon → envoyée → payée, avec
-     deux sorties possibles : en retard, annulée. */
+     deux sorties possibles : en retard, annulée. Le devis suit son propre
+     cycle : envoyé → accepté / refusé / converti. */
   --color-status-draft: var(--status-draft);
   --color-status-sent: var(--status-sent);
   --color-status-paid: var(--status-paid);
   --color-status-partial: var(--status-partial);
   --color-status-overdue: var(--status-overdue);
   --color-status-cancelled: var(--status-cancelled);
+  --color-status-accepted: var(--status-accepted);
+  --color-status-refused: var(--status-refused);
+  --color-status-converted: var(--status-converted);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -95,6 +99,11 @@
   --status-partial: oklch(0.62 0.14 75);
   --status-overdue: oklch(0.57 0.2 27);
   --status-cancelled: oklch(0.6 0.015 258);
+  /* Teintes du cycle « devis ». `accepted` est volontairement décalé de
+     `paid` (teal vs vert) : un devis accepté n'est pas un encaissement. */
+  --status-accepted: oklch(0.55 0.11 195);
+  --status-refused: oklch(0.55 0.16 12);
+  --status-converted: oklch(0.55 0.15 300);
 
   /* §11 : rayons discrets 6–8px. 0.5rem = 8px sur --radius-lg. */
   --radius: 0.5rem;
@@ -145,6 +154,9 @@
   --status-partial: oklch(0.78 0.14 75);
   --status-overdue: oklch(0.7 0.17 27);
   --status-cancelled: oklch(0.6 0.015 258);
+  --status-accepted: oklch(0.74 0.1 195);
+  --status-refused: oklch(0.7 0.14 12);
+  --status-converted: oklch(0.72 0.13 300);
 
   --sidebar: oklch(0.192 0.015 258);
   --sidebar-foreground: oklch(0.955 0.005 258);

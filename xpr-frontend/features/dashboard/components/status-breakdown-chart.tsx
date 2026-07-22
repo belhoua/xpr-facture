@@ -18,6 +18,9 @@ import { formatMoney, formatNumber } from "@/lib/format";
 const STATUS_VAR: Record<DocumentStatus, string> = {
   draft: "var(--color-status-draft)",
   sent: "var(--color-status-sent)",
+  accepted: "var(--color-status-accepted)",
+  refused: "var(--color-status-refused)",
+  converted: "var(--color-status-converted)",
   partial: "var(--color-status-partial)",
   paid: "var(--color-status-paid)",
   overdue: "var(--color-status-overdue)",

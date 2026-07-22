@@ -37,7 +37,11 @@
     "minLength": "This text is too short",
     "clientName": "Client name is required",
     "amount": "Invalid amount",
-    "dueBeforeIssued": "Due date must be on or after the issue date"
+    "dueBeforeIssued": "Due date must be on or after the issue date",
+    "color": "Invalid colour (#RRGGBB format)",
+    "quantity": "Invalid quantity",
+    "discount": "Invalid discount (0 to 100%)",
+    "stockGoodsOnly": "Only goods can be stock-tracked"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -62,7 +66,10 @@
     "toggleTheme": "Toggle theme",
     "account": "My account",
     "settings": "Settings",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "quotes": "Quotes",
+    "creditNotes": "Credit notes",
+    "catalog": "Catalogue"
   },
   "status": {
     "draft": "Draft",
@@ -70,7 +77,10 @@
     "partial": "Partial",
     "paid": "Paid",
     "overdue": "Overdue",
-    "cancelled": "Cancelled"
+    "cancelled": "Cancelled",
+    "accepted": "Accepted",
+    "refused": "Refused",
+    "converted": "Converted"
   },
   "auth": {
     "common": {
@@ -239,58 +249,209 @@
       }
     }
   },
-  "invoices": {
-    "title": "Invoices",
-    "description": "All your invoices, quotes and credit notes",
-    "create": "New invoice",
-    "searchPlaceholder": "Number, client, amount…",
+  "documents": {
+    "title": {
+      "invoice": "Invoices",
+      "quote": "Quotes",
+      "credit_note": "Credit notes"
+    },
+    "description": {
+      "invoice": "Your customer invoices, from draft to payment",
+      "quote": "Your commercial proposals, through to conversion",
+      "credit_note": "Credit notes attached to your invoices"
+    },
+    "create": {
+      "invoice": "New invoice",
+      "quote": "New quote",
+      "credit_note": "New credit note"
+    },
+    "searchPlaceholder": "Number, customer…",
+    "draftLabel": "Draft",
+    "linkedTo": "linked to {number}",
+    "clientIce": "Customer ICE",
     "columns": {
       "number": "Number",
-      "client": "Client",
+      "client": "Customer",
       "issuedAt": "Issued",
       "dueAt": "Due",
       "status": "Status",
-      "total": "Total incl. VAT",
-      "actions": "Actions"
+      "total": "Total incl. VAT"
     },
     "empty": {
-      "title": "No invoices",
-      "description": "Create your first compliant invoice in under a minute."
-    },
-    "form": {
-      "createTitle": "New invoice",
-      "editTitle": "Edit draft",
-      "createDescription": "Enter the client and amount. The number is assigned on validation.",
-      "editDescription": "Only drafts can be edited (fiscal immutability).",
-      "clientName": "Client",
-      "clientPlaceholder": "Client or company name",
-      "issuedAt": "Issue date",
-      "dueAt": "Due date",
-      "status": "Status",
-      "amount": "Total incl. tax",
-      "currency": "Currency",
-      "submit": "Save invoice",
-      "submitting": "Saving…",
-      "partner": "Customer",
-      "partnerPlaceholder": "Pick a customer…",
-      "walkInClient": "Walk-in customer (free text)"
+      "invoice": {
+        "title": "No invoice yet",
+        "description": "Create your first compliant invoice in under a minute."
+      },
+      "quote": {
+        "title": "No quote yet",
+        "description": "Send a quote; it converts into an invoice in one click."
+      },
+      "credit_note": {
+        "title": "No credit note yet",
+        "description": "A credit note is created from the invoice it corrects."
+      }
     },
     "actions": {
       "open": "Open actions",
+      "view": "View details",
       "edit": "Edit",
-      "cancel": "Cancel invoice",
       "delete": "Delete",
-      "locked": "Validated invoice — locked"
+      "issue": "Issue",
+      "cancel": "Cancel",
+      "convert": "Convert to invoice",
+      "creditNote": "Create credit note",
+      "changeStatus": "Change status"
     },
     "delete": {
       "title": "Delete this draft?",
-      "description": "This action is permanent. Only drafts can be deleted.",
+      "description": "This cannot be undone. Only drafts can be deleted.",
       "confirm": "Delete"
     },
     "cancelConfirm": {
-      "title": "Cancel this invoice?",
-      "description": "The invoice moves to the “Cancelled” status. By law, it is never deleted.",
-      "confirm": "Cancel invoice"
+      "title": "Cancel this document?",
+      "description": "The document moves to « Cancelled ». By law it is never deleted.",
+      "confirm": "Cancel document"
+    },
+    "creditNoteConfirm": {
+      "title": "Create a credit note for this invoice?",
+      "description": "A draft credit note is created with the invoice lines. You can reduce them before issuing it.",
+      "confirm": "Create credit note"
+    },
+    "form": {
+      "createTitle": {
+        "invoice": "New invoice",
+        "quote": "New quote",
+        "credit_note": "New credit note"
+      },
+      "editTitle": {
+        "invoice": "Edit invoice draft",
+        "quote": "Edit quote draft",
+        "credit_note": "Edit credit note draft"
+      },
+      "createDescription": "The number is assigned on issue, not on save.",
+      "editDescription": "Only drafts can be edited (fiscal immutability).",
+      "partner": "Customer",
+      "partnerPlaceholder": "Pick a customer…",
+      "walkInClient": "Walk-in customer (free text)",
+      "clientName": "Customer name",
+      "clientPlaceholder": "Customer or company name",
+      "issuedAt": "Issue date",
+      "dueAt": "Due date",
+      "notes": "Notes",
+      "terms": "Terms",
+      "lines": "Document lines",
+      "addLine": "Add line",
+      "noLines": "No lines yet. Add one before issuing the document.",
+      "line": {
+        "product": "Catalogue item",
+        "freeLine": "Free line",
+        "label": "Description",
+        "labelPlaceholder": "Line description",
+        "quantity": "Qty",
+        "unitPrice": "Unit price",
+        "discount": "Disc. %",
+        "tax": "VAT",
+        "noTax": "No VAT",
+        "total": "Total incl. VAT",
+        "remove": "Remove line"
+      },
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving…"
+    },
+    "totals": {
+      "subtotal": "Subtotal",
+      "discount": "Discount",
+      "tax": "VAT",
+      "total": "Total incl. VAT",
+      "taxSummary": "VAT breakdown",
+      "rate": "Rate",
+      "base": "Net base"
+    }
+  },
+  "catalog": {
+    "title": "Catalogue",
+    "description": "Your products and services, ready to invoice",
+    "tabs": {
+      "products": "Items",
+      "categories": "Categories"
+    },
+    "archive": {
+      "action": "Archive",
+      "confirm": "Archive",
+      "productTitle": "Archive this item?",
+      "productDescription": "The item leaves the lists but stays readable on documents already issued.",
+      "categoryTitle": "Archive this category?",
+      "categoryDescription": "Its items stay in the catalogue, simply without a category."
+    },
+    "products": {
+      "create": "New item",
+      "searchPlaceholder": "Name, reference…",
+      "allCategories": "All categories",
+      "columns": {
+        "name": "Item",
+        "type": "Kind",
+        "category": "Category",
+        "tax": "VAT",
+        "price": "Net price"
+      },
+      "types": {
+        "good": "Good",
+        "service": "Service"
+      },
+      "empty": {
+        "title": "Empty catalogue",
+        "description": "Add your products and services — they will fill your invoice lines for you."
+      },
+      "form": {
+        "createTitle": "New item",
+        "editTitle": "Edit item",
+        "description": "The price and rate set here are copied onto documents, then frozen.",
+        "type": "Kind",
+        "reference": "Reference",
+        "referencePlaceholder": "Internal code (optional)",
+        "name": "Name",
+        "namePlaceholder": "Item name",
+        "descriptionLabel": "Description",
+        "category": "Category",
+        "noCategory": "No category",
+        "taxRate": "VAT rate",
+        "noTaxRate": "No VAT",
+        "unitPrice": "Net selling price",
+        "costPrice": "Cost price",
+        "unit": "Unit",
+        "unitPlaceholder": "piece, hour, kg…",
+        "trackStock": "Track stock",
+        "isActive": "Active item",
+        "cancel": "Cancel",
+        "save": "Save",
+        "saving": "Saving…"
+      }
+    },
+    "categories": {
+      "create": "New category",
+      "columns": {
+        "name": "Category",
+        "description": "Description",
+        "products": "Items"
+      },
+      "empty": {
+        "title": "No category yet",
+        "description": "Group your items to find what you invoice faster."
+      },
+      "form": {
+        "createTitle": "New category",
+        "editTitle": "Edit category",
+        "description": "The name must be unique; case does not matter.",
+        "name": "Name",
+        "namePlaceholder": "Printing, Consulting, Hardware…",
+        "descriptionLabel": "Description",
+        "color": "Colour",
+        "isActive": "Active category",
+        "cancel": "Cancel",
+        "save": "Save",
+        "saving": "Saving…"
+      }
     }
   },
   "partners": {

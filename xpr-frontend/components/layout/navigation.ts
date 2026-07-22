@@ -1,8 +1,11 @@
 import {
   Contact,
+  FileMinus,
   FileText,
   LayoutDashboard,
   MessageSquareText,
+  Package,
+  ReceiptText,
   Users,
   Wallet,
   type LucideIcon,
@@ -45,6 +48,14 @@ export const NAVIGATION: readonly NavGroup[] = [
     titleKey: "nav.groups.management",
     items: [
       { href: "/invoices", titleKey: "nav.invoices", icon: FileText, shortcut: "F" },
+      { href: "/quotes", titleKey: "nav.quotes", icon: ReceiptText, shortcut: "V" },
+      {
+        href: "/credit-notes",
+        titleKey: "nav.creditNotes",
+        icon: FileMinus,
+        shortcut: "A",
+      },
+      { href: "/catalog", titleKey: "nav.catalog", icon: Package, shortcut: "P" },
       { href: "/partners", titleKey: "nav.partners", icon: Contact, shortcut: "T" },
       { href: "/cash", titleKey: "nav.cash", icon: Wallet, shortcut: "C" },
     ],

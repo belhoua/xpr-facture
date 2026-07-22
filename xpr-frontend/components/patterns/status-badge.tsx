@@ -9,9 +9,18 @@ import { cn } from "@/lib/utils";
  * saturé : dans un tableau dense, dix aplats de couleur crient plus fort que la
  * donnée qu'ils qualifient.
  */
+/**
+ * Miroir exact de `Documents\Enums\DocumentStatus` côté backend. Les neuf
+ * états couvrent les huit types de documents ; c'est le serveur qui décide
+ * lesquels sont atteignables pour un type donné (`allowedFor()`), l'interface
+ * ne rejoue pas cette matrice — elle sait seulement les afficher.
+ */
 export const DOCUMENT_STATUSES = [
   "draft",
   "sent",
+  "accepted",
+  "refused",
+  "converted",
   "partial",
   "paid",
   "overdue",
@@ -23,6 +32,11 @@ export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 const STATUS_COLOR: Record<DocumentStatus, string> = {
   draft: "text-status-draft bg-status-draft/10 ring-status-draft/20",
   sent: "text-status-sent bg-status-sent/10 ring-status-sent/20",
+  accepted:
+    "text-status-accepted bg-status-accepted/10 ring-status-accepted/20",
+  refused: "text-status-refused bg-status-refused/10 ring-status-refused/20",
+  converted:
+    "text-status-converted bg-status-converted/10 ring-status-converted/20",
   partial: "text-status-partial bg-status-partial/10 ring-status-partial/20",
   paid: "text-status-paid bg-status-paid/10 ring-status-paid/20",
   overdue: "text-status-overdue bg-status-overdue/10 ring-status-overdue/20",

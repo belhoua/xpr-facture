@@ -37,7 +37,11 @@
     "minLength": "Ce texte est trop court",
     "clientName": "Le nom du client est requis",
     "amount": "Montant invalide",
-    "dueBeforeIssued": "L'échéance doit suivre la date d'émission"
+    "dueBeforeIssued": "L'échéance doit suivre la date d'émission",
+    "color": "Couleur invalide (format #RRGGBB)",
+    "quantity": "Quantité invalide",
+    "discount": "Remise invalide (0 à 100 %)",
+    "stockGoodsOnly": "Seul un bien peut être suivi en stock"
   },
   "nav": {
     "dashboard": "Tableau de bord",
@@ -62,7 +66,10 @@
     "toggleTheme": "Changer de thème",
     "account": "Mon compte",
     "settings": "Paramètres",
-    "logout": "Se déconnecter"
+    "logout": "Se déconnecter",
+    "quotes": "Devis",
+    "creditNotes": "Avoirs",
+    "catalog": "Catalogue"
   },
   "status": {
     "draft": "Brouillon",
@@ -70,7 +77,10 @@
     "partial": "Partielle",
     "paid": "Payée",
     "overdue": "En retard",
-    "cancelled": "Annulée"
+    "cancelled": "Annulée",
+    "accepted": "Accepté",
+    "refused": "Refusé",
+    "converted": "Converti"
   },
   "auth": {
     "common": {
@@ -239,48 +249,58 @@
       }
     }
   },
-  "invoices": {
-    "title": "Factures",
-    "description": "Toutes vos factures, devis et avoirs",
-    "create": "Nouvelle facture",
-    "searchPlaceholder": "Numéro, client, montant…",
+  "documents": {
+    "title": {
+      "invoice": "Factures",
+      "quote": "Devis",
+      "credit_note": "Avoirs"
+    },
+    "description": {
+      "invoice": "Vos factures clients, de la saisie au règlement",
+      "quote": "Vos propositions commerciales, jusqu'à leur transformation",
+      "credit_note": "Les avoirs rattachés à vos factures"
+    },
+    "create": {
+      "invoice": "Nouvelle facture",
+      "quote": "Nouveau devis",
+      "credit_note": "Nouvel avoir"
+    },
+    "searchPlaceholder": "Numéro, client…",
+    "draftLabel": "Brouillon",
+    "linkedTo": "rattaché à {number}",
+    "clientIce": "ICE du client",
     "columns": {
       "number": "Numéro",
       "client": "Client",
-      "issuedAt": "Émise le",
+      "issuedAt": "Émis le",
       "dueAt": "Échéance",
       "status": "Statut",
-      "total": "Total TTC",
-      "actions": "Actions"
+      "total": "Total TTC"
     },
     "empty": {
-      "title": "Aucune facture",
-      "description": "Créez votre première facture conforme en moins d'une minute."
-    },
-    "form": {
-      "createTitle": "Nouvelle facture",
-      "editTitle": "Modifier le brouillon",
-      "createDescription": "Renseignez le client et le montant. Le numéro est attribué à la validation.",
-      "editDescription": "Seuls les brouillons sont modifiables (immuabilité fiscale).",
-      "clientName": "Client",
-      "clientPlaceholder": "Nom du client ou de la société",
-      "issuedAt": "Date d'émission",
-      "dueAt": "Échéance",
-      "status": "Statut",
-      "amount": "Montant TTC",
-      "currency": "Devise",
-      "submit": "Enregistrer la facture",
-      "submitting": "Enregistrement…",
-      "partner": "Client",
-      "partnerPlaceholder": "Choisir un client…",
-      "walkInClient": "Client de passage (nom libre)"
+      "invoice": {
+        "title": "Aucune facture",
+        "description": "Créez votre première facture conforme en moins d'une minute."
+      },
+      "quote": {
+        "title": "Aucun devis",
+        "description": "Proposez un devis ; il se transformera en facture en un clic."
+      },
+      "credit_note": {
+        "title": "Aucun avoir",
+        "description": "Un avoir se crée depuis la facture qu'il corrige."
+      }
     },
     "actions": {
       "open": "Ouvrir les actions",
+      "view": "Voir le détail",
       "edit": "Modifier",
-      "cancel": "Annuler la facture",
       "delete": "Supprimer",
-      "locked": "Facture validée — verrouillée"
+      "issue": "Émettre",
+      "cancel": "Annuler",
+      "convert": "Convertir en facture",
+      "creditNote": "Créer un avoir",
+      "changeStatus": "Changer de statut"
     },
     "delete": {
       "title": "Supprimer ce brouillon ?",
@@ -288,9 +308,150 @@
       "confirm": "Supprimer"
     },
     "cancelConfirm": {
-      "title": "Annuler cette facture ?",
-      "description": "La facture passe au statut « Annulée ». Conformément à la loi, elle n'est jamais supprimée.",
-      "confirm": "Annuler la facture"
+      "title": "Annuler ce document ?",
+      "description": "Le document passe au statut « Annulé ». Conformément à la loi, il n'est jamais supprimé.",
+      "confirm": "Annuler le document"
+    },
+    "creditNoteConfirm": {
+      "title": "Créer un avoir sur cette facture ?",
+      "description": "Un avoir brouillon reprenant les lignes de la facture est créé. Vous pourrez les réduire avant de l'émettre.",
+      "confirm": "Créer l'avoir"
+    },
+    "form": {
+      "createTitle": {
+        "invoice": "Nouvelle facture",
+        "quote": "Nouveau devis",
+        "credit_note": "Nouvel avoir"
+      },
+      "editTitle": {
+        "invoice": "Modifier le brouillon de facture",
+        "quote": "Modifier le brouillon de devis",
+        "credit_note": "Modifier le brouillon d'avoir"
+      },
+      "createDescription": "Le numéro est attribué à l'émission, pas à l'enregistrement.",
+      "editDescription": "Seuls les brouillons sont modifiables (immuabilité fiscale).",
+      "partner": "Client",
+      "partnerPlaceholder": "Choisir un client…",
+      "walkInClient": "Client de passage (nom libre)",
+      "clientName": "Nom du client",
+      "clientPlaceholder": "Nom du client ou de la société",
+      "issuedAt": "Date d'émission",
+      "dueAt": "Échéance",
+      "notes": "Notes",
+      "terms": "Conditions",
+      "lines": "Lignes du document",
+      "addLine": "Ajouter une ligne",
+      "noLines": "Aucune ligne. Ajoutez-en une pour pouvoir émettre le document.",
+      "line": {
+        "product": "Article du catalogue",
+        "freeLine": "Ligne libre",
+        "label": "Désignation",
+        "labelPlaceholder": "Désignation de la ligne",
+        "quantity": "Qté",
+        "unitPrice": "P.U. HT",
+        "discount": "Remise %",
+        "tax": "TVA",
+        "noTax": "Sans TVA",
+        "total": "Total TTC",
+        "remove": "Supprimer la ligne"
+      },
+      "cancel": "Annuler",
+      "save": "Enregistrer",
+      "saving": "Enregistrement…"
+    },
+    "totals": {
+      "subtotal": "Total HT",
+      "discount": "Remise",
+      "tax": "TVA",
+      "total": "Total TTC",
+      "taxSummary": "Récapitulatif de TVA",
+      "rate": "Taux",
+      "base": "Base HT"
+    }
+  },
+  "catalog": {
+    "title": "Catalogue",
+    "description": "Vos produits et prestations, prêts à facturer",
+    "tabs": {
+      "products": "Articles",
+      "categories": "Catégories"
+    },
+    "archive": {
+      "action": "Archiver",
+      "confirm": "Archiver",
+      "productTitle": "Archiver cet article ?",
+      "productDescription": "L'article disparaît des listes mais reste lisible sur les documents déjà émis.",
+      "categoryTitle": "Archiver cette catégorie ?",
+      "categoryDescription": "Les articles qu'elle contient restent au catalogue, simplement sans catégorie."
+    },
+    "products": {
+      "create": "Nouvel article",
+      "searchPlaceholder": "Nom, référence…",
+      "allCategories": "Toutes les catégories",
+      "columns": {
+        "name": "Article",
+        "type": "Nature",
+        "category": "Catégorie",
+        "tax": "TVA",
+        "price": "Prix HT"
+      },
+      "types": {
+        "good": "Bien",
+        "service": "Service"
+      },
+      "empty": {
+        "title": "Catalogue vide",
+        "description": "Ajoutez vos produits et prestations : ils se rappelleront tout seuls dans vos factures."
+      },
+      "form": {
+        "createTitle": "Nouvel article",
+        "editTitle": "Modifier l'article",
+        "description": "Le prix et le taux saisis ici seront recopiés dans les documents, puis figés.",
+        "type": "Nature",
+        "reference": "Référence",
+        "referencePlaceholder": "Code interne (facultatif)",
+        "name": "Désignation",
+        "namePlaceholder": "Nom de l'article",
+        "descriptionLabel": "Description",
+        "category": "Catégorie",
+        "noCategory": "Sans catégorie",
+        "taxRate": "Taux de TVA",
+        "noTaxRate": "Sans TVA",
+        "unitPrice": "Prix de vente HT",
+        "costPrice": "Prix de revient",
+        "unit": "Unité",
+        "unitPlaceholder": "pièce, heure, kg…",
+        "trackStock": "Suivre le stock",
+        "isActive": "Article actif",
+        "cancel": "Annuler",
+        "save": "Enregistrer",
+        "saving": "Enregistrement…"
+      }
+    },
+    "categories": {
+      "create": "Nouvelle catégorie",
+      "columns": {
+        "name": "Catégorie",
+        "description": "Description",
+        "products": "Articles"
+      },
+      "empty": {
+        "title": "Aucune catégorie",
+        "description": "Classez vos articles pour retrouver plus vite ce que vous facturez."
+      },
+      "form": {
+        "createTitle": "Nouvelle catégorie",
+        "editTitle": "Modifier la catégorie",
+        "description": "Le nom doit être unique ; la casse n'y change rien.",
+        "name": "Nom",
+        "namePlaceholder": "Impression, Conseil, Matériel…",
+        "descriptionLabel": "Description",
+        "color": "Couleur",
+        "isActive": "Catégorie active",
+        "cancel": "Annuler",
+        "save": "Enregistrer",
+        "saving": "Enregistrement…"
+      }
     }
   },
   "partners": {
