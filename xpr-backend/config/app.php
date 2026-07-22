@@ -54,9 +54,21 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
-    // URL du SPA Next.js : cible des redirections (vérification e-mail) et
-    // des liens dans les notifications (réinitialisation de mot de passe)
-    'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
+    /*
+     * URL CANONIQUE du SPA Next.js : cible des redirections (vérification
+     * e-mail) et des liens dans les notifications (réinitialisation de mot de
+     * passe).
+     *
+     * FRONTEND_URL peut déclarer plusieurs origines séparées par des virgules
+     * pour le CORS (cf. config/cors.php) ; on ne retient ICI que la première.
+     * Concaténer la liste entière fabriquerait des liens du type
+     * « http://localhost:3000,http://localhost:3001/email-verified », envoyés
+     * par e-mail et donc impossibles à rattraper après coup.
+     */
+    'frontend_url' => trim(explode(
+        ',',
+        (string) env('FRONTEND_URL', 'http://localhost:3000'),
+    )[0]),
 
     /*
     |--------------------------------------------------------------------------
