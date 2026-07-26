@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "buildCommand": "cd xpr-backend && composer install --no-dev --prefer-dist --optimize-autoloader",
   "builds": [
     {
       "src": "xpr-backend/api/index.php",
