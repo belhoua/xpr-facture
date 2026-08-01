@@ -1,0 +1,57 @@
+# Ce qui ne doit pas être téléversé vers Vercel.
+#
+# vendor/ en tête : le runtime PHP exécute `composer install` lui-même au
+# build. L'envoyer depuis la machine locale ajouterait 66 Mo au paquet et
+# risquerait d'y glisser les dépendances de développement.
+vendor/
+node_modules/
+
+# Versant Node de l'échafaudage Laravel par défaut (Vite/Tailwind), inutilisé :
+# l'interface est un projet Vercel séparé. L'écarter n'est pas une économie de
+# place mais une nécessité — en voyant un package.json, Vercel détecterait ici
+# un projet JavaScript et lancerait `vite build` au lieu de déployer le PHP.
+package.json
+package-lock.json
+vite.config.js
+resources/css/
+resources/js/
+
+# public/ est délibérément exclu. Ce déploiement est une API pure : il ne sert
+# aucun fichier statique (le frontend Next.js est un projet Vercel distinct).
+# L'exclure évite surtout que Vercel prenne ce dossier pour un répertoire de
+# sortie statique et y serve public/index.php comme un fichier — c'est-à-dire
+# en exposant son code source au lieu de l'exécuter.
+public/
+
+# Secrets : les variables viennent du panneau Vercel, jamais d'un fichier.
+.env
+.env.*
+!.env.example
+
+# Déploiement conteneurisé (Render) : sans objet ici, mais conservé dans le
+# dépôt comme voie de repli si un hébergeur sans carte redevient accessible.
+Dockerfile
+.dockerignore
+docker/
+
+# Développement et outillage
+tests/
+.git/
+.github/
+.editorconfig
+.gitattributes
+.gitignore
+phpunit.xml
+pint.json
+phpstan.neon
+README.md
+
+# Artefacts locaux — storage/ et bootstrap/cache sont redirigés vers /tmp à
+# l'exécution (cf. api/index.php), mais les manifestes générés au build par
+# composer doivent rester dans bootstrap/cache : ne pas ignorer ce dossier.
+storage/logs/*
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+.phpunit.cache/
+.phpunit.result.cache
