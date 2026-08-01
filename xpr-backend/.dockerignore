@@ -1,0 +1,35 @@
+# Ce qui ne doit JAMAIS entrer dans l'image de production.
+#
+# vendor/ en tête : 66 Mo réinstallés proprement par `composer install --no-dev`
+# dans le Dockerfile. Le copier écraserait cette installation avec les
+# dépendances de développement de la machine locale.
+vendor/
+node_modules/
+
+# Secrets : les variables viennent de Render, jamais d'un fichier embarqué.
+# .env.example reste inclus — c'est de la documentation, pas un secret.
+.env
+.env.*
+!.env.example
+
+# Artefacts locaux
+storage/logs/*
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+bootstrap/cache/*.php
+.phpunit.cache/
+.phpunit.result.cache
+
+# Développement et outillage : inutiles en production, et invalideraient le
+# cache de build Docker à chaque modification.
+tests/
+.git/
+.github/
+.editorconfig
+.gitattributes
+.gitignore
+phpunit.xml
+pint.json
+phpstan.neon
+README.md

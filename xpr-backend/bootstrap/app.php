@@ -18,6 +18,17 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // En production l'application tourne derrière le répartiteur de charge
+        // de l'hébergeur, qui termine le TLS et transmet la requête en HTTP.
+        // Sans cette déclaration Laravel se croit en clair : il génère des URL
+        // en http:// et surtout refuse de poser les cookies de session marqués
+        // Secure — l'authentification Sanctum échouerait silencieusement.
+        //
+        // '*' plutôt qu'une liste d'IP : les répartiteurs des PaaS n'ont pas
+        // d'adresse stable. Le compromis est acceptable parce que rien d'autre
+        // que le proxy ne peut joindre le conteneur.
+        $middleware->trustProxies(at: '*');
+
         // Sessions cookie Sanctum pour le SPA (domaines déclarés dans
         // SANCTUM_STATEFUL_DOMAINS) — l'API reste stateless pour le reste.
         $middleware->statefulApi();

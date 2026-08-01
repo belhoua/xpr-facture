@@ -1,0 +1,131 @@
+# Blueprint Render — décrit le service backend pour qu'il soit créé sans
+# configuration manuelle dans l'interface (Render lit ce fichier au « New
+# Blueprint Instance »).
+#
+# Ne couvre QUE le backend :
+#   - le frontend Next.js est déployé sur Vercel (éditeur du framework) ;
+#   - la base PostgreSQL est chez Neon, dont le plan gratuit est permanent,
+#     là où une base Render gratuite est supprimée au bout de 30 jours.
+#
+# Les valeurs marquées `sync: false` ne sont PAS versionnées : Render les
+# demande à la création et les garde chiffrées. Aucun secret dans ce dépôt.
+
+services:
+  - type: web
+    name: xpr-backend
+    runtime: docker
+    plan: free
+    region: frankfurt # le plus proche du Maroc parmi les régions gratuites
+    rootDir: xpr-backend
+    dockerfilePath: ./Dockerfile
+    # Sonde exposée par withRouting(health: '/up') dans bootstrap/app.php.
+    # Render la sollicite pour valider un déploiement avant de basculer dessus.
+    healthCheckPath: /up
+
+    envVars:
+      - key: APP_NAME
+        value: XPR Facture
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_LOCALE
+        value: fr
+      - key: APP_FALLBACK_LOCALE
+        value: en
+
+      # Généré en local par `php artisan key:generate --show`.
+      - key: APP_KEY
+        sync: false
+
+      # URL publique du service, connue seulement après la première création.
+      - key: APP_URL
+        sync: false
+
+      # --- PostgreSQL (Neon) ---------------------------------------------
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_PORT
+        value: "5432"
+      # Neon n'accepte que les connexions chiffrées.
+      - key: DB_SSLMODE
+        value: require
+      - key: DB_HOST
+        sync: false
+      - key: DB_DATABASE
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+
+      # --- Pas de Redis en offre gratuite --------------------------------
+      # Sessions et cache basculent sur PostgreSQL. Les tables existent déjà :
+      # `sessions` (migration users) et `cache`.
+      - key: SESSION_DRIVER
+        value: database
+      - key: CACHE_STORE
+        value: database
+
+      # File d'attente : `sync`, pas `database`. Un Background Worker Render est
+      # payant — avec le driver `database` les jobs s'empileraient dans la table
+      # `jobs` sans que personne ne les consomme, ce qui est pire qu'une
+      # exécution synchrone : la panne serait silencieuse. `sync` exécute le job
+      # dans la requête. À rebasculer sur `database` + worker le jour où un
+      # traitement long (PDF, relances) le justifie.
+      - key: QUEUE_CONNECTION
+        value: sync
+
+      # predis (PHP pur, déjà dans composer.json) et non phpredis : l'image de
+      # production n'embarque pas l'extension redis. Rien ne doit toucher cette
+      # connexion, mais si un provider la sollicitait, l'échec serait une erreur
+      # de connexion lisible plutôt qu'un fatal « Class Redis not found ».
+      - key: REDIS_CLIENT
+        value: predis
+
+      # Cookie « host-only » : le navigateur ne parle qu'au domaine Vercel, qui
+      # relaie vers ce service. Un Domain= figé serait rejeté.
+      - key: SESSION_DOMAIN
+        value: "null"
+      # Le TLS est terminé par Render : sans trustProxies (bootstrap/app.php)
+      # Laravel refuserait de poser ce cookie.
+      - key: SESSION_SECURE_COOKIE
+        value: "true"
+
+      # --- Frontend ------------------------------------------------------
+      # Renseignés après le déploiement Vercel, avec le domaine obtenu.
+      # SANCTUM_STATEFUL_DOMAINS s'écrit SANS schéma : « mon-app.vercel.app ».
+      - key: FRONTEND_URL
+        sync: false
+      - key: SANCTUM_STATEFUL_DOMAINS
+        sync: false
+
+      # --- Journalisation ------------------------------------------------
+      # stderr : Render collecte la sortie standard du conteneur. Écrire dans
+      # storage/logs serait perdu à chaque redémarrage (disque éphémère).
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: LOG_LEVEL
+        value: warning
+
+      # --- E-mail ---------------------------------------------------------
+      # `log` et non `smtp` : le parcours public d'inscription envoie les
+      # identifiants par e-mail. Sans mailer joignable, l'envoi lève une
+      # exception et fait échouer l'inscription entière. En `log`, le message
+      # part dans la sortie standard — lisible dans les logs Render.
+      # À remplacer par un SMTP réel (Brevo, 300 envois/jour gratuits et sans
+      # carte) avant toute mise à disposition d'utilisateurs.
+      - key: MAIL_MAILER
+        value: log
+      - key: MAIL_FROM_ADDRESS
+        value: no-reply@xpr.ma
+      - key: MAIL_FROM_NAME
+        value: XPR Facture
+
+      # --- Stockage de fichiers -------------------------------------------
+      # Disque éphémère : tout fichier téléversé disparaît au redémarrage du
+      # conteneur. Tenable tant que P0-13 (uploads S3) n'est pas livré ; à
+      # basculer sur un disque S3 (Supabase Storage, gratuit sans carte) à ce
+      # moment-là.
+      - key: FILESYSTEM_DISK
+        value: local
