@@ -7,6 +7,7 @@ namespace App\Modules\Authentication\Models;
 use App\Modules\Tenancy\Models\Company;
 use App\Modules\Tenancy\Models\CompanyUser;
 use Database\Factories\UserFactory;
+use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Contracts\Translation\HasLocalePreference;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -16,8 +17,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
+use Throwable;
 
 /**
  * Compte global : un utilisateur peut appartenir à N sociétés (cabinets
@@ -74,6 +77,36 @@ final class User extends Authenticatable implements HasLocalePreference, MustVer
     public function preferredLocale(): string
     {
         return $this->locale;
+    }
+
+    /**
+     * Envoi best-effort du lien de vérification.
+     *
+     * Le listener SendEmailVerificationNotification est déclenché par l'event
+     * Registered, donc DANS la requête d'inscription et APRÈS le commit. Sans
+     * worker de file d'attente — c'est le cas en serverless — l'appel au
+     * transport est synchrone : un SMTP injoignable ou une API mail en timeout
+     * fait alors remonter une TransportException, et le client reçoit un 500
+     * pour un compte qui a bel et bien été créé. Le pire des deux mondes : il
+     * ne peut ni se connecter (il croit l'inscription échouée) ni recommencer
+     * (l'e-mail est déjà pris).
+     *
+     * La remise d'un e-mail est un incident d'infrastructure, pas une erreur du
+     * client : on la trace et l'appelant garde sa réponse. La route de renvoi
+     * répond déjà 202 Accepted — « accepté pour traitement », jamais « remis ».
+     * L'utilisateur peut la rappeler une fois le transport rétabli.
+     */
+    public function sendEmailVerificationNotification(): void
+    {
+        try {
+            $this->notify(new VerifyEmail);
+        } catch (Throwable $e) {
+            Log::error('Envoi du lien de vérification impossible', [
+                'user_id' => $this->id,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     /** @return BelongsToMany<Company, $this, CompanyUser> */

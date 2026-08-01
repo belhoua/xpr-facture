@@ -62,7 +62,13 @@ final class CompanyProvisioning
         // validée. À faire avant tout jeu de données, qui numérote déjà.
         $this->accounting->initialize($company);
 
-        $this->demoData->seedForCompany($company);
+        // Le jeu de démonstration émet de vrais documents : une centaine de
+        // requêtes dans le chemin critique de l'inscription. Acceptable avec la
+        // base sur le même réseau, coûteux dès que la latence entre en jeu —
+        // d'où l'interrupteur (cf. config/xpr.php).
+        if (config('xpr.demo_data_on_signup') === true) {
+            $this->demoData->seedForCompany($company);
+        }
 
         return $company;
     }

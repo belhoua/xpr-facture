@@ -8,6 +8,7 @@ use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Support\Facades\Notification;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
+use Symfony\Component\Mailer\Exception\TransportException;
 
 use function Pest\Laravel\assertAuthenticatedAs;
 use function Pest\Laravel\postJson;
@@ -89,6 +90,20 @@ it("n'enregistre AUCUN compte si la création de la société échoue (rollback)
 
     // La transaction a tout annulé : pas de compte orphelin
     expect(User::count())->toBe(0)->and(Company::count())->toBe(0);
+});
+
+it("crée le compte même si le transport mail est injoignable", function (): void {
+    // Sans worker de file d'attente — c'est le cas en serverless — l'envoi du
+    // lien de vérification est synchrone : il part DANS la requête, et APRÈS le
+    // commit. Une TransportException remontait alors en 500 sur un compte déjà
+    // enregistré, que l'utilisateur ne pouvait ni utiliser ni recréer.
+    Notification::shouldReceive('send')
+        ->once()
+        ->andThrow(new TransportException('Connection could not be established'));
+
+    postJson('/api/v1/auth/register', registerPayload())->assertCreated();
+
+    expect(User::where('email', 'othmane@exemple.ma')->exists())->toBeTrue();
 });
 
 it("autorise la réinscription d'un e-mail dont le compte a été supprimé", function (): void {
