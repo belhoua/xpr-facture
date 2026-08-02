@@ -94,7 +94,18 @@ final class RegisterController
             // La fautive est celle qui SUIT la dernière de cette liste.
             $lastQueries = array_slice($executed, -15);
 
+            // Commit réellement servi par la fonction. Sans lui, impossible de
+            // distinguer « le correctif ne marche pas » de « le correctif n'est
+            // pas déployé » — les deux se présentent comme un 500 identique.
+            // env() plutôt que config() : variable fournie par la plateforme, et
+            // aucun config:cache ne tourne au build (vérifié).
+            $deployment = [
+                'commit' => env('VERCEL_GIT_COMMIT_SHA', 'inconnu'),
+                'environment' => app()->environment(),
+            ];
+
             Log::error('Échec de l\'inscription', [
+                'deployment' => $deployment,
                 'chain' => $chain,
                 'last_queries' => $lastQueries,
                 'demo_data_on_signup' => config('xpr.demo_data_on_signup'),
@@ -103,6 +114,7 @@ final class RegisterController
 
             return response()->json([
                 'error' => $e->getMessage(),
+                'deployment' => $deployment,
                 'chain' => $chain,
                 'last_queries' => $lastQueries,
                 'demo_data_on_signup' => config('xpr.demo_data_on_signup'),
