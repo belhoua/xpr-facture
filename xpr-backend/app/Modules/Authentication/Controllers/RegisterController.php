@@ -10,8 +10,10 @@ use App\Modules\Authentication\Resources\UserResource;
 use App\Modules\Authentication\Services\RegistrationService;
 use App\Modules\Tenancy\Resources\CompanyResource;
 use App\Modules\Tenancy\Services\TenantContext;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -52,6 +54,16 @@ final class RegisterController
         // base injoignable — ne passera jamais ici. Si la réponse reste un 500
         // sans ce corps JSON, la cause est en amont du contrôleur.
         // ------------------------------------------------------------------
+        // Une requête qui ÉCHOUE n'atteint jamais ce listener : Laravel ne
+        // journalise qu'après succès. La dernière entrée est donc celle qui
+        // précède la fautive — c'est ce qui désigne la panne quand le message
+        // reçu n'est plus que le 25P02 des requêtes suivantes.
+        $executed = [];
+
+        DB::listen(function (QueryExecuted $query) use (&$executed): void {
+            $executed[] = $query->sql;
+        });
+
         try {
             $account = $registration->register(RegisterData::fromRequest($request));
 
@@ -79,14 +91,21 @@ final class RegisterController
                 ];
             }
 
+            // La fautive est celle qui SUIT la dernière de cette liste.
+            $lastQueries = array_slice($executed, -15);
+
             Log::error('Échec de l\'inscription', [
                 'chain' => $chain,
+                'last_queries' => $lastQueries,
+                'demo_data_on_signup' => config('xpr.demo_data_on_signup'),
                 'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'error' => $e->getMessage(),
                 'chain' => $chain,
+                'last_queries' => $lastQueries,
+                'demo_data_on_signup' => config('xpr.demo_data_on_signup'),
                 'trace' => $e->getTraceAsString(),
             ], 500);
         }

@@ -134,10 +134,23 @@ final class TenantContext
      */
     public function forget(): void
     {
-        $this->companyId = null;
-        $this->userId = null;
+        $this->forgetInMemory();
 
         DB::statement("SELECT set_config('app.company_id', '', false)");
         DB::statement("SELECT set_config('app.user_id', '', false)");
+    }
+
+    /**
+     * Volet PHP de forget(), sans toucher à PostgreSQL.
+     *
+     * Utile sur un chemin d'erreur, où la transaction peut être avortée : une
+     * requête y lèverait 25P02, qui remplacerait la cause de l'échec. L'appelant
+     * reste responsable de l'état côté base — en jetant la connexion s'il ne
+     * peut pas la nettoyer (cf. Jobs/Middleware/TenantAware).
+     */
+    public function forgetInMemory(): void
+    {
+        $this->companyId = null;
+        $this->userId = null;
     }
 }
