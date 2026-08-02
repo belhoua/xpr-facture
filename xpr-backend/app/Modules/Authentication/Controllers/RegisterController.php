@@ -8,6 +8,7 @@ use App\Modules\Authentication\DTO\RegisterData;
 use App\Modules\Authentication\Requests\RegisterRequest;
 use App\Modules\Authentication\Resources\UserResource;
 use App\Modules\Authentication\Services\RegistrationService;
+use App\Modules\Shared\Diagnostics\QueryTrail;
 use App\Modules\Tenancy\Resources\CompanyResource;
 use App\Modules\Tenancy\Services\TenantContext;
 use Illuminate\Database\Events\QueryExecuted;
@@ -102,11 +103,22 @@ final class RegisterController
             $deployment = [
                 'commit' => env('VERCEL_GIT_COMMIT_SHA', 'inconnu'),
                 'environment' => app()->environment(),
+                // Hôte seul, jamais les identifiants : distingue l'endpoint
+                // direct du pooled, qui n'ont pas la même sémantique de session.
+                'db_host' => DB::connection()->getConfig('host'),
+                'session_driver' => config('session.driver'),
+                'cache_store' => config('cache.default'),
             ];
+
+            // Couvre TOUTE la requête HTTP, contrairement à $lastQueries qui ne
+            // commence qu'au contrôleur. `failing` est la requête recherchée.
+            $trail = QueryTrail::report();
 
             Log::error('Échec de l\'inscription', [
                 'deployment' => $deployment,
+                'failing_query' => $trail['failing'],
                 'chain' => $chain,
+                'trail' => $trail,
                 'last_queries' => $lastQueries,
                 'demo_data_on_signup' => config('xpr.demo_data_on_signup'),
                 'trace' => $e->getTraceAsString(),
@@ -115,7 +127,9 @@ final class RegisterController
             return response()->json([
                 'error' => $e->getMessage(),
                 'deployment' => $deployment,
+                'failing_query' => $trail['failing'],
                 'chain' => $chain,
+                'trail' => $trail,
                 'last_queries' => $lastQueries,
                 'demo_data_on_signup' => config('xpr.demo_data_on_signup'),
                 'trace' => $e->getTraceAsString(),
