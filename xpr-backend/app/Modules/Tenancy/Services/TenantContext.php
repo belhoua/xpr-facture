@@ -8,6 +8,7 @@ use App\Modules\Tenancy\Exceptions\TenantContextMissing;
 use App\Modules\Tenancy\Models\Company;
 use Closure;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Source de vérité de la société active pour la durée d'une requête HTTP ou
@@ -70,12 +71,33 @@ final class TenantContext
         $this->activateCompany($companyId);
 
         try {
-            return $callback();
-        } finally {
-            $previous === null
-                ? $this->releaseCompany()
-                : $this->activateCompany($previous);
+            $result = $callback();
+        } catch (Throwable $e) {
+            // Restauration EN MÉMOIRE UNIQUEMENT, jamais par une requête.
+            //
+            // Si le callback a échoué à l'intérieur d'une transaction, PostgreSQL
+            // l'a avortée : toute requête suivante est refusée avec 25P02
+            // (« current transaction is aborted ») jusqu'au ROLLBACK. Un
+            // set_config() de restauration lèverait donc une SECONDE exception —
+            // et une exception levée pendant la propagation d'une autre la
+            // REMPLACE, sans même la chaîner en previous. La cause réelle de
+            // l'échec était détruite, et l'appelant ne recevait que 25P02 : le
+            // symptôme du nettoyage, jamais la panne d'origine.
+            //
+            // Ne rien envoyer à PostgreSQL ici ne laisse aucun état résiduel :
+            // set_config(..., false) est un SET de session, que le ROLLBACK
+            // annule avec le reste de la transaction. Hors transaction, la
+            // requête suivante repose la GUC avant de lire quoi que ce soit.
+            $this->companyId = $previous;
+
+            throw $e;
         }
+
+        $previous === null
+            ? $this->releaseCompany()
+            : $this->activateCompany($previous);
+
+        return $result;
     }
 
     /**

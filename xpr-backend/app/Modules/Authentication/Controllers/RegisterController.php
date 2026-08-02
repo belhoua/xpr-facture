@@ -66,15 +66,27 @@ final class RegisterController
                 'company' => new CompanyResource($account['company']),
             ], 201);
         } catch (Throwable $e) {
+            // Chaîne déroulée : une QueryException enveloppe la PDOException
+            // qui porte le SQLSTATE réel. Le premier maillon est le plus
+            // superficiel, le dernier est la panne.
+            $chain = [];
+
+            for ($link = $e; $link !== null; $link = $link->getPrevious()) {
+                $chain[] = [
+                    'exception' => $link::class,
+                    'message' => $link->getMessage(),
+                    'origin' => $link->getFile().':'.$link->getLine(),
+                ];
+            }
+
             Log::error('Échec de l\'inscription', [
-                'exception' => $e::class,
-                'message' => $e->getMessage(),
-                'file' => $e->getFile().':'.$e->getLine(),
+                'chain' => $chain,
                 'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'error' => $e->getMessage(),
+                'chain' => $chain,
                 'trace' => $e->getTraceAsString(),
             ], 500);
         }
