@@ -8,15 +8,10 @@ use App\Modules\Authentication\DTO\RegisterData;
 use App\Modules\Authentication\Requests\RegisterRequest;
 use App\Modules\Authentication\Resources\UserResource;
 use App\Modules\Authentication\Services\RegistrationService;
-use App\Modules\Shared\Diagnostics\QueryTrail;
 use App\Modules\Tenancy\Resources\CompanyResource;
 use App\Modules\Tenancy\Services\TenantContext;
-use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Throwable;
 
 /**
  * US-1 : inscription en une étape. Orchestration pure — la transaction vit
@@ -30,110 +25,17 @@ final class RegisterController
         RegistrationService $registration,
         TenantContext $context,
     ): JsonResponse {
-        // ------------------------------------------------------------------
-        // INSTRUMENTATION TEMPORAIRE — À RETIRER DÈS LE DIAGNOSTIC ÉTABLI.
-        //
-        // Le déploiement Vercel renvoie un 500 dont la cause n'est pas
-        // observable : les logs partent dans storage/logs/, redirigé vers /tmp,
-        // qui meurt avec l'instance. Ce bloc écrit l'exception sur le canal de
-        // log configuré ET la renvoie à l'appelant.
-        //
-        // Ce qu'il coûte, et pourquoi il ne peut pas rester :
-        //  - getTraceAsString() rend les ARGUMENTS SCALAIRES des appels de la
-        //    pile. Un mot de passe qui transite en string y figure en clair,
-        //    dans une réponse HTTP publique et dans les journaux — contraire à
-        //    CLAUDE.md §10 (« logs sans données personnelles en clair ») et à
-        //    la loi 09-08.
-        //  - la trace expose l'arborescence serveur et la structure applicative.
-        //  - il court-circuite ProblemDetailsRenderer : la réponse n'est plus
-        //    au format RFC 9457, donc toApiProblem() côté frontend ne sait plus
-        //    la lire et l'écran d'inscription n'affichera aucun message.
-        //
-        // Angle mort à connaître : ce bloc n'attrape que ce qui est levé DANS
-        // la méthode. Une panne survenant avant — middleware de session,
-        // validation du FormRequest, boot de l'application, APP_KEY absente,
-        // base injoignable — ne passera jamais ici. Si la réponse reste un 500
-        // sans ce corps JSON, la cause est en amont du contrôleur.
-        // ------------------------------------------------------------------
-        // Une requête qui ÉCHOUE n'atteint jamais ce listener : Laravel ne
-        // journalise qu'après succès. La dernière entrée est donc celle qui
-        // précède la fautive — c'est ce qui désigne la panne quand le message
-        // reçu n'est plus que le 25P02 des requêtes suivantes.
-        $executed = [];
+        $account = $registration->register(RegisterData::fromRequest($request));
 
-        DB::listen(function (QueryExecuted $query) use (&$executed): void {
-            $executed[] = $query->sql;
-        });
+        Auth::guard('web')->login($account['user']);
+        $request->session()->regenerate();
 
-        try {
-            $account = $registration->register(RegisterData::fromRequest($request));
+        $context->authenticateUser($account['user']->id);
+        $context->activateCompany($account['company']->id);
 
-            Auth::guard('web')->login($account['user']);
-            $request->session()->regenerate();
-
-            $context->authenticateUser($account['user']->id);
-            $context->activateCompany($account['company']->id);
-
-            return response()->json([
-                'user' => new UserResource($account['user']),
-                'company' => new CompanyResource($account['company']),
-            ], 201);
-        } catch (Throwable $e) {
-            // Chaîne déroulée : une QueryException enveloppe la PDOException
-            // qui porte le SQLSTATE réel. Le premier maillon est le plus
-            // superficiel, le dernier est la panne.
-            $chain = [];
-
-            for ($link = $e; $link !== null; $link = $link->getPrevious()) {
-                $chain[] = [
-                    'exception' => $link::class,
-                    'message' => $link->getMessage(),
-                    'origin' => $link->getFile().':'.$link->getLine(),
-                ];
-            }
-
-            // La fautive est celle qui SUIT la dernière de cette liste.
-            $lastQueries = array_slice($executed, -15);
-
-            // Commit réellement servi par la fonction. Sans lui, impossible de
-            // distinguer « le correctif ne marche pas » de « le correctif n'est
-            // pas déployé » — les deux se présentent comme un 500 identique.
-            // env() plutôt que config() : variable fournie par la plateforme, et
-            // aucun config:cache ne tourne au build (vérifié).
-            $deployment = [
-                'commit' => env('VERCEL_GIT_COMMIT_SHA', 'inconnu'),
-                'environment' => app()->environment(),
-                // Hôte seul, jamais les identifiants : distingue l'endpoint
-                // direct du pooled, qui n'ont pas la même sémantique de session.
-                'db_host' => DB::connection()->getConfig('host'),
-                'session_driver' => config('session.driver'),
-                'cache_store' => config('cache.default'),
-            ];
-
-            // Couvre TOUTE la requête HTTP, contrairement à $lastQueries qui ne
-            // commence qu'au contrôleur. `failing` est la requête recherchée.
-            $trail = QueryTrail::report();
-
-            Log::error('Échec de l\'inscription', [
-                'deployment' => $deployment,
-                'failing_query' => $trail['failing'],
-                'chain' => $chain,
-                'trail' => $trail,
-                'last_queries' => $lastQueries,
-                'demo_data_on_signup' => config('xpr.demo_data_on_signup'),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            return response()->json([
-                'error' => $e->getMessage(),
-                'deployment' => $deployment,
-                'failing_query' => $trail['failing'],
-                'chain' => $chain,
-                'trail' => $trail,
-                'last_queries' => $lastQueries,
-                'demo_data_on_signup' => config('xpr.demo_data_on_signup'),
-                'trace' => $e->getTraceAsString(),
-            ], 500);
-        }
+        return response()->json([
+            'user' => new UserResource($account['user']),
+            'company' => new CompanyResource($account['company']),
+        ], 201);
     }
 }
