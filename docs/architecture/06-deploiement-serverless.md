@@ -162,6 +162,38 @@ L'inscription y échappe parce qu'elle tient dans une seule transaction. Les
 lectures qui suivent, non. Tant que la propagation n'est pas passée en `SET
 LOCAL` dans une transaction par requête, utiliser l'endpoint **direct** de Neon.
 
+#### Ce qui a été mesuré (2026-08-02)
+
+Provisioning complet rejoué depuis un poste local contre la base de production,
+en transaction annulée, avec le rôle `neondb_owner` et `FORCE ROW LEVEL
+SECURITY` active :
+
+| Configuration | Résultat |
+|---|---|
+| Endpoint direct, `legal_form = sarl` | 16 requêtes, passe |
+| Endpoint direct, `legal_form = auto_entrepreneur` | passe |
+| Endpoint **pooled**, les deux formes | passe |
+| `companies` sous RLS ? | **non** — `relrowsecurity = false` |
+
+Le chemin d'inscription est donc hors de cause sur les deux endpoints, et
+`companies` ne porte aucune policy : un « bypass RLS » sur cette table n'a
+pas d'objet.
+
+#### `PDO::ATTR_EMULATE_PREPARES` : fausse piste, à ne pas retenter
+
+L'émulation des requêtes préparées est la parade habituelle à PgBouncer en mode
+transaction, où les requêtes préparées **nommées** de PDO se perdent d'une
+connexion serveur à l'autre. Elle est inapplicable ici : elle interpole les
+valeurs côté PHP, et un booléen PHP part alors en `0`/`1`, que PostgreSQL
+refuse sur une colonne `boolean`.
+
+```
+column "vat_exempt" is of type boolean but expression is of type integer
+```
+
+Mesuré sur `companies`. Toute colonne booléenne casserait de la même façon.
+La sortie reste l'endpoint direct, pas l'émulation.
+
 ---
 
 ## 4. Ordre de mise en service
