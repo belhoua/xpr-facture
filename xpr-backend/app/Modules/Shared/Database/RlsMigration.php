@@ -57,56 +57,6 @@ final class RlsMigration
         SQL);
     }
 
-    /**
-     * Retire FORCE : les policies cessent de s'appliquer au PROPRIÉTAIRE de la
-     * table, et continuent de s'appliquer à tout autre rôle.
-     *
-     * Conséquence directe : si l'application se connecte avec le rôle
-     * propriétaire — c'est le cas par défaut chez les hébergeurs gérés, dont
-     * Neon avec `neondb_owner` — la RLS ne la contraint plus du tout. Il ne
-     * reste que le scope Eloquent (BelongsToCompany) : l'isolation applicative
-     * tient, la défense en profondeur exigée par CLAUDE.md §5.5 disparaît.
-     *
-     * La sortie durable n'est pas là : c'est un rôle applicatif dédié, non
-     * propriétaire et sans BYPASSRLS (`xpr_app` en local), qui rétablit les
-     * deux lignes de défense sans rien désactiver.
-     */
-    public static function unforce(string $table): void
-    {
-        DB::statement("ALTER TABLE {$table} NO FORCE ROW LEVEL SECURITY");
-    }
-
-    public static function force(string $table): void
-    {
-        DB::statement("ALTER TABLE {$table} FORCE ROW LEVEL SECURITY");
-    }
-
-    /**
-     * Tables portant une policy tenant, dans l'ordre des migrations qui les
-     * créent. Source unique pour les bascules globales de FORCE.
-     *
-     * @return list<string>
-     */
-    public static function protectedTables(): array
-    {
-        return [
-            'invoices',
-            'cash_movements',
-            'admin_notes',
-            'exchange_rates',
-            'tax_rates',
-            'fiscal_years',
-            'sequences',
-            'settings',
-            'files',
-            'idempotency_keys',
-            'partners',
-            'categories',
-            'products',
-            'document_items',
-        ];
-    }
-
     public static function drop(string $table): void
     {
         DB::statement("DROP POLICY IF EXISTS tenant_isolation ON {$table}");
