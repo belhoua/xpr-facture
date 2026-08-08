@@ -46,7 +46,7 @@ it('rattache un article à une catégorie et développe son taux de TVA', functi
     [$user, $company] = workspaceAccount();
 
     app(TenantContext::class)->activateCompany($company->id);
-    $category = Category::query()->where('name', 'Prestations')->firstOrFail();
+    $category = Category::query()->where('name', 'Prestation')->firstOrFail();
     $taxRateId = taxRateId('20.00');
 
     actingAs($user)
@@ -55,7 +55,7 @@ it('rattache un article à une catégorie et développe son taux de TVA', functi
             'taxRateId' => $taxRateId,
         ]))
         ->assertCreated()
-        ->assertJsonPath('categoryName', 'Prestations')
+        ->assertJsonPath('categoryName', 'Prestation')
         // Le taux est renvoyé DÉVELOPPÉ : l'éditeur de document doit pouvoir
         // pré-remplir la ligne sans seconde requête.
         ->assertJsonPath('taxRateValue', '20.00');
@@ -214,10 +214,10 @@ it('refuse deux catégories homonymes, casse comprise', function (): void {
     [$user] = workspaceAccount();
 
     // L'index en base porte sur `lower(name)` : sans contrôle insensible à la
-    // casse, « PRESTATIONS » passerait la validation puis heurterait l'index,
+    // casse, « PRESTATION » passerait la validation puis heurterait l'index,
     // et l'utilisateur recevrait une erreur serveur illisible.
     actingAs($user)
-        ->postJson('/api/v1/categories', ['name' => 'PRESTATIONS'])
+        ->postJson('/api/v1/categories', ['name' => 'PRESTATION'])
         ->assertStatus(422)
         ->assertJsonPath('errors.name.0', fn (string $m): bool => $m !== '');
 });

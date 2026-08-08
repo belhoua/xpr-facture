@@ -6,6 +6,7 @@ namespace App\Modules\Tenancy\Services;
 
 use App\Modules\Accounting\Services\CompanyAccountingProvisioning;
 use App\Modules\Authentication\Models\User;
+use App\Modules\Catalog\Services\CompanyCatalogProvisioning;
 use App\Modules\Shared\Services\WorkspaceDemoDataService;
 use App\Modules\Tenancy\Enums\LegalForm;
 use App\Modules\Tenancy\Models\Company;
@@ -26,6 +27,7 @@ final class CompanyProvisioning
         private readonly PermissionRegistrar $permissions,
         private readonly WorkspaceDemoDataService $demoData,
         private readonly CompanyAccountingProvisioning $accounting,
+        private readonly CompanyCatalogProvisioning $catalog,
         private readonly TenantContext $tenant,
     ) {}
 
@@ -77,6 +79,10 @@ final class CompanyProvisioning
             // Exercice courant + séquences : sans eux, aucune facture ne peut
             // être validée. À faire avant tout jeu de données, qui numérote déjà.
             $this->accounting->initialize($company);
+
+            // Nomenclature de services par défaut. AVANT le jeu de démonstration,
+            // qui range ses articles dans ces mêmes catégories.
+            $this->catalog->initialize($company);
 
             // Le jeu de démonstration émet de vrais documents : une centaine de
             // requêtes dans le chemin critique de l'inscription. Acceptable avec

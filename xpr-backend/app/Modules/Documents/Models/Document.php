@@ -32,6 +32,9 @@ use Illuminate\Support\Carbon;
  * @property string $client_name
  * @property string|null $client_ice
  * @property string|null $client_address
+ * @property string|null $subject
+ * @property string|null $issue_city ville d'établissement portée sur le document
+ * @property int $paid_cents
  * @property Carbon|null $issued_at
  * @property Carbon|null $due_at
  * @property DocumentStatus $status
@@ -61,6 +64,8 @@ final class Document extends Model
         'client_name',
         'client_ice',
         'client_address',
+        'subject',
+        'issue_city',
         'issued_at',
         'due_at',
         'status',
@@ -68,6 +73,7 @@ final class Document extends Model
         'discount_cents',
         'tax_cents',
         'total_cents',
+        'paid_cents',
         'currency',
         'notes',
         'terms',
@@ -130,7 +136,11 @@ final class Document extends Model
     }
 
     /**
-     * Recherche libre sur le numéro et le nom du client figé sur le document.
+     * Recherche libre sur le numéro, le nom du client figé et l'objet.
+     *
+     * L'objet y figure parce que c'est le seul texte discriminant d'une
+     * situation : « Situation du mois d'octobre » se cherche par « octobre »,
+     * pas par un numéro qu'on ne retient pas.
      *
      * @param  Builder<$this>  $query
      * @return Builder<$this>
@@ -142,7 +152,8 @@ final class Document extends Model
         return $query->where(function (Builder $inner) use ($escaped): void {
             $inner
                 ->where('client_name', 'ILIKE', "%{$escaped}%")
-                ->orWhere('number', 'ILIKE', "%{$escaped}%");
+                ->orWhere('number', 'ILIKE', "%{$escaped}%")
+                ->orWhere('subject', 'ILIKE', "%{$escaped}%");
         });
     }
 
@@ -150,6 +161,40 @@ final class Document extends Model
     public function isIssued(): bool
     {
         return $this->number !== null;
+    }
+
+    /**
+     * Reste à payer. Jamais négatif : la contrainte
+     * `documents_paid_not_above_total_check` l'interdit en base, le `max()` ne
+     * fait que garantir la cohérence de l'affichage si la donnée venait à être
+     * lue pendant une écriture concurrente.
+     */
+    public function remainingCents(): int
+    {
+        return max(0, $this->total_cents - $this->paid_cents);
+    }
+
+    /**
+     * État de règlement DÉDUIT du montant encaissé — jamais stocké en double.
+     *
+     * C'est cette méthode qui fait autorité sur les trois badges de l'écran
+     * Situations (non payé / partiel / payé). Un document non émis n'a pas
+     * d'état de règlement : il n'y a pas encore de créance.
+     */
+    public function settlementStatus(): DocumentStatus
+    {
+        if (! $this->isIssued()) {
+            return DocumentStatus::Draft;
+        }
+
+        // Un total à zéro avec zéro encaissé n'est pas « payé » : il n'y a
+        // simplement rien à régler. On le laisse « envoyé » plutôt que
+        // d'annoncer un règlement qui n'a pas eu lieu.
+        if ($this->total_cents > 0 && $this->paid_cents >= $this->total_cents) {
+            return DocumentStatus::Paid;
+        }
+
+        return $this->paid_cents > 0 ? DocumentStatus::Partial : DocumentStatus::Sent;
     }
 
     /** Le modèle vit hors d'App\Models : la convention ne trouve pas la factory. */
@@ -170,6 +215,7 @@ final class Document extends Model
             'discount_cents' => 'integer',
             'tax_cents' => 'integer',
             'total_cents' => 'integer',
+            'paid_cents' => 'integer',
         ];
     }
 }

@@ -196,6 +196,21 @@ it('convertit un devis en facture brouillon en recopiant ses lignes', function (
     expect($quote->refresh()->status->value)->toBe('converted');
 });
 
+it("reporte l'objet et la ville du devis sur la facture", function (): void {
+    [$user] = workspaceAccount();
+    $quote = Document::query()->where('type', 'quote')->firstOrFail();
+
+    // Les deux champs s'IMPRIMENT sur la facture produite : les perdre au
+    // transfert obligerait à ressaisir ce que la conversion vient de recopier.
+    $quote->forceFill(['subject' => 'Contrôle technique lot 3', 'issue_city' => 'Oujda'])->save();
+
+    actingAs($user)
+        ->postJson("/api/v1/documents/{$quote->id}/convert")
+        ->assertCreated()
+        ->assertJsonPath('subject', 'Contrôle technique lot 3')
+        ->assertJsonPath('issueCity', 'Oujda');
+});
+
 it('refuse de convertir deux fois le même devis', function (): void {
     [$user] = workspaceAccount();
     $quote = Document::query()->where('type', 'quote')->firstOrFail();

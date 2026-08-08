@@ -36,18 +36,21 @@ final class DemoSeeder extends Seeder
     // ── Données fixes pour la société de démo ─────────────────────────────
 
     /** E-mail du propriétaire (owner) — mot de passe : `password` */
-    private const OWNER_EMAIL = 'kamal.bennani@almaghrib-demo.ma';
+    private const OWNER_EMAIL = 'kamal.bennani@bcat-demo.ma';
 
     /** Sociétés fictives marocaines de démo. */
     private const COMPANIES = [
         [
-            'legal_name' => 'Société Al Maghrib S.A.R.L.',
-            'trade_name' => 'Al Maghrib',
+            'legal_name' => 'BCAT S.A.R.L.',
+            'trade_name' => 'BCAT',
+            'tagline' => 'Bureau de Contrôle & Assistance Technique',
             'legal_form' => 'sarl',
             'ice' => '001234567890123',
             'if_number' => '12345678',
             'rc_number' => '123456',
             'rc_city' => 'Casablanca',
+            'patente' => '10100485',
+            'cnss' => '1144864',
             'vat_regime' => 'debit',
             'vat_exempt' => false,
             'share_capital' => 10_000_000_00, // 10 000 000 DH en centimes
@@ -55,18 +58,22 @@ final class DemoSeeder extends Seeder
             'city' => 'Casablanca',
             'country' => 'MA',
             'phone' => '+212 522 000 001',
-            'email' => 'contact@almaghrib-demo.ma',
+            'email' => 'contact@bcat-demo.ma',
+            'bank_rib' => '011640000032210000180410',
             'default_currency' => 'MAD',
             'timezone' => 'Africa/Casablanca',
         ],
         [
             'legal_name' => 'Atlas Technologies S.A.R.L.',
             'trade_name' => 'AtlasTech',
+            'tagline' => 'Ingénierie et maîtrise d\'œuvre',
             'legal_form' => 'sarl',
             'ice' => '009876543210987',
             'if_number' => '87654321',
             'rc_number' => '654321',
             'rc_city' => 'Rabat',
+            'patente' => '20200731',
+            'cnss' => '2255970',
             'vat_regime' => 'debit',
             'vat_exempt' => false,
             'share_capital' => 5_000_000_00,
@@ -75,12 +82,13 @@ final class DemoSeeder extends Seeder
             'country' => 'MA',
             'phone' => '+212 537 000 002',
             'email' => 'info@atlastech-demo.ma',
+            'bank_rib' => '022780000045120000290530',
             'default_currency' => 'MAD',
             'timezone' => 'Africa/Casablanca',
         ],
     ];
 
-    /** Collaborateurs de démo avec leur rôle dans Al Maghrib (1ère société). */
+    /** Collaborateurs de démo avec leur rôle dans BCAT (1ère société). */
     private const TEAM = [
         [
             'name' => 'Kamal Bennani',
@@ -90,25 +98,25 @@ final class DemoSeeder extends Seeder
         ],
         [
             'name' => 'Yasmine Alaoui',
-            'email' => 'yasmine.alaoui@almaghrib-demo.ma',
+            'email' => 'yasmine.alaoui@bcat-demo.ma',
             'locale' => 'fr',
             'role' => 'admin',
         ],
         [
             'name' => 'Mourad Tazi',
-            'email' => 'mourad.tazi@almaghrib-demo.ma',
+            'email' => 'mourad.tazi@bcat-demo.ma',
             'locale' => 'fr',
             'role' => 'accountant',
         ],
         [
             'name' => 'Salma Berrada',
-            'email' => 'salma.berrada@almaghrib-demo.ma',
+            'email' => 'salma.berrada@bcat-demo.ma',
             'locale' => 'ar',
             'role' => 'sales',
         ],
         [
             'name' => 'Othmane Idrissi',
-            'email' => 'o.idrissi@almaghrib-demo.ma',
+            'email' => 'o.idrissi@bcat-demo.ma',
             'locale' => 'fr',
             'role' => 'viewer',
         ],
@@ -125,7 +133,7 @@ final class DemoSeeder extends Seeder
     // ── Distribution des statuts de factures ──────────────────────────────
 
     /**
-     * Répartition des 22 factures pour Al Maghrib.
+     * Répartition des 22 factures pour BCAT.
      * Représente un pipeline commercial réaliste.
      */
     private const INVOICE_DISTRIBUTION = [
@@ -181,13 +189,13 @@ final class DemoSeeder extends Seeder
         $this->seedCatalog($companyMain->id);
         $this->seedCatalog($companySecond->id);
 
-        // ── 5. Documents pour Al Maghrib (société principale) ──────────────
+        // ── 5. Documents pour BCAT (société principale) ──────────────
         $this->seedDocuments($companyMain->id);
 
         // ── 5bis. Quelques documents pour AtlasTech (société secondaire) ───
         $this->seedDocuments($companySecond->id, 5);
 
-        // ── 6. Mouvements de caisse pour Al Maghrib ───────────────────────
+        // ── 6. Mouvements de caisse pour BCAT ───────────────────────
         $this->seedCashMovements($companyMain->id, 25);
 
         // ── 7. Quelques mouvements pour AtlasTech ─────────────────────────
@@ -200,14 +208,14 @@ final class DemoSeeder extends Seeder
         $this->command->table(
             ['Ressource', 'Société', 'Quantité'],
             [
-                ['Utilisateurs', 'Al Maghrib', count(self::TEAM)],
-                ['Factures',     'Al Maghrib', array_sum(self::INVOICE_DISTRIBUTION)],
+                ['Utilisateurs', 'BCAT', count(self::TEAM)],
+                ['Factures',     'BCAT', array_sum(self::INVOICE_DISTRIBUTION)],
                 ['Factures',     'AtlasTech',  5],
-                ['Tiers',        'Al Maghrib', 18],
+                ['Tiers',        'BCAT', 18],
                 ['Tiers',        'AtlasTech',  6],
-                ['Mouvements',   'Al Maghrib', 25],
+                ['Mouvements',   'BCAT', 25],
                 ['Mouvements',   'AtlasTech',  8],
-                ['Notes',        'Al Maghrib', count(self::ADMIN_NOTES)],
+                ['Notes',        'BCAT', count(self::ADMIN_NOTES)],
             ]
         );
     }

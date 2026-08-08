@@ -88,7 +88,9 @@ it('repart à 0001 au changement d exercice', function (): void {
         // L'exercice précédent garde son compteur : le prochain document daté
         // de cette année-là suit sa propre séquence.
         ->and(allocate(DocumentType::Invoice, $thisYear))->toBe('FAC-'.$thisYear->format('Y').'-0003')
-        ->and(Sequence::query()->where('company_id', $company->id)->count())->toBe(4);
+        // 4 séquences provisionnées sur l'exercice courant (facture, devis,
+        // avoir, situation) + celle ouverte à la volée sur l'exercice suivant.
+        ->and(Sequence::query()->where('company_id', $company->id)->count())->toBe(5);
 });
 
 it('ne laisse aucun trou quand la transaction échoue', function (): void {
@@ -180,8 +182,9 @@ it('ouvre un exercice sur l année civile à la création d une société', func
         ->and($fiscalYear->starts_on->toDateString())->toBe($today->copy()->startOfYear()->toDateString())
         ->and($fiscalYear->ends_on->toDateString())->toBe($today->copy()->endOfYear()->toDateString())
         ->and($fiscalYear->status)->toBe(FiscalYearStatus::Open)
-        // Facture, devis et avoir sont provisionnés d'emblée
-        ->and(Sequence::query()->count())->toBe(3);
+        // Facture, devis, avoir et situation sont provisionnés d'emblée
+        // (cf. DocumentType::provisionedAtSignup()).
+        ->and(Sequence::query()->count())->toBe(4);
 });
 
 it('interdit deux exercices qui se chevauchent', function (): void {

@@ -14,6 +14,7 @@ use Illuminate\Database\Seeder;
  *   2. RoleSeeder      — rôles Spatie (requis pour DemoSeeder.createTeam)
  *   3. TaxRateSeeder   — catalogue TVA standard, partagé par toutes les sociétés
  *   4. DemoSeeder      — sociétés, utilisateurs, factures, mouvements de caisse
+ *   5. ConventionSeeder — contrats de convention et dépôts de dossier
  *
  * Usage :
  *   php artisan migrate:fresh --seed          ← recréer toute la base + peupler
@@ -41,5 +42,10 @@ final class DatabaseSeeder extends Seeder
         }
 
         $this->call(DemoSeeder::class);
+
+        // APRÈS DemoSeeder : les conventions se rattachent à la société
+        // principale, que celui-ci crée. Lancé avant, ConventionSeeder ne
+        // trouverait aucune société et s'abstiendrait.
+        $this->call(ConventionSeeder::class);
     }
 }

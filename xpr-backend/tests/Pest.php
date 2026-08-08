@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Accounting\Models\TaxRate;
 use App\Modules\Accounting\Services\CompanyAccountingProvisioning;
 use App\Modules\Authentication\Models\User;
+use App\Modules\Catalog\Services\CompanyCatalogProvisioning;
 use App\Modules\Shared\Services\WorkspaceDemoDataService;
 use App\Modules\Tenancy\Models\Company;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -40,9 +41,38 @@ function workspaceAccount(): array
     // Exercice + séquences AVANT les données : les documents de démo sont
     // numérotés par la séquence, comme de vrais documents émis.
     app(CompanyAccountingProvisioning::class)->initialize($company);
+    // Même ordre qu'en production (cf. CompanyProvisioning) : la nomenclature
+    // de services d'abord, le jeu de démonstration s'y raccroche ensuite.
+    app(CompanyCatalogProvisioning::class)->initialize($company);
     app(WorkspaceDemoDataService::class)->seedForCompany($company);
 
     return [$user, $company];
+}
+
+/**
+ * Colonnes minimales d'une convention, écrites DIRECTEMENT en base.
+ *
+ * Ici et non dans un fichier de test : deux suites s'en servent
+ * (`ConventionTest`, `FileDepositTest`) et Pest n'inclut un fichier qu'au moment
+ * de l'exécuter — une fonction définie dans l'un manquerait à l'autre selon
+ * l'ordre de passage.
+ *
+ * Pas de factory : le module n'en expose pas, et les tests qui en ont besoin
+ * fabriquent une convention de CONTRÔLE, pas un jeu de données réaliste. Le
+ * `company_id` est explicite — plusieurs cas insèrent délibérément dans une
+ * société qui n'est pas celle du contexte, pour éprouver le cloisonnement.
+ *
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function conventionColumns(string $companyId, array $overrides = []): array
+{
+    return array_merge([
+        'company_id' => $companyId,
+        'owner_name' => 'Société Clinique La Vallée',
+        'project_description' => 'Construction d\'une polyclinique',
+        'total_cents' => 16_224_000,
+    ], $overrides);
 }
 
 /**

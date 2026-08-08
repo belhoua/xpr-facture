@@ -41,6 +41,24 @@ enum Permission: string
     /** Archivage d'un tiers : il disparaît des listes sans perdre son historique. */
     case PartnersDelete = 'partners.delete';
 
+    // Contrats de convention de contrôle et suivi. Famille distincte des
+    // documents commerciaux : une convention n'est pas une pièce fiscale, elle
+    // ENGAGE une mission — c'est un acte de direction, pas de facturation, et
+    // le rôle qui rédige un devis n'est pas nécessairement celui qui signe.
+    case ConventionsView = 'conventions.view';
+    case ConventionsCreate = 'conventions.create';
+    case ConventionsUpdate = 'conventions.update';
+    case ConventionsDelete = 'conventions.delete';
+
+    /**
+     * Dépôts de dossier. Deux permissions seulement là où les conventions en ont
+     * quatre : le dépôt est un SUIVI administratif, pas un engagement. Rien ne
+     * distingue le risque d'en corriger un de celui d'en supprimer un — un
+     * découpage plus fin n'aurait servi qu'à faire nombre.
+     */
+    case DepositsView = 'deposits.view';
+    case DepositsManage = 'deposits.manage';
+
     case CashView = 'cash.view';
     case CashManage = 'cash.manage';
 

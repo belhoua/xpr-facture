@@ -31,6 +31,16 @@ enum DocumentStatus: string
     /** Devis concrétisé en facture. Terminal, et posé automatiquement. */
     case Converted = 'converted';
 
+    /**
+     * En cours : l'affaire est ouverte, le règlement n'est pas encore attendu.
+     *
+     * État d'AVANCEMENT et non de rédaction — à ne pas confondre avec `Draft`,
+     * qui signifie « pas encore numéroté ». Un document `in_progress` porte son
+     * numéro. Propre aux situations à ce jour (chantier en cours, décompte non
+     * clos).
+     */
+    case InProgress = 'in_progress';
+
     /** Facture partiellement réglée. */
     case Partial = 'partial';
 
@@ -68,6 +78,20 @@ enum DocumentStatus: string
             // Un avoir se rembourse ou s'impute : `paid` marque le dénouement.
             DocumentType::CreditNote => [
                 self::Draft, self::Sent, self::Paid, self::Cancelled,
+            ],
+
+            // La situation suit un cycle d'encaissement, comme la facture, mais
+            // sans `overdue` : elle n'a pas d'échéance opposable — c'est un état
+            // d'avancement, pas une créance exigible à date.
+            //
+            // Quatre états lui sont offerts à l'écran : `sent` (non payé),
+            // `in_progress` (en cours), `partial` et `paid`. Ils sont DÉDUITS
+            // du montant réglé par défaut, mais l'utilisateur peut les fixer
+            // lui-même — `in_progress` n'étant, lui, jamais déductible : aucun
+            // montant ne dit qu'un chantier est en cours.
+            DocumentType::Situation => [
+                self::Draft, self::Sent, self::InProgress,
+                self::Partial, self::Paid, self::Cancelled,
             ],
 
             // Types dérivés : émis, puis validés par le tiers. Pas de notion

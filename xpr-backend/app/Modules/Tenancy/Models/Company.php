@@ -19,9 +19,23 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $id uuid v7
  * @property string $legal_name
  * @property string|null $trade_name
+ * @property string|null $tagline
  * @property string $legal_form
  * @property string|null $ice
+ * @property string|null $if_number
+ * @property string|null $rc_number
+ * @property string|null $rc_city
+ * @property string|null $patente
+ * @property string|null $cnss
+ * @property int|null $share_capital
+ * @property string $vat_regime
  * @property bool $vat_exempt
+ * @property string|null $address
+ * @property string|null $city
+ * @property string|null $phone
+ * @property string|null $email
+ * @property string|null $website
+ * @property string|null $bank_rib
  * @property string $default_currency
  * @property string $country
  * @property string $timezone
@@ -37,6 +51,7 @@ final class Company extends Model
     protected $fillable = [
         'legal_name',
         'trade_name',
+        'tagline',
         'legal_form',
         'ice',
         'if_number',
@@ -53,6 +68,7 @@ final class Company extends Model
         'phone',
         'email',
         'website',
+        'bank_rib',
         'default_currency',
         'timezone',
     ];

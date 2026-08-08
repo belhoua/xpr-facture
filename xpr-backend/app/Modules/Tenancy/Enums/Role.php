@@ -62,6 +62,12 @@ enum Role: string
                 Permission::DocumentsDelete,
                 Permission::DocumentsIssue,
                 Permission::DocumentsCancel,
+                Permission::ConventionsView,
+                Permission::ConventionsCreate,
+                Permission::ConventionsUpdate,
+                Permission::ConventionsDelete,
+                Permission::DepositsView,
+                Permission::DepositsManage,
                 Permission::CashView,
                 Permission::CashManage,
                 Permission::UsersView,
@@ -88,6 +94,15 @@ enum Role: string
                 // C'est ANNULER et SUPPRIMER qu'on lui refuse — les deux actes
                 // qui touchent à un document déjà parti chez le client.
                 Permission::DocumentsIssue,
+                // Rédiger la convention issue de SON devis, oui ; la SUPPRIMER,
+                // non — c'est un contrat signé, il relève de la direction.
+                Permission::ConventionsView,
+                Permission::ConventionsCreate,
+                Permission::ConventionsUpdate,
+                // Le suivi du dossier appartient au suivi client : c'est le
+                // commercial que l'on appelle pour savoir où il en est.
+                Permission::DepositsView,
+                Permission::DepositsManage,
                 Permission::CashView,
                 Permission::UsersView,
                 Permission::AdminNotesView,
@@ -100,6 +115,8 @@ enum Role: string
                 Permission::PartnersView,
                 Permission::CatalogView,
                 Permission::DocumentsView,
+                Permission::ConventionsView,
+                Permission::DepositsView,
                 Permission::CashView,
                 Permission::UsersView,
                 Permission::AdminNotesView,

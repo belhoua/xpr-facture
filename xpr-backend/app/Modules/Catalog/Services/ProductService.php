@@ -100,6 +100,7 @@ final class ProductService
             'unit' => 'unit',
             'unitPriceCents' => 'unit_price_cents',
             'costPriceCents' => 'cost_price_cents',
+            'defaultDiscountPercent' => 'default_discount_percent',
             'currency' => 'currency',
             'taxRateId' => 'tax_rate_id',
             'trackStock' => 'track_stock',
@@ -111,6 +112,17 @@ final class ProductService
         foreach ($map as $input => $column) {
             if (array_key_exists($input, $data)) {
                 $columns[$column] = $data[$input];
+            }
+        }
+
+        // Colonnes NOT NULL à valeur par défaut. Le formulaire transmet `null`
+        // pour « champ laissé vide » — convention légitime côté client, mais
+        // que PostgreSQL rejetterait en 23502. On retombe sur le défaut de la
+        // colonne, ce qui rend aussi le comportement correct en MISE À JOUR :
+        // vider l'unité doit la ramener à « unité », pas conserver l'ancienne.
+        foreach (['unit' => 'unité', 'default_discount_percent' => '0'] as $column => $default) {
+            if (array_key_exists($column, $columns) && $columns[$column] === null) {
+                $columns[$column] = $default;
             }
         }
 

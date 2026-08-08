@@ -48,6 +48,9 @@ final class ProductFactory extends Factory
             'unit_price_cents' => $article['price'],
             // Marge brute de 35 % à 60 %, calculée en entiers.
             'cost_price_cents' => intdiv($article['price'] * $this->faker->numberBetween(40, 65), 100),
+            // La plupart des articles se vendent au prix plein : une remise
+            // par défaut systématique donnerait des jeux d'essai irréalistes.
+            'default_discount_percent' => $this->faker->boolean(20) ? $this->faker->randomElement(['5.00', '10.00']) : '0.00',
             'currency' => 'MAD',
             // Seuls les biens sont stockables : la contrainte CHECK
             // `products_stock_goods_only_check` refuserait un service coché.

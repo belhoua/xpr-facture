@@ -125,6 +125,12 @@ final class DocumentConversionService
             'client_name' => $source->client_name,
             'client_ice' => $source->client_ice,
             'client_address' => $source->client_address,
+            // L'OBJET et la VILLE d'établissement suivent la pièce : tous deux
+            // s'impriment sur le document produit (« Objet : … », « RABAT, le
+            // … »), et une facture qui perd l'objet du devis qu'elle facture
+            // oblige à ressaisir ce que l'on vient de recopier.
+            'subject' => $source->subject,
+            'issue_city' => $source->issue_city,
             'currency' => $source->currency,
             'notes' => $source->notes,
             'terms' => $source->terms,

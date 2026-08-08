@@ -11,6 +11,7 @@ use App\Modules\Documents\Controllers\DocumentListController;
 use App\Modules\Documents\Controllers\DocumentShowController;
 use App\Modules\Documents\Controllers\DocumentStatusController;
 use App\Modules\Documents\Controllers\DocumentStoreController;
+use App\Modules\Documents\Controllers\DocumentSummaryController;
 use App\Modules\Documents\Controllers\DocumentUpdateController;
 use App\Modules\Tenancy\Enums\Permission;
 use Illuminate\Support\Facades\Route;
@@ -30,6 +31,14 @@ Route::middleware(['api', 'auth:sanctum', 'tenant'])
     ->group(function (): void {
         Route::get('documents', DocumentListController::class)
             ->middleware('permission:'.Permission::DocumentsView->value);
+
+        // AVANT `documents/{document}`, impérativement : Laravel retient la
+        // première route qui correspond, et `{document}` capturerait « summary »
+        // comme un identifiant — la requête finirait en 404 sans rien indiquer
+        // de la cause.
+        Route::get('documents/summary', DocumentSummaryController::class)
+            ->middleware('permission:'.Permission::DocumentsView->value);
+
         Route::get('documents/{document}', DocumentShowController::class)
             ->middleware('permission:'.Permission::DocumentsView->value);
 

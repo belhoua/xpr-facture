@@ -37,6 +37,9 @@ final class ProductResource extends JsonResource
             'unitPriceCents' => $this->unit_price_cents,
             'costPriceCents' => $this->cost_price_cents,
             'marginCents' => $this->marginCents(),
+            // Chaîne, comme `taxRateValue` et pour la même raison : le front
+            // reporte cette valeur sur la ligne de document sans la recalculer.
+            'defaultDiscountPercent' => (string) $this->default_discount_percent,
             'currency' => $this->currency,
             'categoryId' => $this->category_id,
             'categoryName' => $category instanceof Category ? $category->name : null,

@@ -22,6 +22,10 @@ use App\Modules\Documents\Models\DocumentItem;
  *  2. à défaut, la valeur du produit référencé ;
  *  3. à défaut, une valeur neutre.
  *
+ * La REMISE suit cette règle et hérite donc de `default_discount_percent` : la
+ * fiche fournit la remise habituellement consentie, la ligne la fige. Modifier
+ * la fiche ensuite ne rétroagit sur aucun document déjà saisi (§3).
+ *
  * Le TAUX DE TVA échappe à cette règle : il n'est jamais lu depuis le payload,
  * seulement RÉSOLU depuis `tax_rates` à partir de l'identifiant transmis. Un
  * client qui pourrait poster « tax_rate: 0 » avec un taux à 20 % fabriquerait
@@ -61,7 +65,13 @@ final class DocumentItemBuilder
             // `??` masquerait sans l'empêcher.
             $unitPriceCents = self::cents($row['unitPriceCents'] ?? null)
                 ?? ($product instanceof Product ? $product->unit_price_cents : 0);
-            $discountPercent = self::decimal($row['discountPercent'] ?? null, '0.00');
+            // `array_key_exists` et non `??` : une remise transmise à 0 est une
+            // DÉCISION du vendeur (« pas de remise sur cette ligne »), et doit
+            // primer sur la remise habituelle de la fiche. Seule l'ABSENCE du
+            // champ déclenche l'héritage — même distinction que pour taxRateId.
+            $discountPercent = array_key_exists('discountPercent', $row)
+                ? self::decimal($row['discountPercent'], '0.00')
+                : ($product instanceof Product ? $product->default_discount_percent : '0.00');
 
             $amounts = $this->calculator->line($quantity, $unitPriceCents, $discountPercent, $taxRateValue);
 

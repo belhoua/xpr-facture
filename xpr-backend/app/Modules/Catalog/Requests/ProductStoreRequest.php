@@ -44,6 +44,12 @@ class ProductStoreRequest extends FormRequest
             'costPriceCents' => ['nullable', 'integer', 'min:0', 'max:9999999999'],
             'currency' => ['nullable', 'string', 'size:3', Rule::exists('currencies', 'code')],
 
+            // Remise par défaut : un POURCENTAGE, donc pas un montant en
+            // centimes. Bornes et précision alignées sur
+            // `items.*.discountPercent` du DocumentStoreRequest — la valeur est
+            // recopiée telle quelle sur la ligne, elle doit y être recevable.
+            'defaultDiscountPercent' => ['nullable', 'numeric', 'min:0', 'max:100', 'decimal:0,2'],
+
             // Le catalogue standard (company_id NULL) est accessible à toutes
             // les sociétés — c'est le principe posé par la migration des
             // tax_rates. Une société peut aussi pointer un taux qui lui est propre.

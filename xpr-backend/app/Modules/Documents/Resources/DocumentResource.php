@@ -45,6 +45,14 @@ final class DocumentResource extends JsonResource
             'clientIce' => $this->client_ice,
             'clientAddress' => $this->client_address,
 
+            // Objet libre. Porte seul le sens d'une situation, qui n'a pas de
+            // lignes de détail pour l'exprimer.
+            'subject' => $this->subject,
+
+            // Ville d'établissement, saisie par document : un bureau de
+            // contrôle établit ses devis là où se trouve le chantier.
+            'issueCity' => $this->issue_city,
+
             'issuedAt' => $this->issued_at?->toDateString(),
             'dueAt' => $this->due_at?->toDateString(),
 
@@ -52,6 +60,11 @@ final class DocumentResource extends JsonResource
             'discountCents' => $this->discount_cents,
             'taxCents' => $this->tax_cents,
             'totalCents' => $this->total_cents,
+            // Montant encaissé et solde. Calculé et non stocké : le dériver ici
+            // évite une seconde source de vérité que rien ne garantirait
+            // synchronisée (cf. Document::remainingCents()).
+            'paidCents' => $this->paid_cents,
+            'remainingCents' => $this->remainingCents(),
             'currency' => $this->currency,
 
             'notes' => $this->notes,

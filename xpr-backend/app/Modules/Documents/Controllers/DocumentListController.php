@@ -25,6 +25,8 @@ final class DocumentListController
             'status' => $request->string('status')->toString() ?: null,
             'search' => $request->string('search')->toString() ?: null,
             'partnerId' => $request->string('partnerId')->toString() ?: null,
+            'from' => $request->string('from')->toString() ?: null,
+            'to' => $request->string('to')->toString() ?: null,
             'perPage' => $request->integer('perPage', 25),
             'page' => $request->integer('page', 1),
         ]);

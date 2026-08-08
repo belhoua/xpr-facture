@@ -28,6 +28,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $unit
  * @property int $unit_price_cents
  * @property int|null $cost_price_cents
+ * @property numeric-string $default_discount_percent
  * @property string $currency
  * @property string|null $tax_rate_id
  * @property bool $track_stock
@@ -52,6 +53,7 @@ final class Product extends Model
         'unit',
         'unit_price_cents',
         'cost_price_cents',
+        'default_discount_percent',
         'currency',
         'tax_rate_id',
         'track_stock',
@@ -126,6 +128,10 @@ final class Product extends Model
             'type' => ProductType::class,
             'unit_price_cents' => 'integer',
             'cost_price_cents' => 'integer',
+            // Même cast que `document_items.discount_percent`, vers lequel la
+            // valeur est recopiée : un flottant introduirait un écart d'arrondi
+            // entre la fiche et la ligne de document.
+            'default_discount_percent' => 'decimal:2',
             'track_stock' => 'boolean',
             'is_active' => 'boolean',
         ];

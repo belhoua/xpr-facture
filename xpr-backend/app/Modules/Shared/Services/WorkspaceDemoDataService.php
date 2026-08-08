@@ -135,18 +135,26 @@ final class WorkspaceDemoDataService
 
         $categories = [];
 
+        // « Prestation » et « Maintenance » viennent de la nomenclature posée par
+        // CompanyCatalogProvisioning : firstOrCreate les REPREND au lieu d'en
+        // créer des homonymes, que l'index unique sur lower(name) refuserait de
+        // toute façon. Les deux dernières sont propres au jeu de démonstration.
         foreach ([
-            ['name' => 'Prestations', 'color' => '#2563EB'],
+            ['name' => 'Prestation', 'color' => '#2563EB'],
+            ['name' => 'Maintenance', 'color' => '#059669'],
             ['name' => 'Licences & abonnements', 'color' => '#7C3AED'],
-            ['name' => 'Matériel', 'color' => '#059669'],
+            ['name' => 'Matériel', 'color' => '#DC2626'],
         ] as $row) {
-            $categories[$row['name']] = Category::create($row);
+            $categories[$row['name']] = Category::query()->firstOrCreate(
+                ['name' => $row['name']],
+                ['color' => $row['color']],
+            );
         }
 
         $rows = [
-            ['name' => 'Journée de conseil', 'reference' => 'CONS-J', 'category' => 'Prestations', 'type' => ProductType::Service, 'unit' => 'jour', 'price' => 450_000, 'cost' => 200_000, 'tax' => $standard],
-            ['name' => 'Développement sur mesure', 'reference' => 'DEV-H', 'category' => 'Prestations', 'type' => ProductType::Service, 'unit' => 'heure', 'price' => 60_000, 'cost' => 28_000, 'tax' => $standard],
-            ['name' => 'Maintenance applicative', 'reference' => 'MNT-M', 'category' => 'Prestations', 'type' => ProductType::Service, 'unit' => 'mois', 'price' => 350_000, 'cost' => 150_000, 'tax' => $standard],
+            ['name' => 'Journée de conseil', 'reference' => 'CONS-J', 'category' => 'Prestation', 'type' => ProductType::Service, 'unit' => 'jour', 'price' => 450_000, 'cost' => 200_000, 'tax' => $standard],
+            ['name' => 'Développement sur mesure', 'reference' => 'DEV-H', 'category' => 'Prestation', 'type' => ProductType::Service, 'unit' => 'heure', 'price' => 60_000, 'cost' => 28_000, 'tax' => $standard],
+            ['name' => 'Maintenance applicative', 'reference' => 'MNT-M', 'category' => 'Maintenance', 'type' => ProductType::Service, 'unit' => 'mois', 'price' => 350_000, 'cost' => 150_000, 'tax' => $standard],
             ['name' => 'Licence XPR Facture', 'reference' => 'LIC-XPR', 'category' => 'Licences & abonnements', 'type' => ProductType::Service, 'unit' => 'an', 'price' => 1_200_000, 'cost' => null, 'tax' => $standard],
             ['name' => 'Hébergement mutualisé', 'reference' => 'HEB-M', 'category' => 'Licences & abonnements', 'type' => ProductType::Service, 'unit' => 'mois', 'price' => 45_000, 'cost' => 18_000, 'tax' => $reduced],
             ['name' => 'Ordinateur portable 14"', 'reference' => 'MAT-PC14', 'category' => 'Matériel', 'type' => ProductType::Good, 'unit' => 'unité', 'price' => 950_000, 'cost' => 780_000, 'tax' => $standard],
