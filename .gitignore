@@ -4,3 +4,17 @@
 .idea/
 .vscode/
 xpr-infrastructure/.env
+
+# Modèles de documents fournis par le client (docs/*.docx).
+#
+# Ils servent de SOURCE au développement — la vue d'impression des conventions
+# et celle des devis en reprennent la structure et le texte — mais ils portent
+# des données réelles : nom et raison sociale d'un client, ICE, RC, adresse du
+# chantier, et le RIB du bureau de contrôle. Le dépôt distant est PUBLIC ;
+# les y pousser publierait ces informations de façon difficilement réversible,
+# l'historique git et les caches d'indexation survivant à une suppression.
+#
+# Ils restent donc sur les postes de travail. Ce qu'ils contiennent d'utile au
+# code a été extrait et versionné là où c'est du texte contractuel, pas des
+# données personnelles : `xpr-frontend/features/conventions/contract-text.ts`.
+docs/*.docx
