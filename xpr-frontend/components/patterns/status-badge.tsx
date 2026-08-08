@@ -21,6 +21,8 @@ export const DOCUMENT_STATUSES = [
   "accepted",
   "refused",
   "converted",
+  /** Affaire ouverte, règlement pas encore attendu. Propre aux situations. */
+  "in_progress",
   "partial",
   "paid",
   "overdue",
@@ -37,6 +39,11 @@ const STATUS_COLOR: Record<DocumentStatus, string> = {
   refused: "text-status-refused bg-status-refused/10 ring-status-refused/20",
   converted:
     "text-status-converted bg-status-converted/10 ring-status-converted/20",
+  // Reprend le bleu de `sent` : « en cours » et « envoyé » disent tous deux
+  // qu'une affaire suit son cours normal, sans rien réclamer. Pas de nouvelle
+  // teinte introduite — §11 impose une seule couleur d'accent et une
+  // sémantique de statut stable.
+  in_progress: "text-status-sent bg-status-sent/10 ring-status-sent/20",
   partial: "text-status-partial bg-status-partial/10 ring-status-partial/20",
   paid: "text-status-paid bg-status-paid/10 ring-status-paid/20",
   overdue: "text-status-overdue bg-status-overdue/10 ring-status-overdue/20",

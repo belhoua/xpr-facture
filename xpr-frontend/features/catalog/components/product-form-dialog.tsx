@@ -47,7 +47,8 @@ import {
  * `unitPriceCents` / `costPriceCents` alors que le formulaire saisit des MAD
  * sous `unitPrice` / `costPrice`. Rattacher l'un à l'autre demanderait une
  * table de correspondance qui mentirait sur l'unité ; Zod borne déjà ces deux
- * champs côté client, et un refus serveur s'affiche en bandeau.
+ * champs côté client, et un refus serveur s'affiche en bandeau. Même raison
+ * pour la remise (`defaultDiscountPercent` côté serveur, `defaultDiscount` ici).
  */
 const SERVER_FIELDS = [
   "type",
@@ -74,6 +75,7 @@ function emptyValues(defaultTaxRateId: string): ProductFormValues {
     taxRateId: defaultTaxRateId,
     unitPrice: 0,
     costPrice: 0,
+    defaultDiscount: 0,
     trackStock: false,
     isActive: true,
   };
@@ -92,6 +94,8 @@ function valuesFromProduct(product: Product): ProductFormValues {
     // Centimes → unités majeures : conversion d'AFFICHAGE uniquement (§7).
     unitPrice: product.unitPriceCents / 100,
     costPrice: (product.costPriceCents ?? 0) / 100,
+    // « 10.00 » → 10 : le formulaire manipule un nombre, l'API une chaîne exacte.
+    defaultDiscount: Number(product.defaultDiscountPercent),
     trackStock: product.trackStock,
     isActive: product.isActive,
   };
@@ -356,6 +360,26 @@ export function ProductFormDialog({
                 <FieldError>{fieldError(errors.unit?.message)}</FieldError>
               </Field>
             </div>
+
+            <Field>
+              <FieldLabel htmlFor="product-discount">
+                {t("form.defaultDiscount")}
+              </FieldLabel>
+              <Input
+                id="product-discount"
+                type="number"
+                step="0.01"
+                min={0}
+                max={100}
+                className="tabular"
+                aria-invalid={Boolean(errors.defaultDiscount)}
+                {...form.register("defaultDiscount", { valueAsNumber: true })}
+              />
+              <p className="text-muted-foreground text-xs">
+                {t("form.defaultDiscountHint")}
+              </p>
+              <FieldError>{fieldError(errors.defaultDiscount?.message)}</FieldError>
+            </Field>
 
             {/* Le suivi de stock n'existe que pour un BIEN : la contrainte
                 `products_stock_goods_only_check` le refuse sur un service. */}

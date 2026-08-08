@@ -1,7 +1,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, FileMinus, FileOutput, Send } from "lucide-react";
+import {
+  Ban,
+  FileMinus,
+  FileOutput,
+  FileSignature,
+  Printer,
+  Send,
+} from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -25,6 +32,10 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  conventionKeys,
+  createConventionFromDocument,
+} from "@/features/conventions/api/conventions";
+import {
   cancelDocument,
   changeDocumentStatus,
   convertDocument,
@@ -38,11 +49,15 @@ import {
   isCancellable,
   isConvertible,
   isCreditable,
+  isEditable,
   isIssuable,
+  isTransferableToConvention,
+  printRoute,
   type Document,
 } from "@/features/documents/schemas/document";
 import { toApiProblem } from "@/lib/api/client";
 import { formatDate, formatMoney } from "@/lib/format";
+import { Link, useRouter } from "@/lib/i18n/navigation";
 
 /**
  * Détail d'un document et actions de son cycle de vie.
@@ -69,6 +84,7 @@ export function DocumentDetailSheet({
   const tStatus = useTranslations("status");
   const locale = useLocale();
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const [confirm, setConfirm] = useState<"cancel" | "creditNote" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -129,12 +145,36 @@ export function DocumentDetailSheet({
     onError: fail,
   });
 
+  /**
+   * Devis / facture → contrat de convention.
+   *
+   * `onConverted` ne s'applique PAS ici : ce transfert ne produit pas un
+   * document, et le panneau n'a donc rien à rouvrir. On quitte l'écran pour
+   * l'édition de la convention, qui naît incomplète par construction (titre
+   * foncier, lots, délai) — c'est là que le travail commence.
+   */
+  const conventionMutation = useMutation({
+    mutationFn: (id: string) => createConventionFromDocument(id),
+    onSuccess: async (created) => {
+      queryClient.setQueryData(conventionKeys.detail(created.id), created);
+      await queryClient.invalidateQueries({ queryKey: conventionKeys.all });
+      setActionError(null);
+      router.push(`/conventions/${created.id}/edit`);
+    },
+    onError: fail,
+  });
+
   const pending =
     issueMutation.isPending ||
     statusMutation.isPending ||
     cancelMutation.isPending ||
     convertMutation.isPending ||
-    creditNoteMutation.isPending;
+    creditNoteMutation.isPending ||
+    conventionMutation.isPending;
+
+  // Calculé ici et non dans le JSX : `data` y est déjà resserré par le ternaire
+  // de chargement, et une seconde garde n'y ajouterait que du bruit.
+  const printPath = data ? printRoute(data) : null;
 
   return (
     <>
@@ -201,7 +241,11 @@ export function DocumentDetailSheet({
                     </Button>
                   )}
 
-                  {data.status === "draft" ? (
+                  {/* `isEditable` et non `status === "draft"` : la facture, la
+                      situation et le devis restent modifiables une fois émis,
+                      et le panneau doit offrir ce que la liste offre — sans
+                      quoi la même pièce serait modifiable ici et gelée là. */}
+                  {isEditable(data) && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -209,9 +253,11 @@ export function DocumentDetailSheet({
                     >
                       {t("actions.edit")}
                     </Button>
-                  ) : (
-                    /* Document émis : le statut évolue, le contenu ne bouge
-                       plus. Les états proposés viennent de la matrice du
+                  )}
+
+                  {data.status !== "draft" && (
+                    /* Document émis : son statut évolue le long du cycle de
+                       vie. Les états proposés viennent de la matrice du
                        backend, le serveur reste juge de la transition. */
                     <Select
                       value=""
@@ -235,6 +281,18 @@ export function DocumentDetailSheet({
                     </Select>
                   )}
 
+                  {/* Impression : disponible sur un BROUILLON comme sur un
+                      document émis — une proposition commerciale circule avant
+                      d'être numérotée. La page d'impression le signale. */}
+                  {printPath !== null && (
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href={printPath}>
+                        <Printer aria-hidden />
+                        {t("actions.print")}
+                      </Link>
+                    </Button>
+                  )}
+
                   {isConvertible(data) && (
                     <Button
                       size="sm"
@@ -244,6 +302,18 @@ export function DocumentDetailSheet({
                     >
                       <FileOutput aria-hidden />
                       {t("actions.convert")}
+                    </Button>
+                  )}
+
+                  {isTransferableToConvention(data) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={pending}
+                      onClick={() => conventionMutation.mutate(data.id)}
+                    >
+                      <FileSignature aria-hidden />
+                      {t("actions.convention")}
                     </Button>
                   )}
 

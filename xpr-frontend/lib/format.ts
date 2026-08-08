@@ -45,6 +45,27 @@ export function formatNumber(value: number, locale: string): string {
   return new Intl.NumberFormat(localeTag(locale)).format(value);
 }
 
+/**
+ * Montant en centimes SANS symbole de devise, toujours à deux décimales.
+ *
+ * C'est la forme d'un document imprimé : la devise y est annoncée une fois —
+ * en pied de tableau et dans la somme en toutes lettres — et la répéter sur
+ * chaque ligne alourdirait une colonne qu'on lit en diagonale.
+ */
+export function formatAmount(cents: number, locale: string): string {
+  return new Intl.NumberFormat(localeTag(locale), {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(cents / 100);
+}
+
+/** Quantité décimale (« 1 », « 2,5 ») — les zéros de queue ne sont pas rendus. */
+export function formatQuantity(value: number, locale: string): string {
+  return new Intl.NumberFormat(localeTag(locale), {
+    maximumFractionDigits: 3,
+  }).format(value);
+}
+
 /** Variation en points de pourcentage, signe explicite : « +12,4 % ». */
 export function formatPercent(ratio: number, locale: string): string {
   return new Intl.NumberFormat(localeTag(locale), {

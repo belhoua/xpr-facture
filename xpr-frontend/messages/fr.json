@@ -41,7 +41,12 @@
     "color": "Couleur invalide (format #RRGGBB)",
     "quantity": "Quantité invalide",
     "discount": "Remise invalide (0 à 100 %)",
-    "stockGoodsOnly": "Seul un bien peut être suivi en stock"
+    "stockGoodsOnly": "Seul un bien peut être suivi en stock",
+    "advanceAboveTotal": "L'avance ne peut pas dépasser le montant total",
+    "ice": "ICE invalide (15 chiffres)",
+    "percent": "Pourcentage invalide",
+    "scheduleTotal": "Les trois parts doivent totaliser 100 %",
+    "decidedBeforeDeposit": "La décision ne peut pas précéder le dépôt"
   },
   "nav": {
     "dashboard": "Tableau de bord",
@@ -69,7 +74,16 @@
     "logout": "Se déconnecter",
     "quotes": "Devis",
     "creditNotes": "Avoirs",
-    "catalog": "Catalogue"
+    "catalog": "Catalogue",
+    "services": "Services",
+    "situations": "Situations",
+    "situationsCreate": "Ajouter une situation",
+    "situationsList": "Liste des situations",
+    "situationsByClient": "Situations par client",
+    "conventions": "Conventions",
+    "conventionsCreate": "Nouvelle convention",
+    "conventionsList": "Liste des conventions",
+    "deposits": "Dépôts de dossier"
   },
   "status": {
     "draft": "Brouillon",
@@ -80,7 +94,8 @@
     "cancelled": "Annulée",
     "accepted": "Accepté",
     "refused": "Refusé",
-    "converted": "Converti"
+    "converted": "Converti",
+    "in_progress": "En cours"
   },
   "auth": {
     "common": {
@@ -294,17 +309,22 @@
     "actions": {
       "open": "Ouvrir les actions",
       "view": "Voir le détail",
+      "print": "Imprimer / PDF",
       "edit": "Modifier",
       "delete": "Supprimer",
+      "frozen": "Émis : non modifiable",
       "issue": "Émettre",
       "cancel": "Annuler",
-      "convert": "Convertir en facture",
-      "creditNote": "Créer un avoir",
-      "changeStatus": "Changer de statut"
+      "convert": "Transférer en facture",
+      "creditNote": "Transférer en avoir",
+      "changeStatus": "Changer de statut",
+      "convention": "Transférer en Contrat de Convention"
     },
     "delete": {
       "title": "Supprimer ce brouillon ?",
-      "description": "Cette action est définitive. Seuls les brouillons peuvent être supprimés.",
+      "description": "Ce brouillon n'a pas de numéro : sa suppression ne laisse aucun trou dans la numérotation.",
+      "issuedTitle": "Supprimer le document {number} ?",
+      "issuedDescription": "Ce document est émis et numéroté. Sa suppression laisse un trou définitif dans la séquence : le numéro {number} ne sera pas réattribué. La correction habituelle d'une facture est un avoir.",
       "confirm": "Supprimer"
     },
     "cancelConfirm": {
@@ -335,6 +355,10 @@
       "walkInClient": "Client de passage (nom libre)",
       "clientName": "Nom du client",
       "clientPlaceholder": "Nom du client ou de la société",
+      "subject": "Objet",
+      "subjectPlaceholder": "Objet de la prestation",
+      "issueCity": "Ville",
+      "issueCityPlaceholder": "RABAT",
       "issuedAt": "Date d'émission",
       "dueAt": "Échéance",
       "notes": "Notes",
@@ -367,6 +391,323 @@
       "taxSummary": "Récapitulatif de TVA",
       "rate": "Taux",
       "base": "Base HT"
+    },
+    "print": {
+      "action": "Imprimer le devis",
+      "back": "Retour aux devis",
+      "draftNotice": "Brouillon : le numéro sera attribué à l'émission.",
+      "wrongType": "Ce document n'est pas un devis.",
+      "noCompany": "Aucune société active : l'en-tête du document ne peut pas être composé.",
+      "title": "DEVIS N° {number}",
+      "issuedIn": "{city}, le {date}",
+      "owner": "MAÎTRE D'OUVRAGE",
+      "subject": "Objet",
+      "columns": {
+        "rank": "N°",
+        "designation": "Désignation",
+        "unit": "U",
+        "quantity": "Qte",
+        "unitPrice": "P U (HT)",
+        "lineTotal": "P Total (HT)",
+        "vat": "TVA",
+        "totalIncl": "Total TTC"
+      },
+      "totals": {
+        "gross": "Total brut HT",
+        "excludingTax": "Total HT",
+        "vat": "TVA {rate} %",
+        "includingTax": "Total TTC"
+      },
+      "vatNotApplicable": "TVA non applicable",
+      "settled": "Arrêté le présent devis à la somme de {amount} TTC.",
+      "signature": "Signature : DIRECTION",
+      "stamp": "Cachet & signature",
+      "legal": {
+        "ice": "ICE {value}",
+        "if": "IF {value}",
+        "rc": "RC {value}",
+        "cnss": "CNSS {value}",
+        "patente": "Patente {value}",
+        "address": "Adresse : {value}",
+        "rib": "RIB : {value}",
+        "phone": "Tél. : {value}",
+        "email": "E-mail : {value}"
+      },
+      "invoice": {
+        "action": "Imprimer la facture",
+        "back": "Retour aux factures",
+        "wrongType": "Ce document n'est pas une facture.",
+        "title": "FACTURE N° {number}",
+        "client": "CLIENT",
+        "address": "Adresse",
+        "issuedAt": "Date de facturation",
+        "dueAt": "Date d'échéance",
+        "paymentTerms": "Conditions de règlement",
+        "paymentStatus": "Statut de paiement",
+        "paid": "Montant réglé",
+        "remaining": "Reste à payer",
+        "overdueNotice": "Facture échue : le règlement est exigible.",
+        "settled": "Arrêtée la présente facture à la somme de {amount} TTC."
+      }
+    },
+    "overdue": {
+      "title": "Factures en retard",
+      "trigger": "Factures en retard ({count})",
+      "none": "Aucune facture en retard.",
+      "error": "Le décompte des impayés n'a pas pu être chargé.",
+      "viewAll": "Voir toutes les factures",
+      "more": "et {count} de plus"
+    }
+  },
+  "situations": {
+    "title": "Situations",
+    "description": "Suivi des montants dus et des avances encaissées",
+    "searchPlaceholder": "Rechercher par numéro, objet ou client…",
+    "status": {
+      "sent": "Non payé",
+      "in_progress": "En cours",
+      "partial": "Partiel",
+      "paid": "Payé"
+    },
+    "statusFilter": {
+      "sent": "Non payé",
+      "in_progress": "En cours",
+      "partial": "Partiel",
+      "paid": "Payé",
+      "cancelled": "Annulée"
+    },
+    "table": {
+      "number": "Numéro",
+      "date": "Date",
+      "client": "Client",
+      "subject": "Objet",
+      "total": "Montant total",
+      "advance": "Avance",
+      "remaining": "Reste à payer",
+      "status": "Statut"
+    },
+    "filters": {
+      "from": "Date de début",
+      "to": "Date de fin"
+    },
+    "actions": {
+      "create": "Ajouter une situation",
+      "print": "Imprimer",
+      "printAll": "Imprimer toutes les situations",
+      "viewSituations": "Voir les situations"
+    },
+    "empty": {
+      "title": "Aucune situation",
+      "description": "Enregistrez une première situation pour suivre les montants dus par vos clients."
+    },
+    "delete": {
+      "title": "Supprimer cette situation ?",
+      "description": "La situation {number} ne figurera plus dans les listes ni dans les totaux. Son numéro ne sera pas réattribué."
+    },
+    "create": {
+      "title": "Ajouter une situation",
+      "description": "Le statut se déduit de l'avance : sans avance « non payé », partielle « partiel », soldée « payé »."
+    },
+    "edit": {
+      "title": "Modifier la situation",
+      "description": "Une situation reste corrigeable après son enregistrement, contrairement à une facture."
+    },
+    "form": {
+      "client": "Client",
+      "clientPlaceholder": "Sélectionner un client",
+      "date": "Date",
+      "subject": "Objet",
+      "subjectPlaceholder": "Situation du mois d'octobre",
+      "total": "Montant total (MAD)",
+      "advance": "Avance (MAD)",
+      "notes": "Notes",
+      "status": "Statut"
+    },
+    "kpi": {
+      "count": "Total situations",
+      "total": "Montant total",
+      "paid": "Payé",
+      "remaining": "Reste à payer"
+    },
+    "byClient": {
+      "title": "Situations par client",
+      "description": "Choisissez un client pour consulter ses situations et ses totaux",
+      "searchPlaceholder": "Rechercher un client…",
+      "columns": {
+        "legalName": "Nom",
+        "email": "E-mail",
+        "phone": "Téléphone",
+        "ice": "ICE"
+      },
+      "empty": {
+        "title": "Aucun client",
+        "description": "Ajoutez des clients dans le répertoire des tiers pour leur rattacher des situations."
+      }
+    },
+    "client": {
+      "title": "Situations du client",
+      "description": "Situations rattachées à ce client",
+      "wrongType": "Ce document n'est pas une situation.",
+      "empty": {
+        "title": "Aucune situation trouvée",
+        "description": "Ce client n'a pas encore de situation enregistrée."
+      }
+    },
+    "print": {
+      "heading": "Situation",
+      "ice": "ICE : {ice}",
+      "disclaimer": "Document de suivi non fiscal. Il ne comporte aucune TVA et n'ouvre aucun droit à déduction."
+    }
+  },
+  "conventions": {
+    "title": "Conventions",
+    "description": "Contrats de convention de contrôle et suivi, et suivi de leur dossier.",
+    "searchPlaceholder": "Rechercher un dossier, un maître d'ouvrage, un projet…",
+    "cancelledNotice": "Cette convention est annulée : elle ne peut plus être modifiée.",
+    "create": {
+      "title": "Nouvelle convention",
+      "description": "Rédigez un contrat de convention de contrôle et suivi."
+    },
+    "edit": {
+      "title": "Convention",
+      "description": "Corrigez le contrat et suivez le dépôt de son dossier."
+    },
+    "table": {
+      "dossier": "N° de dossier",
+      "noDossier": "Non déposé",
+      "owner": "Maître d'ouvrage",
+      "project": "Projet",
+      "date": "Date",
+      "fees": "Honoraires TTC",
+      "status": "Statut"
+    },
+    "status": {
+      "draft": "Brouillon",
+      "sent": "Transmise",
+      "signed": "Signée",
+      "cancelled": "Annulée"
+    },
+    "actions": {
+      "create": "Nouvelle convention",
+      "print": "Imprimer le contrat",
+      "openSource": "Document {number}"
+    },
+    "empty": {
+      "title": "Aucune convention",
+      "description": "Transférez un devis ou une facture en contrat de convention, ou rédigez-en un de zéro."
+    },
+    "delete": {
+      "title": "Supprimer la convention ?",
+      "description": "Le contrat établi pour {owner} sera retiré des listes."
+    },
+    "form": {
+      "sections": {
+        "owner": "Maître d'ouvrage",
+        "project": "Projet",
+        "mission": "Mission",
+        "fees": "Honoraires",
+        "file": "Dossier"
+      },
+      "partner": "Client rattaché",
+      "partnerPlaceholder": "Aucun — saisie libre",
+      "ownerName": "Nom / Raison sociale",
+      "ownerIce": "ICE",
+      "ownerRc": "RC",
+      "ownerAddress": "Adresse",
+      "projectDescription": "Description du projet",
+      "projectDescriptionPlaceholder": "Construction d'une polyclinique R+1 avec 3 sous-sols…",
+      "projectAddress": "Adresse du projet",
+      "projectTitleDeed": "Titre foncier (TF)",
+      "lots": "Lots contrôlés",
+      "lotsPlaceholder": "Béton armé\nÉtanchéité des terrasses\nÉlectricité (CFO/CFA) – Ascenseurs",
+      "lotsHint": "Un lot par ligne. Ils sont repris à l'article 1 du contrat.",
+      "executionDelay": "Délai d'exécution",
+      "executionDelayPlaceholder": "Néant",
+      "total": "Honoraires TTC (MAD)",
+      "advancePercent": "Avance (%)",
+      "visaPercent": "Visa des plans (%)",
+      "completionPercent": "Fin des travaux (%)",
+      "dossierNumber": "N° de dossier",
+      "dossierNumberHint": "Délivré par l'organisme. Reporté automatiquement au premier dépôt.",
+      "status": "Statut",
+      "issueCity": "Ville d'établissement",
+      "issueCityPlaceholder": "MARRAKECH",
+      "issuedAt": "Date du contrat",
+      "notes": "Notes internes"
+    },
+    "print": {
+      "action": "Imprimer le contrat",
+      "back": "Retour aux conventions",
+      "noCompany": "Aucune société active : l'en-tête du document ne peut pas être composé.",
+      "noDossierNotice": "Dossier non encore déposé : le numéro sera reporté au premier dépôt.",
+      "noLots": "Aucun lot renseigné."
+    }
+  },
+  "deposits": {
+    "title": "Dépôts de dossier",
+    "description": "Suivi des dossiers déposés auprès des organismes instructeurs.",
+    "panelDescription": "Dépôts enregistrés pour cette convention.",
+    "panelDates": "Déposé le {deposited} · Décision : {decided}",
+    "searchPlaceholder": "Rechercher une référence, un organisme…",
+    "table": {
+      "reference": "Référence",
+      "project": "Projet",
+      "noConvention": "Convention archivée",
+      "organisation": "Organisme",
+      "depositedAt": "Déposé le",
+      "status": "Statut",
+      "decidedAt": "Décision"
+    },
+    "status": {
+      "deposited": "Déposé",
+      "in_progress": "En cours",
+      "validated": "Validé",
+      "rejected": "Rejeté"
+    },
+    "actions": {
+      "create": "Nouveau dépôt",
+      "print": "Imprimer la fiche"
+    },
+    "empty": {
+      "title": "Aucun dépôt",
+      "description": "Enregistrez le dépôt d'un dossier auprès d'une commune ou d'un organisme instructeur.",
+      "panel": "Aucun dépôt enregistré pour cette convention."
+    },
+    "delete": {
+      "title": "Supprimer le dépôt ?",
+      "description": "Le dépôt {reference} sera retiré du suivi."
+    },
+    "form": {
+      "createTitle": "Nouveau dépôt",
+      "editTitle": "Modifier le dépôt",
+      "description": "Renseignez le récépissé remis au guichet.",
+      "convention": "Convention",
+      "conventionPlaceholder": "Choisir la convention…",
+      "reference": "Référence du dossier",
+      "organisation": "Organisme / Commune",
+      "organisationPlaceholder": "Commune de Marrakech",
+      "depositedAt": "Date de dépôt",
+      "status": "Statut",
+      "decidedAt": "Date de décision",
+      "notes": "Notes"
+    },
+    "print": {
+      "title": "Fiche de dépôt de dossier",
+      "subtitle": "Document de suivi établi par BCAT.",
+      "action": "Imprimer la fiche",
+      "back": "Retour aux dépôts",
+      "noCompany": "Aucune société active : l'en-tête du document ne peut pas être composé.",
+      "reference": "Référence du dossier",
+      "organisation": "Organisme",
+      "depositedAt": "Date de dépôt",
+      "status": "Statut",
+      "decidedAt": "Date de décision",
+      "owner": "Maître d'ouvrage",
+      "project": "Projet",
+      "dossier": "N° de dossier",
+      "notes": "Observations",
+      "disclaimer": "Cette fiche est un document de suivi. Seul le récépissé délivré par l'organisme instructeur fait foi du dépôt.",
+      "signature": "Le bureau de contrôle"
     }
   },
   "catalog": {
@@ -425,7 +766,9 @@
         "isActive": "Article actif",
         "cancel": "Annuler",
         "save": "Enregistrer",
-        "saving": "Enregistrement…"
+        "saving": "Enregistrement…",
+        "defaultDiscount": "Remise par défaut (%)",
+        "defaultDiscountHint": "Reportée sur la ligne du document, où elle reste modifiable."
       }
     },
     "categories": {
@@ -452,6 +795,57 @@
         "save": "Enregistrer",
         "saving": "Enregistrement…"
       }
+    }
+  },
+  "services": {
+    "title": "Services",
+    "description": "Vos prestations, prêtes à poser sur une facture",
+    "create": "Nouveau service",
+    "searchPlaceholder": "Nom, référence…",
+    "allKinds": "Tous les types",
+    "columns": {
+      "reference": "Référence",
+      "name": "Service",
+      "kind": "Type",
+      "unit": "Unité",
+      "price": "Prix HT",
+      "discount": "Remise",
+      "tax": "TVA"
+    },
+    "empty": {
+      "title": "Aucun service",
+      "description": "Créez vos prestations une fois : elles se rappelleront ensuite dans vos devis, factures et avoirs."
+    },
+    "archive": {
+      "action": "Archiver",
+      "confirm": "Archiver",
+      "title": "Archiver ce service ?",
+      "description": "Le service disparaît des listes mais reste lisible sur les documents déjà émis."
+    },
+    "form": {
+      "createTitle": "Nouveau service",
+      "editTitle": "Modifier le service",
+      "description": "Le prix, le taux et la remise saisis ici sont recopiés sur la ligne du document, puis figés.",
+      "name": "Nom du service",
+      "namePlaceholder": "ex : Journée de conseil",
+      "reference": "Référence",
+      "referencePlaceholder": "ex : SER001",
+      "kind": "Type",
+      "noKind": "Sans type",
+      "discount": "Remise (%)",
+      "discountHint": "Remise habituellement consentie, modifiable ligne par ligne.",
+      "unitPrice": "Prix HT",
+      "taxRate": "TVA",
+      "noTaxRate": "Sans TVA",
+      "unit": "Unité de mesure",
+      "unitPlaceholder": "heure, jour, forfait…",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Détail de la prestation, tel qu'il apparaîtra sur le document.",
+      "isActive": "Service actif",
+      "cancel": "Annuler",
+      "saving": "Enregistrement…",
+      "submitCreate": "Ajouter le service",
+      "submitEdit": "Enregistrer les modifications"
     }
   },
   "partners": {

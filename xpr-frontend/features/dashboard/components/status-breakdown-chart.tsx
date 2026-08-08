@@ -21,6 +21,10 @@ const STATUS_VAR: Record<DocumentStatus, string> = {
   accepted: "var(--color-status-accepted)",
   refused: "var(--color-status-refused)",
   converted: "var(--color-status-converted)",
+  // Même bleu que `sent`, comme dans StatusBadge : les deux disent qu'une
+  // affaire suit son cours. Le graphique n'agrège aujourd'hui que des
+  // factures, mais la carte doit rester exhaustive.
+  in_progress: "var(--color-status-sent)",
   partial: "var(--color-status-partial)",
   paid: "var(--color-status-paid)",
   overdue: "var(--color-status-overdue)",

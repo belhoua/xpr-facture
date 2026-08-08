@@ -12,6 +12,7 @@ export const DOCUMENT_TYPES = [
   "shipping_slip",
   "credit_note",
   "purchase_invoice",
+  "situation",
 ] as const;
 
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
@@ -69,12 +70,19 @@ export const documentSchema = z.object({
   clientName: z.string(),
   clientIce: z.string().nullable(),
   clientAddress: z.string().nullable(),
+  /** Objet libre. Porte seul le sens d'une situation, qui n'a pas de lignes. */
+  subject: z.string().nullable(),
+  /** Ville d'établissement : « RABAT, le … » en tête du devis imprimé. */
+  issueCity: z.string().nullable(),
   issuedAt: z.iso.date().nullable(),
   dueAt: z.iso.date().nullable(),
   subtotalCents: z.int(),
   discountCents: z.int(),
   taxCents: z.int(),
   totalCents: z.int(),
+  /** Montant encaissé (« avance ») et solde, calculé par le serveur. */
+  paidCents: z.int(),
+  remainingCents: z.int(),
   currency: z.string().length(3),
   notes: z.string().nullable(),
   terms: z.string().nullable(),
@@ -142,6 +150,13 @@ export const documentFormSchema = z
      */
     partnerId: z.string(),
     clientName: z.string().trim().max(255, "validation.tooLong"),
+    /**
+     * Objet du document — « Objet » du devis imprimé. Facultatif ici : seule
+     * une situation l'exige, et elle a son propre formulaire.
+     */
+    subject: z.string().trim().max(255, "validation.tooLong"),
+    /** Ville d'établissement du document. Vide ⇒ repli d'affichage (BRAND). */
+    issueCity: z.string().trim().max(100, "validation.tooLong"),
     issuedAt: z.string(),
     dueAt: z.string(),
     notes: z.string().trim().max(5000, "validation.tooLong"),
@@ -166,9 +181,92 @@ export type DocumentFormValues = z.infer<typeof documentFormSchema>;
 
 /* ------------------------------------------------------- Règles d'affichage */
 
-/** Un brouillon est modifiable ; tout document émis est gelé (§3). */
+/**
+ * Un état TERMINAL clôt le document, quel que soit son type : annulé, refusé,
+ * converti. Rouvrir une pièce annulée effacerait la trace de l'annulation, et
+ * rouvrir un devis converti le ferait diverger de la facture qu'il a produite.
+ *
+ * Miroir de `DocumentStatus::isTerminal()`.
+ */
+const TERMINAL_STATUSES: readonly string[] = ["cancelled", "refused", "converted"];
+
+/**
+ * Types dont le CONTENU reste modifiable une fois numérotés. Miroir de
+ * `DocumentType::freezesOnIssue()` :
+ *  - la SITUATION, pièce de suivi et non pièce fiscale (2026-08-05) ;
+ *  - la FACTURE et le DEVIS, sur décision explicite de l'exploitant
+ *    (2026-08-06) ;
+ *  - l'AVOIR, même décision (2026-08-07).
+ *
+ * Plus aucune pièce commerciale n'est donc figée après émission : seul l'état
+ * TERMINAL ferme encore un document. Ce que chaque levée coûte est documenté
+ * côté backend, dans l'enum ; en retirer une ici sans l'y révoquer ne ferait
+ * que masquer l'écriture, pas l'empêcher.
+ */
+const EDITABLE_ONCE_ISSUED: readonly string[] = [
+  "situation",
+  "invoice",
+  "quote",
+  "credit_note",
+];
+
+/**
+ * Types qu'on peut encore SUPPRIMER une fois numérotés. Miroir de
+ * `DocumentType::deletableOnceIssued()` : la situation et la facture
+ * (2026-08-06), puis le devis et l'avoir (2026-08-07).
+ *
+ * La liste reste DISTINCTE de `EDITABLE_ONCE_ISSUED` bien qu'elle porte
+ * aujourd'hui les mêmes valeurs : les deux actes se décident séparément côté
+ * serveur, et les fusionner ici rendrait la prochaine ouverture d'édition
+ * silencieusement destructrice. Supprimer une pièce numérotée TROUE la
+ * séquence — le numéro n'est jamais réattribué, et rien ne recompacte.
+ */
+const DELETABLE_ONCE_ISSUED: readonly string[] = [
+  "situation",
+  "invoice",
+  "quote",
+  "credit_note",
+];
+
+/**
+ * Un brouillon est modifiable ; un document émis est gelé (§3), sauf exception.
+ *
+ * Miroir de `DocumentWriteService::assertEditable()` et de sa règle de
+ * réouverture : depuis le 2026-08-07, un DEVIS converti ou refusé se rouvre.
+ * L'ANNULATION, elle, ne se rouvre pour aucun type — c'est le seul état
+ * terminal issu d'un acte délibéré, et le rouvrir effacerait la trace de
+ * l'annulation elle-même.
+ */
 export function isEditable(document: Document): boolean {
-  return document.status === "draft";
+  if (document.status === "cancelled") {
+    return false;
+  }
+
+  if (TERMINAL_STATUSES.includes(document.status) && document.type !== "quote") {
+    return false;
+  }
+
+  return (
+    document.status === "draft" || EDITABLE_ONCE_ISSUED.includes(document.type)
+  );
+}
+
+/**
+ * Un brouillon se jette ; une pièce numérotée troue la séquence.
+ *
+ * L'état TERMINAL ferme la suppression pour TOUS les types, y compris le devis
+ * que `isEditable` rouvre désormais : supprimer un devis converti couperait le
+ * lien de parenté et sa facture perdrait la trace de ce dont elle découle.
+ * Miroir de `DocumentWriteService::assertDeletable()`.
+ */
+export function isDeletable(document: Document): boolean {
+  if (TERMINAL_STATUSES.includes(document.status)) {
+    return false;
+  }
+
+  return (
+    document.status === "draft" || DELETABLE_ONCE_ISSUED.includes(document.type)
+  );
 }
 
 /** L'émission consomme un numéro : elle exige au moins une ligne. */
@@ -189,11 +287,83 @@ export function isCancellable(document: Document): boolean {
   );
 }
 
+/**
+ * Chemin de la vue d'impression d'un document, ou `null` si son type n'en a
+ * pas encore.
+ *
+ * Chaque type a son GABARIT : un devis et une facture ne portent ni les mêmes
+ * libellés, ni les mêmes mentions obligatoires. Ouvrir l'un dans le modèle de
+ * l'autre imprimerait un document faux, et les vues s'en gardent explicitement.
+ *
+ * Cette table est ici plutôt que dans chaque menu : la liste et le panneau de
+ * détail proposent tous deux l'action, et deux conditions de type recopiées
+ * divergent au premier type ajouté.
+ */
+export function printRoute(document: Document): string | null {
+  switch (document.type) {
+    case "quote":
+      return `/quotes/${document.id}/print`;
+    case "invoice":
+      return `/invoices/${document.id}/print`;
+    case "situation":
+      return `/situations/${document.id}/print`;
+    default:
+      return null;
+  }
+}
+
 /** Un devis se transforme en facture une fois émis, et une seule fois. */
 export function isConvertible(document: Document): boolean {
   return (
     document.type === "quote" &&
     (document.status === "sent" || document.status === "accepted")
+  );
+}
+
+/**
+ * Écran de LISTE d'un type de document, ou `null` si ce type n'a pas le sien.
+ *
+ * Sert au transfert : convertir un devis produit une facture, qui n'est pas
+ * dans la liste où l'action a été déclenchée. Sans cette table, le document
+ * créé n'existerait que dans une réponse HTTP — l'utilisateur devrait deviner
+ * où le retrouver.
+ *
+ * Même raison d'être que `printRoute` : la correspondance type → route vit à un
+ * seul endroit, sinon chaque menu se met à porter sa propre condition de type.
+ */
+export function listRoute(type: DocumentType): string | null {
+  switch (type) {
+    case "quote":
+      return "/quotes";
+    case "invoice":
+      return "/invoices";
+    case "credit_note":
+      return "/credit-notes";
+    case "situation":
+      return "/situations";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Un devis ou une facture peut fonder un CONTRAT DE CONVENTION.
+ *
+ * Miroir de `ConventionDraftingService::assertTransferable()`. Deux différences
+ * assumées avec `isConvertible` :
+ *  - le BROUILLON passe — la convention précède fréquemment l'émission du
+ *    devis, et rien dans le contrat ne dépend d'un numéro fiscal ;
+ *  - un devis CONVERTI passe aussi — il a produit une facture, c'est le signe
+ *    que l'affaire est conclue, donc le moment de rédiger la convention.
+ *
+ * Seuls l'annulation et le refus ferment la porte : les montants n'engagent
+ * plus rien, un contrat fondé dessus réclamerait un accord qui n'existe pas.
+ */
+export function isTransferableToConvention(document: Document): boolean {
+  return (
+    (document.type === "quote" || document.type === "invoice") &&
+    document.status !== "cancelled" &&
+    document.status !== "refused"
   );
 }
 

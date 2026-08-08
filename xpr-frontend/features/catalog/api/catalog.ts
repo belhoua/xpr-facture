@@ -136,6 +136,10 @@ function toProductPayload(values: ProductFormValues) {
     unitPriceCents: Math.round(values.unitPrice * 100),
     costPriceCents:
       values.costPrice > 0 ? Math.round(values.costPrice * 100) : null,
+    // Arrondi au centième AVANT l'envoi : la colonne est DECIMAL(5,2) et le
+    // serveur refuse une troisième décimale. Un `<input type="number">` peut
+    // produire 12.3456 par collage, ce que le pas de 0,01 n'empêche pas.
+    defaultDiscountPercent: Math.round(values.defaultDiscount * 100) / 100,
     trackStock: values.type === "good" && values.trackStock,
     isActive: values.isActive,
   };

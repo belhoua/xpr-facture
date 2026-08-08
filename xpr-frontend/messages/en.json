@@ -41,7 +41,12 @@
     "color": "Invalid colour (#RRGGBB format)",
     "quantity": "Invalid quantity",
     "discount": "Invalid discount (0 to 100%)",
-    "stockGoodsOnly": "Only goods can be stock-tracked"
+    "stockGoodsOnly": "Only goods can be stock-tracked",
+    "advanceAboveTotal": "The advance cannot exceed the total amount",
+    "ice": "Invalid ICE (15 digits)",
+    "percent": "Invalid percentage",
+    "scheduleTotal": "The three instalments must add up to 100%",
+    "decidedBeforeDeposit": "The decision cannot precede the deposit"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -69,7 +74,16 @@
     "logout": "Sign out",
     "quotes": "Quotes",
     "creditNotes": "Credit notes",
-    "catalog": "Catalogue"
+    "catalog": "Catalogue",
+    "services": "Services",
+    "situations": "Statements",
+    "situationsCreate": "Add statement",
+    "situationsList": "Statement list",
+    "situationsByClient": "Statements by client",
+    "conventions": "Conventions",
+    "conventionsCreate": "New convention",
+    "conventionsList": "Convention list",
+    "deposits": "File deposits"
   },
   "status": {
     "draft": "Draft",
@@ -80,7 +94,8 @@
     "cancelled": "Cancelled",
     "accepted": "Accepted",
     "refused": "Refused",
-    "converted": "Converted"
+    "converted": "Converted",
+    "in_progress": "In progress"
   },
   "auth": {
     "common": {
@@ -294,17 +309,22 @@
     "actions": {
       "open": "Open actions",
       "view": "View details",
+      "print": "Print / PDF",
       "edit": "Edit",
       "delete": "Delete",
+      "frozen": "Issued: read-only",
       "issue": "Issue",
       "cancel": "Cancel",
-      "convert": "Convert to invoice",
-      "creditNote": "Create credit note",
-      "changeStatus": "Change status"
+      "convert": "Transfer to invoice",
+      "creditNote": "Transfer to credit note",
+      "changeStatus": "Change status",
+      "convention": "Transfer to convention contract"
     },
     "delete": {
       "title": "Delete this draft?",
-      "description": "This cannot be undone. Only drafts can be deleted.",
+      "description": "This draft has no number: deleting it leaves no gap in the numbering.",
+      "issuedTitle": "Delete document {number}?",
+      "issuedDescription": "This document is issued and numbered. Deleting it leaves a permanent gap in the sequence: number {number} will not be reassigned. The usual way to correct an invoice is a credit note.",
       "confirm": "Delete"
     },
     "cancelConfirm": {
@@ -335,6 +355,10 @@
       "walkInClient": "Walk-in customer (free text)",
       "clientName": "Customer name",
       "clientPlaceholder": "Customer or company name",
+      "subject": "Subject",
+      "subjectPlaceholder": "Subject of the engagement",
+      "issueCity": "City",
+      "issueCityPlaceholder": "RABAT",
       "issuedAt": "Issue date",
       "dueAt": "Due date",
       "notes": "Notes",
@@ -367,6 +391,323 @@
       "taxSummary": "VAT breakdown",
       "rate": "Rate",
       "base": "Net base"
+    },
+    "print": {
+      "action": "Print quote",
+      "back": "Back to quotes",
+      "draftNotice": "Draft: the number is assigned on issuance.",
+      "wrongType": "This document is not a quote.",
+      "noCompany": "No active company: the document letterhead cannot be composed.",
+      "title": "QUOTE No. {number}",
+      "issuedIn": "{city}, {date}",
+      "owner": "PROJECT OWNER",
+      "subject": "Subject",
+      "columns": {
+        "rank": "No.",
+        "designation": "Description",
+        "unit": "U",
+        "quantity": "Qty",
+        "unitPrice": "Unit price (excl.)",
+        "lineTotal": "Total (excl.)",
+        "vat": "VAT",
+        "totalIncl": "Total incl."
+      },
+      "totals": {
+        "gross": "Gross total excl. VAT",
+        "excludingTax": "Total excl. VAT",
+        "vat": "VAT {rate} %",
+        "includingTax": "Total incl. VAT"
+      },
+      "vatNotApplicable": "VAT not applicable",
+      "settled": "This quote is settled at the sum of {amount} incl. VAT.",
+      "signature": "Signature: MANAGEMENT",
+      "stamp": "Stamp & signature",
+      "legal": {
+        "ice": "ICE {value}",
+        "if": "TIN {value}",
+        "rc": "Trade register {value}",
+        "cnss": "CNSS {value}",
+        "patente": "Business tax {value}",
+        "address": "Address: {value}",
+        "rib": "Bank account: {value}",
+        "phone": "Phone: {value}",
+        "email": "E-mail: {value}"
+      },
+      "invoice": {
+        "action": "Print invoice",
+        "back": "Back to invoices",
+        "wrongType": "This document is not an invoice.",
+        "title": "INVOICE No. {number}",
+        "client": "CLIENT",
+        "address": "Address",
+        "issuedAt": "Invoice date",
+        "dueAt": "Due date",
+        "paymentTerms": "Payment terms",
+        "paymentStatus": "Payment status",
+        "paid": "Amount paid",
+        "remaining": "Balance due",
+        "overdueNotice": "Overdue invoice: payment is due.",
+        "settled": "This invoice is settled at the sum of {amount} incl. VAT."
+      }
+    },
+    "overdue": {
+      "title": "Overdue invoices",
+      "trigger": "Overdue invoices ({count})",
+      "none": "No overdue invoice.",
+      "error": "Overdue invoices could not be loaded.",
+      "viewAll": "View all invoices",
+      "more": "and {count} more"
+    }
+  },
+  "situations": {
+    "title": "Statements",
+    "description": "Tracking of amounts due and advances received",
+    "searchPlaceholder": "Search by number, subject or client…",
+    "status": {
+      "sent": "Unpaid",
+      "in_progress": "In progress",
+      "partial": "Partial",
+      "paid": "Paid"
+    },
+    "statusFilter": {
+      "sent": "Unpaid",
+      "in_progress": "In progress",
+      "partial": "Partial",
+      "paid": "Paid",
+      "cancelled": "Cancelled"
+    },
+    "table": {
+      "number": "Number",
+      "date": "Date",
+      "client": "Client",
+      "subject": "Subject",
+      "total": "Total amount",
+      "advance": "Advance",
+      "remaining": "Outstanding",
+      "status": "Status"
+    },
+    "filters": {
+      "from": "Start date",
+      "to": "End date"
+    },
+    "actions": {
+      "create": "Add statement",
+      "print": "Print",
+      "printAll": "Print all statements",
+      "viewSituations": "View statements"
+    },
+    "empty": {
+      "title": "No statements",
+      "description": "Record a first statement to track the amounts your clients owe."
+    },
+    "delete": {
+      "title": "Delete this statement?",
+      "description": "Statement {number} will no longer appear in lists or totals. Its number will not be reused."
+    },
+    "create": {
+      "title": "Add statement",
+      "description": "The status follows the advance: none means unpaid, partial means partial, settled means paid."
+    },
+    "edit": {
+      "title": "Edit statement",
+      "description": "A statement stays correctable after it is saved, unlike an invoice."
+    },
+    "form": {
+      "client": "Client",
+      "clientPlaceholder": "Select a client",
+      "date": "Date",
+      "subject": "Subject",
+      "subjectPlaceholder": "October statement",
+      "total": "Total amount (MAD)",
+      "advance": "Advance (MAD)",
+      "notes": "Notes",
+      "status": "Status"
+    },
+    "kpi": {
+      "count": "Total statements",
+      "total": "Total amount",
+      "paid": "Paid",
+      "remaining": "Outstanding"
+    },
+    "byClient": {
+      "title": "Statements by client",
+      "description": "Pick a client to review their statements and totals",
+      "searchPlaceholder": "Search for a client…",
+      "columns": {
+        "legalName": "Name",
+        "email": "Email",
+        "phone": "Phone",
+        "ice": "ICE"
+      },
+      "empty": {
+        "title": "No clients",
+        "description": "Add clients to the partner directory to attach statements to them."
+      }
+    },
+    "client": {
+      "title": "Client statements",
+      "description": "Statements attached to this client",
+      "wrongType": "This document is not a statement.",
+      "empty": {
+        "title": "No statements found",
+        "description": "This client has no recorded statement yet."
+      }
+    },
+    "print": {
+      "heading": "Statement",
+      "ice": "ICE: {ice}",
+      "disclaimer": "Non-fiscal tracking document. It carries no VAT and grants no deduction rights."
+    }
+  },
+  "conventions": {
+    "title": "Conventions",
+    "description": "Inspection and monitoring convention contracts, and their file tracking.",
+    "searchPlaceholder": "Search a file, an owner, a project…",
+    "cancelledNotice": "This convention is cancelled: it can no longer be edited.",
+    "create": {
+      "title": "New convention",
+      "description": "Draft an inspection and monitoring convention contract."
+    },
+    "edit": {
+      "title": "Convention",
+      "description": "Amend the contract and follow its file submissions."
+    },
+    "table": {
+      "dossier": "File no.",
+      "noDossier": "Not submitted",
+      "owner": "Project owner",
+      "project": "Project",
+      "date": "Date",
+      "fees": "Fees incl. tax",
+      "status": "Status"
+    },
+    "status": {
+      "draft": "Draft",
+      "sent": "Sent",
+      "signed": "Signed",
+      "cancelled": "Cancelled"
+    },
+    "actions": {
+      "create": "New convention",
+      "print": "Print contract",
+      "openSource": "Document {number}"
+    },
+    "empty": {
+      "title": "No conventions",
+      "description": "Transfer a quote or an invoice into a convention contract, or draft one from scratch."
+    },
+    "delete": {
+      "title": "Delete this convention?",
+      "description": "The contract drawn up for {owner} will be removed from the lists."
+    },
+    "form": {
+      "sections": {
+        "owner": "Project owner",
+        "project": "Project",
+        "mission": "Assignment",
+        "fees": "Fees",
+        "file": "File"
+      },
+      "partner": "Linked client",
+      "partnerPlaceholder": "None — free entry",
+      "ownerName": "Name / Company name",
+      "ownerIce": "ICE",
+      "ownerRc": "Trade register",
+      "ownerAddress": "Address",
+      "projectDescription": "Project description",
+      "projectDescriptionPlaceholder": "Construction of a clinic, ground + 1 with 3 basements…",
+      "projectAddress": "Project address",
+      "projectTitleDeed": "Land title (TF)",
+      "lots": "Inspected works",
+      "lotsPlaceholder": "Reinforced concrete\nRoof waterproofing\nElectricity – Lifts",
+      "lotsHint": "One item per line. They appear in article 1 of the contract.",
+      "executionDelay": "Completion time",
+      "executionDelayPlaceholder": "None",
+      "total": "Fees incl. tax (MAD)",
+      "advancePercent": "Advance (%)",
+      "visaPercent": "Drawing approval (%)",
+      "completionPercent": "Completion (%)",
+      "dossierNumber": "File no.",
+      "dossierNumberHint": "Issued by the authority. Filled in automatically on the first submission.",
+      "status": "Status",
+      "issueCity": "Place of issue",
+      "issueCityPlaceholder": "MARRAKECH",
+      "issuedAt": "Contract date",
+      "notes": "Internal notes"
+    },
+    "print": {
+      "action": "Print contract",
+      "back": "Back to conventions",
+      "noCompany": "No active company: the letterhead cannot be composed.",
+      "noDossierNotice": "File not submitted yet: the number will be filled in on the first submission.",
+      "noLots": "No inspected works listed."
+    }
+  },
+  "deposits": {
+    "title": "File deposits",
+    "description": "Tracking of files submitted to the reviewing authorities.",
+    "panelDescription": "Submissions recorded for this convention.",
+    "panelDates": "Submitted on {deposited} · Decision: {decided}",
+    "searchPlaceholder": "Search a reference, an authority…",
+    "table": {
+      "reference": "Reference",
+      "project": "Project",
+      "noConvention": "Archived convention",
+      "organisation": "Authority",
+      "depositedAt": "Submitted on",
+      "status": "Status",
+      "decidedAt": "Decision"
+    },
+    "status": {
+      "deposited": "Submitted",
+      "in_progress": "Under review",
+      "validated": "Approved",
+      "rejected": "Rejected"
+    },
+    "actions": {
+      "create": "New submission",
+      "print": "Print sheet"
+    },
+    "empty": {
+      "title": "No submissions",
+      "description": "Record the submission of a file to a municipality or a reviewing authority.",
+      "panel": "No submission recorded for this convention."
+    },
+    "delete": {
+      "title": "Delete this submission?",
+      "description": "Submission {reference} will be removed from the tracking list."
+    },
+    "form": {
+      "createTitle": "New submission",
+      "editTitle": "Edit submission",
+      "description": "Enter the receipt handed over at the counter.",
+      "convention": "Convention",
+      "conventionPlaceholder": "Choose the convention…",
+      "reference": "File reference",
+      "organisation": "Authority / Municipality",
+      "organisationPlaceholder": "Municipality of Marrakech",
+      "depositedAt": "Submission date",
+      "status": "Status",
+      "decidedAt": "Decision date",
+      "notes": "Notes"
+    },
+    "print": {
+      "title": "File submission sheet",
+      "subtitle": "Tracking document issued by BCAT.",
+      "action": "Print sheet",
+      "back": "Back to submissions",
+      "noCompany": "No active company: the letterhead cannot be composed.",
+      "reference": "File reference",
+      "organisation": "Authority",
+      "depositedAt": "Submission date",
+      "status": "Status",
+      "decidedAt": "Decision date",
+      "owner": "Project owner",
+      "project": "Project",
+      "dossier": "File no.",
+      "notes": "Remarks",
+      "disclaimer": "This sheet is a tracking document. Only the receipt issued by the reviewing authority evidences the submission.",
+      "signature": "The inspection office"
     }
   },
   "catalog": {
@@ -425,7 +766,9 @@
         "isActive": "Active item",
         "cancel": "Cancel",
         "save": "Save",
-        "saving": "Saving…"
+        "saving": "Saving…",
+        "defaultDiscount": "Default discount (%)",
+        "defaultDiscountHint": "Carried onto the document line, where it stays editable."
       }
     },
     "categories": {
@@ -452,6 +795,57 @@
         "save": "Save",
         "saving": "Saving…"
       }
+    }
+  },
+  "services": {
+    "title": "Services",
+    "description": "Your offerings, ready to drop onto an invoice",
+    "create": "New service",
+    "searchPlaceholder": "Name, reference…",
+    "allKinds": "All types",
+    "columns": {
+      "reference": "Reference",
+      "name": "Service",
+      "kind": "Type",
+      "unit": "Unit",
+      "price": "Net price",
+      "discount": "Discount",
+      "tax": "VAT"
+    },
+    "empty": {
+      "title": "No services yet",
+      "description": "Set up your offerings once: they will then be recalled in your quotes, invoices and credit notes."
+    },
+    "archive": {
+      "action": "Archive",
+      "confirm": "Archive",
+      "title": "Archive this service?",
+      "description": "The service leaves the lists but stays readable on documents already issued."
+    },
+    "form": {
+      "createTitle": "New service",
+      "editTitle": "Edit service",
+      "description": "The price, rate and discount set here are copied onto the document line, then frozen.",
+      "name": "Service name",
+      "namePlaceholder": "e.g. Consulting day",
+      "reference": "Reference",
+      "referencePlaceholder": "e.g. SER001",
+      "kind": "Type",
+      "noKind": "No type",
+      "discount": "Discount (%)",
+      "discountHint": "The discount usually granted; still editable line by line.",
+      "unitPrice": "Net price",
+      "taxRate": "VAT",
+      "noTaxRate": "No VAT",
+      "unit": "Unit of measure",
+      "unitPlaceholder": "hour, day, flat rate…",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Details of the service, as they will appear on the document.",
+      "isActive": "Active service",
+      "cancel": "Cancel",
+      "saving": "Saving…",
+      "submitCreate": "Add service",
+      "submitEdit": "Save changes"
     }
   },
   "partners": {

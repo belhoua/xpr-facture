@@ -17,6 +17,7 @@ export const partnerKeys = {
   all: ["partners"] as const,
   list: (filters: PartnerFilters) =>
     [...partnerKeys.all, "list", filters] as const,
+  detail: (id: string) => [...partnerKeys.all, "detail", id] as const,
 };
 
 export async function fetchPartners(
@@ -33,6 +34,17 @@ export async function fetchPartners(
   });
 
   return partnerListSchema.parse(data);
+}
+
+/**
+ * Fiche d'un tiers. Utilisée par les écrans qui partent d'un identifiant
+ * d'URL — « situations par client » — et qui ne peuvent donc pas compter sur
+ * une liste déjà en cache : un rechargement direct de la page n'en a aucune.
+ */
+export async function fetchPartner(id: string): Promise<Partner> {
+  const { data } = await api.get(`/partners/${id}`);
+
+  return partnerSchema.parse(data);
 }
 
 /**

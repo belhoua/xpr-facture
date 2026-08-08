@@ -21,6 +21,12 @@ export const productSchema = z.object({
   unit: z.string().nullable(),
   unitPriceCents: z.int(),
   costPriceCents: z.int().nullable(),
+  /**
+   * Remise habituellement consentie, en pourcentage. CHAÎNE (« 10.00 ») pour la
+   * même raison que `taxRateValue` : la valeur est reportée telle quelle sur la
+   * ligne de document, jamais recalculée côté client.
+   */
+  defaultDiscountPercent: z.string(),
   /** Marge unitaire HT, calculée par le serveur ; nulle sans prix de revient. */
   marginCents: z.int().nullable(),
   currency: z.string().length(3),
@@ -82,6 +88,12 @@ export const productFormSchema = z
     taxRateId: z.string(),
     unitPrice: z.number("validation.amount").nonnegative("validation.amount").max(99999999, "validation.amount"),
     costPrice: z.number("validation.amount").nonnegative("validation.amount").max(99999999, "validation.amount"),
+    // Un POURCENTAGE, pas un montant : bornes alignées sur la contrainte
+    // `products_default_discount_check` et sur celle de la ligne de document.
+    defaultDiscount: z
+      .number("validation.discount")
+      .min(0, "validation.discount")
+      .max(100, "validation.discount"),
     trackStock: z.boolean(),
     isActive: z.boolean(),
   })

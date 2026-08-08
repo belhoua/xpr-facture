@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useMemo } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 
+import { ErrorState } from "@/components/patterns/error-state";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,12 +25,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { applyProblemToForm } from "@/features/auth/hooks/use-auth";
 import { catalogKeys, fetchProducts, fetchTaxRates } from "@/features/catalog/api/catalog";
 import {
   createDocument,
   documentKeys,
+  fetchDocument,
   updateDocument,
 } from "@/features/documents/api/documents";
 import {
@@ -44,12 +47,15 @@ import {
 } from "@/features/documents/schemas/document";
 import { computeTotals } from "@/features/documents/utils/totals";
 import { fetchPartners, partnerKeys } from "@/features/partners/api/partners";
+import { toApiProblem } from "@/lib/api/client";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/format";
 
 /** Champs mappables depuis une erreur de validation serveur (RFC 9457). */
 const SERVER_FIELDS = [
   "partnerId",
   "clientName",
+  "subject",
+  "issueCity",
   "issuedAt",
   "dueAt",
   "notes",
@@ -71,6 +77,8 @@ function emptyValues(defaultTaxRateId: string): DocumentFormValues {
   return {
     partnerId: "",
     clientName: "",
+    subject: "",
+    issueCity: "",
     issuedAt: todayIso(),
     dueAt: "",
     notes: "",
@@ -84,6 +92,8 @@ function valuesFromDocument(document: Document): DocumentFormValues {
   return {
     partnerId: document.partnerId ?? "",
     clientName: document.clientName,
+    subject: document.subject ?? "",
+    issueCity: document.issueCity ?? "",
     issuedAt: document.issuedAt ?? "",
     dueAt: document.dueAt ?? "",
     notes: document.notes ?? "",
@@ -160,6 +170,27 @@ export function DocumentFormDialog({
     staleTime: REFERENCE_STALE_TIME,
   });
 
+  /**
+   * Détail complet du document en cours de modification.
+   *
+   * Indispensable : l'appelant transmet souvent la ligne de LISTE, et
+   * `fetchDocuments` n'expose pas `items` — ce serait une jointure pour rien sur
+   * chaque page. Se contenter de cet objet ouvrirait le formulaire sans aucune
+   * ligne, et l'enregistrement les effacerait toutes, le PATCH transmettant
+   * alors un tableau vide.
+   *
+   * Le cache absorbe le coût : quand l'édition part du panneau de détail, la
+   * réponse est déjà là et la requête ne repart pas.
+   */
+  const detailQuery = useQuery({
+    queryKey: documentKeys.detail(document?.id ?? ""),
+    queryFn: () => fetchDocument(document?.id ?? ""),
+    enabled: open && document != null,
+  });
+
+  /** Ce qui pré-remplit réellement le formulaire, lignes comprises. */
+  const editing = detailQuery.data ?? null;
+
   const taxRates = useMemo(() => taxRatesQuery.data ?? [], [taxRatesQuery.data]);
   const products = productsQuery.data?.data ?? [];
 
@@ -174,13 +205,25 @@ export function DocumentFormDialog({
   // pour bénéficier du taux par défaut. La liste précharge ce référentiel, si
   // bien qu'en pratique il est déjà là — et le cas résiduel se produit dans la
   // seconde qui suit l'ouverture, avant toute saisie.
+  //
+  // En MODIFICATION, on attend le détail : réinitialiser d'abord sans les
+  // lignes puis une seconde fois avec écraserait ce que l'utilisateur aurait
+  // commencé à saisir entre les deux. Le formulaire reste masqué d'ici là.
   useEffect(() => {
-    if (open) {
-      form.reset(
-        document ? valuesFromDocument(document) : emptyValues(defaultTaxRateId),
-      );
+    if (!open) {
+      return;
     }
-  }, [open, document, defaultTaxRateId, form]);
+
+    if (document == null) {
+      form.reset(emptyValues(defaultTaxRateId));
+
+      return;
+    }
+
+    if (editing !== null) {
+      form.reset(valuesFromDocument(editing));
+    }
+  }, [open, document, editing, defaultTaxRateId, form]);
 
   const partnerId = useWatch({ control: form.control, name: "partnerId" });
   // Pas de `?? []` ici : la valeur de repli créerait un tableau neuf à chaque
@@ -222,7 +265,12 @@ export function DocumentFormDialog({
   const fieldError = (message?: string): string | undefined =>
     message?.startsWith("validation.") ? tRoot(message) : message;
 
-  const currency = document?.currency ?? DEFAULT_CURRENCY;
+  const currency = editing?.currency ?? document?.currency ?? DEFAULT_CURRENCY;
+
+  // Le formulaire n'existe pas tant que les lignes ne sont pas là : montrer des
+  // champs vides puis les remplir sous les doigts de l'utilisateur est pire
+  // qu'une attente d'un dixième de seconde.
+  const loadingDetail = isEdit && editing === null && !detailQuery.isError;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -236,6 +284,20 @@ export function DocumentFormDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {loadingDetail ? (
+          <div className="space-y-3 py-4">
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-2/3" />
+            <Skeleton className="h-32 w-full" />
+          </div>
+        ) : detailQuery.isError ? (
+          <div className="py-4">
+            <ErrorState
+              detail={toApiProblem(detailQuery.error).detail}
+              onRetry={() => void detailQuery.refetch()}
+            />
+          </div>
+        ) : (
         <form
           id="document-form"
           onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
@@ -299,6 +361,39 @@ export function DocumentFormDialog({
                 <FieldError>{fieldError(errors.clientName?.message)}</FieldError>
               </Field>
             )}
+
+            {/* Objet du document : c'est lui qui s'imprime en tête du devis,
+                sous le maître d'ouvrage. Facultatif — un document sans objet
+                se lit dans ses lignes. */}
+            <Field className="sm:col-span-2">
+              <FieldLabel htmlFor="document-subject">
+                {t("form.subject")}
+              </FieldLabel>
+              <Input
+                id="document-subject"
+                placeholder={t("form.subjectPlaceholder")}
+                aria-invalid={Boolean(errors.subject)}
+                {...form.register("subject")}
+              />
+              <FieldError>{fieldError(errors.subject?.message)}</FieldError>
+            </Field>
+
+            {/* Ville d'établissement : elle s'imprime en tête du devis, avant
+                la date. Un bureau de contrôle établit ses documents là où se
+                trouve le chantier, pas à son siège — d'où la saisie par
+                document. Vide, l'impression retombe sur RABAT. */}
+            <Field>
+              <FieldLabel htmlFor="document-issue-city">
+                {t("form.issueCity")}
+              </FieldLabel>
+              <Input
+                id="document-issue-city"
+                placeholder={t("form.issueCityPlaceholder")}
+                aria-invalid={Boolean(errors.issueCity)}
+                {...form.register("issueCity")}
+              />
+              <FieldError>{fieldError(errors.issueCity?.message)}</FieldError>
+            </Field>
 
             <Field>
               <FieldLabel htmlFor="document-issued-at">
@@ -386,6 +481,7 @@ export function DocumentFormDialog({
             </Field>
           </div>
         </form>
+        )}
 
         <DialogFooter>
           <Button
@@ -395,7 +491,13 @@ export function DocumentFormDialog({
           >
             {t("form.cancel")}
           </Button>
-          <Button type="submit" form="document-form" disabled={mutation.isPending}>
+          {/* Enregistrer reste hors du formulaire (`form=`) mais suit son
+              état : tant que le détail charge, il n'y a rien à soumettre. */}
+          <Button
+            type="submit"
+            form="document-form"
+            disabled={mutation.isPending || loadingDetail || detailQuery.isError}
+          >
             {mutation.isPending ? t("form.saving") : t("form.save")}
           </Button>
         </DialogFooter>

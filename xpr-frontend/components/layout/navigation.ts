@@ -1,13 +1,19 @@
 import {
+  ClipboardList,
   Contact,
   FileMinus,
+  FilePlus,
+  FileSignature,
   FileText,
+  FolderInput,
   LayoutDashboard,
   MessageSquareText,
   Package,
   ReceiptText,
   Users,
+  UsersRound,
   Wallet,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 
@@ -25,6 +31,12 @@ export interface NavItem {
   icon: LucideIcon;
   /** Raccourci clavier affiché dans la palette (⌘ + touche). */
   shortcut?: string;
+  /**
+   * Sous-entrées d'un menu déroulant. L'entrée parente reste un lien à part
+   * entière — le chevron déplie, il ne remplace pas la navigation : un menu
+   * qu'on ne peut qu'ouvrir oblige à deux gestes là où un suffisait.
+   */
+  children?: readonly NavItem[];
 }
 
 export interface NavGroup {
@@ -55,6 +67,44 @@ export const NAVIGATION: readonly NavGroup[] = [
         icon: FileMinus,
         shortcut: "A",
       },
+      {
+        href: "/situations",
+        titleKey: "nav.situations",
+        icon: ClipboardList,
+        shortcut: "I",
+        children: [
+          { href: "/situations/create", titleKey: "nav.situationsCreate", icon: FilePlus },
+          { href: "/situations", titleKey: "nav.situationsList", icon: ClipboardList },
+          {
+            href: "/situations/by-client",
+            titleKey: "nav.situationsByClient",
+            icon: UsersRound,
+          },
+        ],
+      },
+      {
+        href: "/conventions",
+        titleKey: "nav.conventions",
+        icon: FileSignature,
+        shortcut: "K",
+        children: [
+          {
+            href: "/conventions/create",
+            titleKey: "nav.conventionsCreate",
+            icon: FilePlus,
+          },
+          {
+            href: "/conventions",
+            titleKey: "nav.conventionsList",
+            icon: FileSignature,
+          },
+          // Le suivi des dépôts vit SOUS les conventions : un dépôt n'existe
+          // que rattaché à un contrat, et lui donner une entrée de premier
+          // niveau laisserait croire à un module autonome.
+          { href: "/deposits", titleKey: "nav.deposits", icon: FolderInput },
+        ],
+      },
+      { href: "/services", titleKey: "nav.services", icon: Wrench, shortcut: "S" },
       { href: "/catalog", titleKey: "nav.catalog", icon: Package, shortcut: "P" },
       { href: "/partners", titleKey: "nav.partners", icon: Contact, shortcut: "T" },
       { href: "/cash", titleKey: "nav.cash", icon: Wallet, shortcut: "C" },
@@ -74,7 +124,23 @@ export const NAVIGATION: readonly NavGroup[] = [
   },
 ];
 
-/** Aplatissement pour la palette ⌘K et la résolution du fil d'Ariane. */
-export const NAV_ITEMS: readonly NavItem[] = NAVIGATION.flatMap(
-  (group) => group.items,
+/**
+ * Aplatissement pour la palette ⌘K et la résolution du fil d'Ariane.
+ *
+ * Les sous-entrées y figurent : « Ajouter une situation » doit être atteignable
+ * au clavier sans passer par la sidebar. La DÉDUPLICATION par `href` est
+ * nécessaire — l'entrée parente `/situations` est reprise dans ses enfants sous
+ * le libellé « Liste des situations », et la palette afficherait deux fois la
+ * même destination. La première occurrence gagne, donc le libellé du parent.
+ */
+export const NAV_ITEMS: readonly NavItem[] = Array.from(
+  NAVIGATION.flatMap((group) =>
+    group.items.flatMap((item) => [item, ...(item.children ?? [])]),
+  )
+    .reduce(
+      (unique, item) =>
+        unique.has(item.href) ? unique : unique.set(item.href, item),
+      new Map<string, NavItem>(),
+    )
+    .values(),
 );

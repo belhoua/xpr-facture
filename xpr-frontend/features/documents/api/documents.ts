@@ -60,6 +60,8 @@ function toPayload(values: DocumentFormValues, type?: DocumentType) {
     // Avec un tiers, l'identité vient du serveur (sa raison sociale) : on
     // n'envoie pas une saisie résiduelle du formulaire, qui prendrait le pas.
     clientName: partnerId === null ? values.clientName.trim() : null,
+    subject: values.subject.trim() || null,
+    issueCity: values.issueCity.trim() || null,
     issuedAt: values.issuedAt || null,
     dueAt: values.dueAt || null,
     notes: values.notes.trim() || null,
@@ -101,7 +103,17 @@ export async function updateDocument(
   return documentSchema.parse(data);
 }
 
-/** Brouillons uniquement — le serveur répond 409 sur un document émis (§3). */
+/**
+ * Suppression (soft delete côté serveur).
+ *
+ * Portée : les brouillons de tout type, plus les FACTURES et SITUATIONS émises
+ * — le gel des factures a été levé le 2026-08-06 sur décision de l'exploitant,
+ * et `DocumentType::freezesOnIssue()` documente ce que cela coûte. Un devis ou
+ * un avoir émis reçoit toujours un 409.
+ *
+ * Supprimer une pièce numérotée TROUE la séquence : le numéro est consommé et
+ * ne sera pas réattribué. L'appelant doit avertir avant d'appeler.
+ */
 export async function deleteDocument(id: string): Promise<void> {
   await ensureCsrfCookie();
 

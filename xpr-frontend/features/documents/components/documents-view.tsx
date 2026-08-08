@@ -1,8 +1,21 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, MoreHorizontal, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import {
+  FileMinus,
+  FileOutput,
+  FileSignature,
+  FileText,
+  Lock,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Printer,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/patterns/confirm-dialog";
@@ -26,6 +39,12 @@ import {
 } from "@/components/ui/select";
 import { catalogKeys, fetchProducts, fetchTaxRates } from "@/features/catalog/api/catalog";
 import {
+  conventionKeys,
+  createConventionFromDocument,
+} from "@/features/conventions/api/conventions";
+import {
+  convertDocument,
+  createCreditNote,
   deleteDocument,
   documentKeys,
   fetchDocuments,
@@ -34,12 +53,19 @@ import { DocumentDetailSheet } from "@/features/documents/components/document-de
 import { DocumentFormDialog } from "@/features/documents/components/document-form-dialog";
 import {
   assignableStatuses,
+  isConvertible,
+  isCreditable,
+  isDeletable,
   isEditable,
+  isTransferableToConvention,
+  listRoute,
+  printRoute,
   type Document,
   type DocumentType,
 } from "@/features/documents/schemas/document";
 import { toApiProblem } from "@/lib/api/client";
 import { formatDate, formatMoney } from "@/lib/format";
+import { Link, usePathname, useRouter } from "@/lib/i18n/navigation";
 
 /** Une heure : le référentiel de TVA et le catalogue ne bougent pas en séance. */
 const REFERENCE_STALE_TIME = 60 * 60 * 1000;
@@ -63,6 +89,9 @@ export function DocumentsView({ type }: { type: DocumentType }) {
   const tCommon = useTranslations("common");
   const locale = useLocale();
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
@@ -71,6 +100,29 @@ export function DocumentsView({ type }: { type: DocumentType }) {
   const [editing, setEditing] = useState<Document | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
+  const [creditTarget, setCreditTarget] = useState<Document | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  /**
+   * `?document=<id>` ouvre le panneau de détail au chargement de l'écran.
+   *
+   * C'est ce qui donne son sens au transfert : la facture issue d'un devis naît
+   * dans une AUTRE liste que celle où l'on était, et on y arrive avec elle
+   * déjà ouverte. Le paramètre est aussi une URL partageable vers une pièce.
+   *
+   * Dérivé et non recopié dans un état par un effet : l'état ne peut pas se
+   * retrouver en retard d'un rendu sur l'URL. Le premier geste de l'utilisateur
+   * (ouvrir une autre ligne, ou fermer) retire le paramètre — sans quoi, une
+   * fois refermé, le panneau se rouvrirait sur ce même document.
+   */
+  const deepLinkId = searchParams.get("document");
+  const openDetail = (id: string | null) => {
+    setDetailId(id);
+
+    if (deepLinkId !== null) {
+      router.replace(pathname);
+    }
+  };
 
   const filters = { type, search, status };
   const { data, isPending, isError, error, refetch } = useQuery({
@@ -102,6 +154,86 @@ export function DocumentsView({ type }: { type: DocumentType }) {
     },
   });
 
+  /**
+   * Aboutissement commun des deux transferts : le document créé est mis en
+   * cache, les listes invalidées (celle-ci a changé — un devis converti passe
+   * `converted` — et celle d'arrivée a un élément de plus), puis on OUVRE la
+   * pièce produite dans sa propre liste.
+   *
+   * La redirection n'est pas cosmétique : le transfert crée un BROUILLON, qu'il
+   * reste à vérifier puis à émettre. Laisser l'utilisateur sur la liste de
+   * départ lui cacherait le travail qui commence.
+   */
+  const settleTransfer = async (created: Document) => {
+    queryClient.setQueryData(documentKeys.detail(created.id), created);
+    await queryClient.invalidateQueries({ queryKey: documentKeys.all });
+
+    setCreditTarget(null);
+    setActionError(null);
+
+    const destination = listRoute(created.type);
+
+    if (destination === null) {
+      // Type sans écran de liste : on n'a nulle part où aller, mais le document
+      // existe — mieux vaut le dire que rediriger vers une page inexistante.
+      setDetailId(created.id);
+
+      return;
+    }
+
+    router.push(`${destination}?document=${created.id}`);
+  };
+
+  const failTransfer = (cause: unknown) => {
+    const problem = toApiProblem(cause);
+
+    // Le serveur reste juge de la transition (409 si le devis a déjà été
+    // converti, si la facture est annulée…) : on réaffiche SON message plutôt
+    // que d'en inventer un depuis l'interface.
+    setActionError(problem.detail ?? problem.title);
+    setCreditTarget(null);
+  };
+
+  const convertMutation = useMutation({
+    mutationFn: (id: string) => convertDocument(id),
+    onSuccess: settleTransfer,
+    onError: failTransfer,
+  });
+
+  const creditNoteMutation = useMutation({
+    mutationFn: (id: string) => createCreditNote(id),
+    onSuccess: settleTransfer,
+    onError: failTransfer,
+  });
+
+  /**
+   * Devis / facture → contrat de convention.
+   *
+   * Ne passe PAS par `settleTransfer` : ce transfert ne produit pas un document
+   * mais une CONVENTION, qui n'a ni le même contrat JSON ni la même liste. Le
+   * document source, lui, n'est pas consommé — inutile d'invalider les listes
+   * de documents, rien n'y a changé.
+   *
+   * On atterrit sur l'écran d'ÉDITION et non sur la liste : la convention naît
+   * incomplète par construction (titre foncier, lots réellement contrôlés,
+   * délai), et c'est le travail qui commence.
+   */
+  const conventionMutation = useMutation({
+    mutationFn: (id: string) => createConventionFromDocument(id),
+    onSuccess: async (created) => {
+      queryClient.setQueryData(conventionKeys.detail(created.id), created);
+      await queryClient.invalidateQueries({ queryKey: conventionKeys.all });
+      setActionError(null);
+      router.push(`/conventions/${created.id}/edit`);
+    },
+    onError: failTransfer,
+  });
+
+  const transferring =
+    convertMutation.isPending ||
+    creditNoteMutation.isPending ||
+    conventionMutation.isPending;
+
   const openCreate = () => {
     setEditing(null);
     setFormOpen(true);
@@ -111,6 +243,14 @@ export function DocumentsView({ type }: { type: DocumentType }) {
     setEditing(document);
     setFormOpen(true);
   };
+
+  /**
+   * Numéro de la pièce en cours de suppression, `null` pour un brouillon.
+   *
+   * C'est lui, et non le statut, qui décide de l'avertissement : un document
+   * sans numéro n'a rien consommé dans la séquence, quel que soit son état.
+   */
+  const deletingNumber = deleteTarget?.number ?? null;
 
   /** Statuts filtrables : ceux du cycle du type, brouillon et annulé compris. */
   const statusFilters = ["all", "draft", ...assignableStatuses(type), "cancelled"];
@@ -165,36 +305,98 @@ export function DocumentsView({ type }: { type: DocumentType }) {
       id: "actions",
       header: tCommon("actions"),
       align: "end",
-      cell: (row) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t("actions.open")}
-              // Le clic sur l'action ne doit pas aussi ouvrir le détail :
-              // la ligne entière est cliquable.
-              onClick={(event) => event.stopPropagation()}
-              className="opacity-60 transition-opacity group-hover/row:opacity-100 data-[state=open]:opacity-100"
-            >
-              <MoreHorizontal aria-hidden />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onSelect={() => setDetailId(row.id)}>
-              <FileText aria-hidden />
-              {t("actions.view")}
-            </DropdownMenuItem>
+      cell: (row) => {
+        const printPath = printRoute(row);
 
-            {/* Immuabilité fiscale (§3) : seuls les brouillons se modifient
-                ou se suppriment. Un document émis ne peut qu'être annulé,
-                depuis le panneau de détail. */}
-            {isEditable(row) && (
-              <>
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t("actions.open")}
+                // Le clic sur l'action ne doit pas aussi ouvrir le détail :
+                // la ligne entière est cliquable.
+                onClick={(event) => event.stopPropagation()}
+                className="opacity-60 transition-opacity group-hover/row:opacity-100 data-[state=open]:opacity-100"
+              >
+                <MoreHorizontal aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem onSelect={() => openDetail(row.id)}>
+                <FileText aria-hidden />
+                {t("actions.view")}
+              </DropdownMenuItem>
+
+              {/* Transferts. Les mêmes règles que le panneau de détail —
+                  `isConvertible` / `isCreditable` — parce que c'est le même
+                  acte : un devis ÉMIS devient une facture, une facture émise
+                  s'annule par un avoir. Un brouillon n'est transférable ni dans
+                  un cas ni dans l'autre : il n'engage encore rien. */}
+              {isConvertible(row) && (
+                <DropdownMenuItem
+                  disabled={transferring}
+                  onSelect={() => convertMutation.mutate(row.id)}
+                >
+                  <FileOutput aria-hidden />
+                  {t("actions.convert")}
+                </DropdownMenuItem>
+              )}
+
+              {/* L'avoir passe par une confirmation, pas la conversion : il
+                  DÉFAIT comptablement une facture émise, quand la conversion ne
+                  fait que proposer un brouillon de plus. */}
+              {isCreditable(row) && (
+                <DropdownMenuItem
+                  disabled={transferring}
+                  onSelect={() => setCreditTarget(row)}
+                >
+                  <FileMinus aria-hidden />
+                  {t("actions.creditNote")}
+                </DropdownMenuItem>
+              )}
+
+              {/* Transfert en CONVENTION. Séparé des deux précédents : il ne
+                  produit pas un document commercial mais un contrat de mission,
+                  et il ne consomme pas le devis — on peut parfaitement le
+                  convertir en facture ensuite, ce qui est même l'ordre normal :
+                  on signe la convention, puis on facture l'avance. */}
+              {isTransferableToConvention(row) && (
+                <DropdownMenuItem
+                  disabled={transferring}
+                  onSelect={() => conventionMutation.mutate(row.id)}
+                >
+                  <FileSignature aria-hidden />
+                  {t("actions.convention")}
+                </DropdownMenuItem>
+              )}
+
+              {/* Chaque type a son gabarit A4 ; `printRoute` ne rend une route
+                  que pour ceux qui en ont un. Les avoirs n'en ont pas encore :
+                  l'entrée disparaît plutôt que d'ouvrir un modèle faux. */}
+              {printPath !== null && (
+                <DropdownMenuItem asChild>
+                  <Link href={printPath}>
+                    <Printer aria-hidden />
+                    {t("actions.print")}
+                  </Link>
+                </DropdownMenuItem>
+              )}
+
+              {/* Immuabilité fiscale (§3) et ses levées. Les deux actes sont
+                  jugés SÉPARÉMENT : un devis émis se modifie (2026-08-06) mais
+                  ne se supprime pas, sa séquence `DEV-` devant rester continue.
+                  Les deux prédicats reflètent le serveur, ils ne le décident
+                  pas. */}
+              {isEditable(row) && (
                 <DropdownMenuItem onSelect={() => openEdit(row)}>
                   <Pencil aria-hidden />
                   {t("actions.edit")}
                 </DropdownMenuItem>
+              )}
+
+              {isDeletable(row) && (
                 <DropdownMenuItem
                   variant="destructive"
                   onSelect={() => setDeleteTarget(row)}
@@ -202,11 +404,23 @@ export function DocumentsView({ type }: { type: DocumentType }) {
                   <Trash2 aria-hidden />
                   {t("actions.delete")}
                 </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
+              )}
+
+              {/* Ni l'un ni l'autre : document clos (annulé, refusé, converti)
+                  ou type gelé. Désactivé plutôt qu'absent — sans cette mention,
+                  l'utilisateur qui cherche « Modifier » conclut à un
+                  dysfonctionnement. Annulation et avoir restent offerts dans le
+                  panneau de détail. */}
+              {!isEditable(row) && !isDeletable(row) && (
+                <DropdownMenuItem disabled>
+                  <Lock aria-hidden />
+                  {t("actions.frozen")}
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
     },
   ];
 
@@ -222,6 +436,16 @@ export function DocumentsView({ type }: { type: DocumentType }) {
           </Button>
         }
       />
+
+      {/* Un transfert refusé doit se voir : il part d'un menu, pas d'un
+          formulaire, et sans ce retour l'utilisateur conclurait que le clic
+          n'a rien fait. Pas de toast — le dépôt n'en a pas, et en ajouter un
+          pour un cas d'erreur ne se justifie pas. */}
+      {actionError !== null && (
+        <p className="text-destructive mb-3 text-sm" role="alert">
+          {actionError}
+        </p>
+      )}
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative min-w-56 flex-1 sm:max-w-80">
@@ -259,7 +483,7 @@ export function DocumentsView({ type }: { type: DocumentType }) {
         status={isPending ? "pending" : isError ? "error" : "success"}
         errorDetail={isError ? toApiProblem(error).detail : undefined}
         onRetry={() => void refetch()}
-        onRowClick={(row) => setDetailId(row.id)}
+        onRowClick={(row) => openDetail(row.id)}
         empty={{
           icon: FileText,
           title: t(`empty.${type}.title`),
@@ -281,27 +505,52 @@ export function DocumentsView({ type }: { type: DocumentType }) {
       />
 
       <DocumentDetailSheet
-        documentId={detailId}
-        onOpenChange={(open) => !open && setDetailId(null)}
+        documentId={detailId ?? deepLinkId}
+        onOpenChange={(open) => !open && openDetail(null)}
         onEdit={(document) => {
-          setDetailId(null);
+          openDetail(null);
           openEdit(document);
         }}
         // Conversion et avoir produisent un NOUVEAU document, d'un autre type
-        // que celui de cet écran : on bascule le panneau dessus plutôt que de
-        // laisser l'utilisateur le chercher dans une liste qui ne le contient
-        // pas.
-        onConverted={(created) => setDetailId(created.id)}
+        // que celui de cet écran : il part dans SA liste, panneau ouvert — le
+        // même trajet que depuis le menu de la table, sinon la même action
+        // aboutirait à deux endroits différents selon l'endroit d'où on la
+        // déclenche.
+        onConverted={(created) => void settleTransfer(created)}
       />
 
+      {/* Deux avertissements distincts, parce que les deux gestes n'ont pas la
+          même portée : jeter un brouillon ne laisse aucune trace, supprimer une
+          pièce NUMÉROTÉE troue définitivement la séquence. Un texte unique
+          finirait par mentir dans l'un des deux cas. */}
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title={t("delete.title")}
-        description={t("delete.description")}
+        title={
+          deletingNumber === null
+            ? t("delete.title")
+            : t("delete.issuedTitle", { number: deletingNumber })
+        }
+        description={
+          deletingNumber === null
+            ? t("delete.description")
+            : t("delete.issuedDescription", { number: deletingNumber })
+        }
         confirmLabel={t("delete.confirm")}
         pending={deleteMutation.isPending}
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+      />
+
+      <ConfirmDialog
+        open={creditTarget !== null}
+        onOpenChange={(open) => !open && setCreditTarget(null)}
+        title={t("creditNoteConfirm.title")}
+        description={t("creditNoteConfirm.description")}
+        confirmLabel={t("creditNoteConfirm.confirm")}
+        pending={creditNoteMutation.isPending}
+        onConfirm={() =>
+          creditTarget && creditNoteMutation.mutate(creditTarget.id)
+        }
       />
     </>
   );

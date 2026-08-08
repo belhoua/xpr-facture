@@ -90,6 +90,14 @@ export function DocumentLineEditor({
     setValue(`items.${index}.unitPrice`, product.unitPriceCents / 100);
     setValue(`items.${index}.unit`, product.unit ?? "");
     setValue(`items.${index}.taxRateId`, product.taxRateId ?? defaultTaxRateId);
+    // Remise habituelle de la fiche, recopiée comme le prix et le taux. Le
+    // serveur applique la même règle si la ligne ne transmet pas de remise
+    // (DocumentItemBuilder) ; la poser ici la rend VISIBLE et corrigeable
+    // avant l'envoi, plutôt que de la voir apparaître dans la réponse.
+    setValue(
+      `items.${index}.discountPercent`,
+      Number(product.defaultDiscountPercent),
+    );
 
     if (product.description) {
       setValue(`items.${index}.description`, product.description);

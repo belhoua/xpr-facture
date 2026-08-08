@@ -199,11 +199,150 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
   }
+  /* Un montant : chasse fixe, sens de lecture forcé, et jamais coupé en deux
+     lignes.
+
+     PAS de `display` ici. La règle portait `inline-block`, ce qui SORTAIT du
+     flux de tableau toute cellule marquée `.amount` : le `<td>` cessait d'être
+     une case de la grille, se repliait sous le précédent avec sa bordure, et
+     la colonne « P U (HT) » se retrouvait à empiler tous les montants d'une
+     ligne. `unicode-bidi: isolate` isole déjà le nombre sans changer sa boîte,
+     et c'est tout ce dont l'affichage a besoin — sur un `<td>`, un `<span>` ou
+     un `<p>` indifféremment. */
   .amount {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
     direction: ltr;
     unicode-bidi: isolate;
-    display: inline-block;
+    white-space: nowrap;
+  }
+}
+/* ---------------------------------------------------------------- Impression
+
+   Feuille d'impression de l'application. Elle sert les écrans « situations »
+   (vue client et document individuel), qui s'impriment depuis le navigateur —
+   la situation est une pièce de SUIVI, pas un document opposable, et n'a donc
+   pas à passer par le rendu Gotenberg réservé aux pièces qui engagent (§4).
+
+   Le principe : la page imprimée ne montre que le document. Tout ce qui relève
+   de la navigation ou du pilotage (sidebar, barre du haut, filtres, boutons)
+   disparaît — non pas masqué au cas par cas dans chaque écran, mais ici, une
+   fois. Les écrans se contentent de marquer leur conteneur `.print-document`. */
+@media print {
+  /* Fond blanc et texte noir imposés : le thème sombre imprimerait une page
+     entièrement noire, et la plupart des navigateurs n'impriment de toute
+     façon pas les fonds par défaut — ce qui donnerait du texte clair sur
+     blanc, donc illisible. */
+  :root,
+  :root[data-theme="dark"] {
+    --background: white;
+    --foreground: black;
+    --card: white;
+    --card-foreground: black;
+    --muted-foreground: oklch(0.35 0 0);
+    --border: oklch(0.75 0 0);
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Chrome applicatif : hors sujet sur une feuille de papier. La sidebar et la
+     barre du haut sont visées par leur position dans la coquille de
+     `(app)/layout.tsx`, pas par une classe utilitaire — un écran ne doit pas
+     avoir à penser à l'impression pour bien s'imprimer. L'en-tête de PAGE
+     (PageHeader) vit dans `main` et reste imprimé : c'est le titre du document.
+     (`print:hidden` reste disponible au cas par cas, Tailwind le génère.) */
+  aside,
+  body header:not(main header) {
+    display: none !important;
+  }
+
+  /* La zone de contenu perd ses contraintes d'écran (hauteur pleine, défilement
+     interne) : à l'impression, le flux doit pouvoir déborder sur plusieurs
+     pages au lieu d'être tronqué à la hauteur du viewport. */
+  main {
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .print-document {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  /* Les conteneurs à défilement horizontal (DataTable) doivent rendre tout leur
+     contenu : `overflow-x: auto` couperait les colonnes de droite. */
+  .print-document .overflow-x-auto,
+  .print-document .overflow-hidden {
+    overflow: visible !important;
+  }
+
+  /* Une ligne de tableau coupée entre deux pages est illisible ; l'en-tête est
+     répété sur chaque page pour que les colonnes restent identifiables. */
+  table {
+    break-inside: auto;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tr {
+    break-inside: avoid;
+    break-after: auto;
+  }
+
+  /* Les tuiles d'indicateurs tiennent sur une ligne : quatre colonnes même si
+     la largeur de page les aurait repliées. */
+  .print-document .grid {
+    break-inside: avoid;
+  }
+
+  a[href] {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  /* ---------------------------------------------------- Documents commerciaux
+
+     `.print-sheet` marque le CORPS d'un document qui a une forme imposée hors
+     de l'écran — le devis et, demain, la facture. À l'écran il ressemble déjà à
+     une feuille (largeur A4, marges intérieures) ; à l'impression il perd ce
+     décor et laisse @page tenir les marges, sinon elles se cumuleraient. */
+  .print-sheet {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  /* Filets du tableau : noir franc. Les jetons de bordure du thème sont
+     délibérément peu contrastés à l'écran ; sur du papier, la grille d'un devis
+     doit rester lisible après une photocopie. */
+  .print-sheet :is(table, th, td) {
+    border-color: black !important;
+  }
+
+  /* Un titre ou une en-tête orphelins en bas de page sont le défaut le plus
+     visible d'une impression : on interdit la coupure juste après eux. */
+  .print-sheet > header,
+  .print-sheet h1 {
+    break-after: avoid;
+  }
+
+  /* Les sous-points d'une prestation forment un bloc : les scinder entre deux
+     pages rend la ligne incompréhensible. */
+  .print-sheet li {
+    break-inside: avoid;
+  }
+
+  @page {
+    /* A4 : format du papier au Maroc, et la largeur sur laquelle les gabarits
+       de documents sont calés. */
+    size: A4;
+    margin: 14mm;
   }
 }
