@@ -6,6 +6,7 @@ namespace Database\Seeders;
 
 use App\Modules\Authentication\Models\User;
 use App\Modules\Tenancy\Enums\LegalForm;
+use App\Modules\Tenancy\Enums\Role;
 use App\Modules\Tenancy\Models\Company;
 use App\Modules\Tenancy\Services\CompanyProvisioning;
 use Illuminate\Console\Command;
@@ -172,7 +173,7 @@ final class AdminSeeder extends Seeder
 
         if ($existing instanceof Company) {
             // Déjà rattaché : on garantit seulement le rôle, sans rien recréer.
-            $this->ensureOwner($user, $existing);
+            $this->ensureRole($user, $existing);
             $this->fillLegalIdentity($existing);
 
             return $existing;
@@ -184,6 +185,12 @@ final class AdminSeeder extends Seeder
         // ferait diverger l'amorçage de la porte principale au premier
         // changement — exactement ce que `xpr:create-admin` évite déjà.
         $company = app(CompanyProvisioning::class)->createFirstCompanyFor($user, $companyName, $legalForm);
+
+        // `createFirstCompanyFor` pose `owner` — c'est la règle de l'inscription
+        // publique, où celui qui crée la société la possède. On réaligne ensuite
+        // sur le rôle configuré, sans dupliquer ici l'ouverture de l'exercice ni
+        // la création des séquences.
+        $this->ensureRole($user, $company);
 
         $this->fillLegalIdentity($company);
 
@@ -251,22 +258,53 @@ final class AdminSeeder extends Seeder
     }
 
     /**
-     * Le rôle est scopé à la société (mode teams Spatie) : sans ce périmètre,
-     * `assignRole` écrirait une attribution sur le périmètre null, que le
+     * Rôle du compte d'amorçage, scopé à la société (mode teams Spatie) : sans
+     * ce périmètre, l'attribution s'écrirait sur le périmètre null, que le
      * registre n'interroge jamais pour une requête tenant.
      */
-    private function ensureOwner(User $user, Company $company): void
+    private function ensureRole(User $user, Company $company): void
     {
+        $role = $this->configuredRole();
+
         $permissions = app(PermissionRegistrar::class);
         $previous = $permissions->getPermissionsTeamId();
         $permissions->setPermissionsTeamId($company->id);
 
         try {
-            if (! $user->hasRole('owner')) {
-                $user->assignRole('owner');
+            // `syncRoles` et non `assignRole` : le compte d'amorçage doit finir
+            // avec EXACTEMENT le rôle configuré. Ajouter sans retirer laisserait
+            // cumuler `owner` et `admin` après un changement de configuration,
+            // et le plus permissif des deux l'emporterait en silence.
+            if (! $user->hasRole($role->value)) {
+                $user->syncRoles([$role->value]);
             }
         } finally {
             $permissions->setPermissionsTeamId($previous);
         }
+    }
+
+    /**
+     * Rôle du compte d'amorçage, `owner` à défaut.
+     *
+     * Une valeur inconnue n'est pas ignorée : la retomber silencieusement sur
+     * `owner` donnerait tous les droits à un compte qu'on voulait restreindre.
+     * On signale et on s'abstient — le compte reste alors sans rôle, ce que
+     * l'écran des utilisateurs montre, plutôt que de trancher à la place de
+     * l'exploitant.
+     */
+    private function configuredRole(): Role
+    {
+        /** @var string $configured */
+        $configured = config('xpr.admin.role', Role::Owner->value);
+
+        $role = Role::tryFrom($configured);
+
+        if (! $role instanceof Role) {
+            $this->report("XPR_ADMIN_ROLE inconnu : {$configured} — repli sur owner.", 'warn');
+
+            return Role::Owner;
+        }
+
+        return $role;
     }
 }

@@ -18,3 +18,15 @@ xpr-infrastructure/.env
 # code a été extrait et versionné là où c'est du texte contractuel, pas des
 # données personnelles : `xpr-frontend/features/conventions/contract-text.ts`.
 docs/*.docx
+
+# Charte de développement lue par Claude Code au démarrage de chaque session.
+#
+# Retirée du dépôt distant le 2026-08-18 (commit da6eb5e), mais INDISPENSABLE
+# sur les postes : elle porte les contraintes fiscales marocaines, le modèle
+# multi-tenant, les règles de numérotation et la méthode de travail. Sans elle,
+# une session repart sans aucune de ces conventions.
+#
+# Ignorée plutôt que supprimée : le fichier vit sur les disques, pas sur un
+# dépôt public. Chaque poste en garde donc sa copie — à se transmettre hors
+# dépôt si l'équipe s'agrandit, puisque rien ne la synchronise plus.
+CLAUDE.md

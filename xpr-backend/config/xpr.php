@@ -59,11 +59,39 @@ return [
     */
 
     'admin' => [
-        'email' => env('XPR_ADMIN_EMAIL', 'admin@bcat.ma'),
-        'name' => env('XPR_ADMIN_NAME', 'Administrateur'),
+        'email' => env('XPR_ADMIN_EMAIL', 'chakib123@bcat.com'),
+        'name' => env('XPR_ADMIN_NAME', 'Chakib'),
         'company' => env('XPR_ADMIN_COMPANY', 'BCAT'),
         'legal_form' => env('XPR_ADMIN_LEGAL_FORM', 'sarl'),
+
+        /*
+         * JAMAIS de défaut ici, et jamais en dur dans le seeder : le dépôt
+         * distant est PUBLIC (cf. le .gitignore de la racine). Un mot de passe
+         * écrit dans un fichier versionné serait publié sur GitHub, et resterait
+         * lisible dans l'historique après correction.
+         *
+         * Il se fournit donc par l'environnement, le temps de l'amorçage :
+         *     XPR_ADMIN_PASSWORD='…' php artisan db:seed --force
+         *
+         * `db:seed` SANS `--class`, et c'est important : sur une base fraîche,
+         * `AdminSeeder` seul échoue en violation de clé étrangère
+         * (`companies.default_currency` référence `currencies`, vide à ce
+         * stade). `DatabaseSeeder` enchaîne les référentiels indispensables
+         * puis l'amorçage, et rien d'autre — aucune donnée de démonstration.
+         *
+         * Sans lui, `AdminSeeder` s'abstient en production plutôt que d'ouvrir
+         * un compte propriétaire dont le mot de passe serait connu de tous.
+         */
         'password' => env('XPR_ADMIN_PASSWORD'),
+
+        /*
+         * Rôle du compte d'amorçage. `owner` par défaut : c'est le seul rôle
+         * qui puisse modifier l'IDENTITÉ LÉGALE de la société — ICE, IF, RC,
+         * patente —, mentions obligatoires au pied de chaque facture (§3). Sur
+         * une base qui ne contient qu'un compte, `admin` laisserait ces champs
+         * inaccessibles à tout le monde.
+         */
+        'role' => env('XPR_ADMIN_ROLE', 'owner'),
     ],
 
 ];
