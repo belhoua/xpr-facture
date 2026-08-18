@@ -93,11 +93,30 @@ services:
         value: "true"
 
       # --- Frontend ------------------------------------------------------
-      # Renseignés après le déploiement Vercel, avec le domaine obtenu.
-      # SANCTUM_STATEFUL_DOMAINS s'écrit SANS schéma : « mon-app.vercel.app ».
+      # NOTE : le déploiement en service tourne sur VERCEL (front et back, cf.
+      # xpr-backend/vercel.json). Ce blueprint Render est conservé comme
+      # variante d'hébergement ; les variables ci-dessous valent pour les deux.
+      #
+      #   FRONTEND_URL=https://votre-front.vercel.app
+      #   SANCTUM_STATEFUL_DOMAINS=votre-front.vercel.app,votre-front-*.vercel.app
+      #
+      # C'est la seconde dont l'absence produit « The origin … is absent from
+      # SANCTUM_STATEFUL_DOMAINS » : sans elle, Sanctum n'injecte pas
+      # StartSession et l'authentification par cookies ne s'établit pas.
+      #
+      # Sur Vercel, les domaines du déploiement courant s'ajoutent seuls
+      # (VERCEL_URL & co, lues par config/sanctum.php). Sur Render, ces
+      # variables n'existent pas : tout passe par les deux clés ci-dessous.
+      #
+      # ⚠️ Jamais « *.vercel.app » seul : le domaine est mutualisé, et le joker
+      # nu ouvrirait une session à tout site qu'un tiers y déploierait.
       - key: FRONTEND_URL
         sync: false
       - key: SANCTUM_STATEFUL_DOMAINS
+        sync: false
+      # Facultatif — uniquement si un client appelle l'API sans passer par le
+      # proxy Next (cf. config/cors.php).
+      - key: FRONTEND_URL_PATTERNS
         sync: false
 
       # --- Journalisation ------------------------------------------------
