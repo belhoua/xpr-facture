@@ -8,6 +8,7 @@ use App\Modules\Accounting\Enums\DocumentType;
 use App\Modules\Accounting\Services\DocumentNumberService;
 use App\Modules\Documents\Enums\DocumentStatus;
 use App\Modules\Documents\Models\Document;
+use App\Modules\Documents\Models\DocumentItem;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -120,11 +121,18 @@ final class DocumentConversionService
         $target->number = null;
         $target->save();
 
+        // Les copies partent en UNE requête : convertir un devis de trente
+        // postes tenait trente INSERT dans la transaction qui numérote la
+        // facture (cf. DocumentItem::insertMany).
+        $copies = [];
+
         foreach ($source->items()->get() as $item) {
             $copy = $item->replicate(['document_id', 'created_at', 'updated_at']);
             $copy->document_id = $target->id;
-            $copy->save();
+            $copies[] = $copy;
         }
+
+        DocumentItem::insertMany($copies);
 
         // Numérotation APRÈS la copie des lignes, jamais avant : un numéro posé
         // sur un document encore vide serait consommé sans rien attester, et le

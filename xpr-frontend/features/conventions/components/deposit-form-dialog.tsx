@@ -295,7 +295,7 @@ export function DepositFormDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {tCommon("cancel")}
           </Button>
-          <Button type="submit" form="deposit-form" disabled={mutation.isPending}>
+          <Button type="submit" form="deposit-form" loading={mutation.isPending}>
             {mutation.isPending ? (
               <Loader2 className="size-4 animate-spin" aria-hidden />
             ) : null}

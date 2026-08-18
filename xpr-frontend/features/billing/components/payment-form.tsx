@@ -168,7 +168,7 @@ export function PaymentForm({
               type="submit"
               size="lg"
               className="mt-6 w-full"
-              disabled={form.formState.isSubmitting}
+              loading={form.formState.isSubmitting}
             >
               <Lock aria-hidden />
               {form.formState.isSubmitting

@@ -716,9 +716,10 @@ final class DocumentWriteService
 
         $items = $this->itemBuilder->build($document, $payload);
 
-        foreach ($items as $item) {
-            $item->save();
-        }
+        // UN seul INSERT pour toutes les lignes (cf. DocumentItem::insertMany) :
+        // la boucle de `save()` qui l'a précédée coûtait un aller-retour par
+        // poste, à l'intérieur de la transaction d'écriture.
+        DocumentItem::insertMany($items);
 
         $this->refreshTotals($document, $items);
     }

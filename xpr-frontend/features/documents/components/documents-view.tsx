@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   FileOutput,
   FileSignature,
@@ -15,6 +20,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
@@ -48,9 +54,6 @@ import {
   documentKeys,
   fetchDocuments,
 } from "@/features/documents/api/documents";
-import { DocumentDetailSheet } from "@/features/documents/components/document-detail-sheet";
-import { DocumentFormDialog } from "@/features/documents/components/document-form-dialog";
-import { PaymentsModal } from "@/features/payments/components/payments-modal";
 import {
   assignableStatuses,
   isConvertible,
@@ -65,6 +68,45 @@ import {
 import { toApiProblem } from "@/lib/api/client";
 import { formatDate, formatMoney } from "@/lib/format";
 import { Link, usePathname, useRouter } from "@/lib/i18n/navigation";
+import { useDeferredMount } from "@/lib/use-deferred-mount";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+
+/**
+ * Les TROIS panneaux lourds de cet écran sont chargés à la demande.
+ *
+ * Le formulaire de document, le panneau de détail et la fenêtre des règlements
+ * représentent à eux seuls plus de code que la liste qui les héberge — le
+ * formulaire embarque l'éditeur de lignes, ses calculs de totaux et ses
+ * sélecteurs de catalogue. Importés statiquement, ils partaient dans le lot
+ * initial de /invoices et /quotes, alors que l'écran s'ouvre sur un tableau et
+ * que la plupart des consultations n'en ouvrent aucun.
+ *
+ * `useDeferredMount` retient la première ouverture : le téléchargement a lieu
+ * au clic, puis le composant reste monté (cf. le commentaire du hook).
+ */
+const DocumentFormDialog = dynamic(
+  () =>
+    import("@/features/documents/components/document-form-dialog").then(
+      (m) => m.DocumentFormDialog,
+    ),
+  { ssr: false },
+);
+
+const DocumentDetailSheet = dynamic(
+  () =>
+    import("@/features/documents/components/document-detail-sheet").then(
+      (m) => m.DocumentDetailSheet,
+    ),
+  { ssr: false },
+);
+
+const PaymentsModal = dynamic(
+  () =>
+    import("@/features/payments/components/payments-modal").then(
+      (m) => m.PaymentsModal,
+    ),
+  { ssr: false },
+);
 
 /** Une heure : le référentiel de TVA et le catalogue ne bougent pas en séance. */
 const REFERENCE_STALE_TIME = 60 * 60 * 1000;
@@ -93,6 +135,10 @@ export function DocumentsView({ type }: { type: DocumentType }) {
   const searchParams = useSearchParams();
 
   const [search, setSearch] = useState("");
+
+  // La valeur INTERROGÉE est retardée ; le champ, lui, reste immédiat.
+  // Sans cela, chaque caractère frappé partait en requête (cf. le hook).
+  const debouncedSearch = useDebouncedValue(search);
   const [status, setStatus] = useState("all");
 
   const [formOpen, setFormOpen] = useState(false);
@@ -125,10 +171,20 @@ export function DocumentsView({ type }: { type: DocumentType }) {
     }
   };
 
-  const filters = { type, search, status };
+  // Montage différé des trois panneaux lourds : le code n'est demandé qu'à la
+  // première ouverture de chacun (cf. le bloc `dynamic` en tête de fichier).
+  const formMounted = useDeferredMount(formOpen);
+  const detailMounted = useDeferredMount((detailId ?? deepLinkId) !== null);
+  const paymentsMounted = useDeferredMount(paymentTarget !== null);
+
+  const filters = { type, search: debouncedSearch, status };
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: documentKeys.list(filters),
     queryFn: () => fetchDocuments(filters),
+    // La liste PRÉCÉDENTE reste affichée pendant que la nouvelle arrive :
+    // sans cela, chaque recherche renvoyait le tableau à ses squelettes,
+    // et l'écran clignotait à chaque pause de frappe.
+    placeholderData: keepPreviousData,
   });
 
   useQuery({
@@ -492,27 +548,31 @@ export function DocumentsView({ type }: { type: DocumentType }) {
         }}
       />
 
-      <DocumentFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        type={type}
-        document={editing}
-      />
+      {formMounted && (
+        <DocumentFormDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          type={type}
+          document={editing}
+        />
+      )}
 
-      <DocumentDetailSheet
-        documentId={detailId ?? deepLinkId}
-        onOpenChange={(open) => !open && openDetail(null)}
-        onEdit={(document) => {
-          openDetail(null);
-          openEdit(document);
-        }}
-        // Conversion et avoir produisent un NOUVEAU document, d'un autre type
-        // que celui de cet écran : il part dans SA liste, panneau ouvert — le
-        // même trajet que depuis le menu de la table, sinon la même action
-        // aboutirait à deux endroits différents selon l'endroit d'où on la
-        // déclenche.
-        onConverted={(created) => void settleTransfer(created)}
-      />
+      {detailMounted && (
+        <DocumentDetailSheet
+          documentId={detailId ?? deepLinkId}
+          onOpenChange={(open) => !open && openDetail(null)}
+          onEdit={(document) => {
+            openDetail(null);
+            openEdit(document);
+          }}
+          // Conversion et avoir produisent un NOUVEAU document, d'un autre
+          // type que celui de cet écran : il part dans SA liste, panneau
+          // ouvert — le même trajet que depuis le menu de la table, sinon la
+          // même action aboutirait à deux endroits différents selon l'endroit
+          // d'où on la déclenche.
+          onConverted={(created) => void settleTransfer(created)}
+        />
+      )}
 
       {/* Deux avertissements distincts, parce que les deux gestes n'ont pas la
           même portée : jeter un brouillon ne laisse aucune trace, supprimer une
@@ -536,12 +596,14 @@ export function DocumentsView({ type }: { type: DocumentType }) {
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
       />
 
-      <PaymentsModal
-        invoiceId={paymentTarget?.id ?? null}
-        invoiceNumber={paymentTarget?.number ?? null}
-        open={paymentTarget !== null}
-        onOpenChange={(next) => !next && setPaymentTarget(null)}
-      />
+      {paymentsMounted && (
+        <PaymentsModal
+          invoiceId={paymentTarget?.id ?? null}
+          invoiceNumber={paymentTarget?.number ?? null}
+          open={paymentTarget !== null}
+          onOpenChange={(next) => !next && setPaymentTarget(null)}
+        />
+      )}
     </>
   );
 }

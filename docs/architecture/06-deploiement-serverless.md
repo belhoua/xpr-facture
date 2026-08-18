@@ -194,6 +194,46 @@ column "vat_exempt" is of type boolean but expression is of type integer
 Mesuré sur `companies`. Toute colonne booléenne casserait de la même façon.
 La sortie reste l'endpoint direct, pas l'émulation.
 
+### 3.6 Les caches applicatifs de Laravel ne s'appliquent pas ici
+
+`config:cache`, `route:cache` et `event:cache` sont **actifs en conteneur** :
+`docker/entrypoint.sh` les joue au démarrage, une fois les variables
+d'environnement injectées par Render. Ils ne le sont **pas** sur Vercel, et ce
+n'est pas un oubli.
+
+Deux obstacles, dans cet ordre :
+
+1. **Il n'y a pas d'étape où les jouer.** `vercel-php` construit la fonction en
+   exécutant `composer install` ; il n'exécute aucune commande applicative, et
+   la fonction déployée n'a pas d'accès artisan (cf. §4.1, qui joue déjà les
+   migrations depuis un poste local pour la même raison).
+2. **Le cache ne serait pas lu.** `api/index.php` déplace `bootstrap/cache/`
+   vers `/tmp` — c'est ce qui rend l'écriture possible sur un paquet en lecture
+   seule. Laravel y cherche donc `config.php` et `routes-v7.php`, alors qu'un
+   fichier produit au build resterait dans le paquet. Seuls `packages.php` et
+   `services.php` traversent, parce que le point d'entrée les **recopie**
+   explicitement.
+
+Un `config:cache` joué au build serait par ailleurs **dangereux**, et pas
+seulement inefficace : il fige les valeurs lues au moment du build. Une
+variable modifiée ensuite dans le tableau de bord Vercel n'aurait plus aucun
+effet, y compris `APP_KEY` ou les identifiants de base — une panne silencieuse,
+qui se manifesterait comme une authentification cassée sans message.
+
+**Ce qui tient lieu d'optimisation ici**, c'est OPcache, fourni par le runtime :
+le bytecode est conservé entre les requêtes servies par une même instance, ce
+qui couvre l'essentiel de ce que le cache de configuration ferait gagner. Le
+poste de coût réel du démarrage à froid n'est pas le parsing de la
+configuration mais la **latence réseau vers Neon** (§3.4) — le levier est de
+réduire le NOMBRE d'allers-retours SQL, pas le temps de démarrage de Laravel.
+
+C'est ce que fait `DocumentItem::insertMany()` : les lignes d'un document
+partent en un seul INSERT au lieu d'un par ligne. Sur ce déploiement, où chaque
+requête traverse Internet, une facture de trente postes économise vingt-neuf
+allers-retours — à l'intérieur de la transaction qui tient le verrou de
+numérotation. Le budget est verrouillé par
+`tests/Feature/Documents/DocumentQueryBudgetTest.php`.
+
 ---
 
 ## 4. Ordre de mise en service

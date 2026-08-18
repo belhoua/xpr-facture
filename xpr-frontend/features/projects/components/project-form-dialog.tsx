@@ -311,7 +311,7 @@ export function ProjectFormDialog({
           >
             {t("form.cancel")}
           </Button>
-          <Button type="submit" form="project-form" disabled={mutation.isPending}>
+          <Button type="submit" form="project-form" loading={mutation.isPending}>
             {mutation.isPending ? t("form.saving") : t("form.submit")}
           </Button>
         </DialogFooter>

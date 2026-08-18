@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   Archive,
   Contact,
@@ -10,6 +15,7 @@ import {
   Search,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/patterns/confirm-dialog";
@@ -36,13 +42,25 @@ import {
   fetchPartners,
   partnerKeys,
 } from "@/features/partners/api/partners";
-import { PartnerFormDialog } from "@/features/partners/components/partner-form-dialog";
 import {
   PARTNER_TYPES,
   type Partner,
   type PartnerType,
 } from "@/features/partners/schemas/partner";
 import { toApiProblem } from "@/lib/api/client";
+import { useDeferredMount } from "@/lib/use-deferred-mount";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+
+/**
+ * Panneau chargé à la demande : son code — formulaire complet, validation
+ * Zod, sélecteurs — n'a aucune raison de partir avec la liste, qui s'ouvre
+ * sur un tableau. Le téléchargement a lieu à la première ouverture
+ * (cf. `useDeferredMount`).
+ */
+const PartnerFormDialog = dynamic(
+  () => import("@/features/partners/components/partner-form-dialog").then((m) => m.PartnerFormDialog),
+  { ssr: false },
+);
 
 /**
  * Options du filtre. Dérivées de l'énumération, non recopiées : un type ajouté
@@ -81,16 +99,24 @@ export function PartnersView() {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
+
+  // La valeur INTERROGÉE est retardée ; le champ, lui, reste immédiat.
+  // Sans cela, chaque caractère frappé partait en requête (cf. le hook).
+  const debouncedSearch = useDebouncedValue(search);
   const [type, setType] = useState<PartnerType | "all">("all");
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Partner | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<Partner | null>(null);
 
-  const filters = { search, type };
+  const filters = { search: debouncedSearch, type };
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: partnerKeys.list(filters),
     queryFn: () => fetchPartners(filters),
+    // La liste PRÉCÉDENTE reste affichée pendant que la nouvelle arrive :
+    // sans cela, chaque recherche renvoyait le tableau à ses squelettes,
+    // et l'écran clignotait à chaque pause de frappe.
+    placeholderData: keepPreviousData,
   });
 
   const archiveMutation = useMutation({
@@ -209,6 +235,8 @@ export function PartnersView() {
     },
   ];
 
+  const formOpenMounted = useDeferredMount(formOpen);
+
   return (
     <>
       <PageHeader
@@ -274,11 +302,13 @@ export function PartnersView() {
         }}
       />
 
-      <PartnerFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        partner={editing}
-      />
+      {formOpenMounted && (
+        <PartnerFormDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          partner={editing}
+        />
+      )}
 
       <ConfirmDialog
         open={archiveTarget !== null}

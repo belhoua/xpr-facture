@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, MoreHorizontal, Pencil, Plus, Search, Tags } from "lucide-react";
 import { useTranslations } from "next-intl";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/patterns/confirm-dialog";
@@ -21,9 +22,21 @@ import {
   catalogKeys,
   fetchCategories,
 } from "@/features/catalog/api/catalog";
-import { CategoryFormDialog } from "@/features/catalog/components/category-form-dialog";
 import type { Category } from "@/features/catalog/schemas/category";
 import { toApiProblem } from "@/lib/api/client";
+import { useDeferredMount } from "@/lib/use-deferred-mount";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+
+/**
+ * Panneau chargé à la demande : son code — formulaire complet, validation
+ * Zod, sélecteurs — n'a aucune raison de partir avec la liste, qui s'ouvre
+ * sur un tableau. Le téléchargement a lieu à la première ouverture
+ * (cf. `useDeferredMount`).
+ */
+const CategoryFormDialog = dynamic(
+  () => import("@/features/catalog/components/category-form-dialog").then((m) => m.CategoryFormDialog),
+  { ssr: false },
+);
 
 /**
  * Catégories de services.
@@ -50,12 +63,16 @@ export function CatalogView() {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
+
+  // La valeur INTERROGÉE est retardée ; le champ, lui, reste immédiat.
+  // Sans cela, chaque caractère frappé partait en requête (cf. le hook).
+  const debouncedSearch = useDebouncedValue(search);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<Category | null>(null);
 
   const categoriesQuery = useQuery({
-    queryKey: catalogKeys.categoryList(search),
+    queryKey: catalogKeys.categoryList(debouncedSearch),
     queryFn: () => fetchCategories(search),
   });
 
@@ -145,6 +162,8 @@ export function CatalogView() {
     },
   ];
 
+  const formOpenMounted = useDeferredMount(formOpen);
+
   return (
     <>
       <PageHeader
@@ -204,11 +223,13 @@ export function CatalogView() {
         }}
       />
 
-      <CategoryFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        category={editing}
-      />
+      {formOpenMounted && (
+        <CategoryFormDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          category={editing}
+        />
+      )}
 
       <ConfirmDialog
         open={archiveTarget !== null}

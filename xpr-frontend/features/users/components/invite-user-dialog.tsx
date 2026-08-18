@@ -139,7 +139,7 @@ export function InviteUserDialog() {
           >
             {tRoot("common.cancel")}
           </Button>
-          <Button type="submit" form="invite-user" disabled={mutation.isPending}>
+          <Button type="submit" form="invite-user" loading={mutation.isPending}>
             {mutation.isPending ? t("dialog.submitting") : t("dialog.submit")}
           </Button>
         </DialogFooter>

@@ -418,7 +418,7 @@ export function PaymentsModal({
                 </div>
 
                 <div className="flex justify-end">
-                  <Button type="submit" disabled={createMutation.isPending}>
+                  <Button type="submit" loading={createMutation.isPending}>
                     <Plus className="size-4" aria-hidden />
                     {createMutation.isPending ? t("form.saving") : t("form.submit")}
                   </Button>

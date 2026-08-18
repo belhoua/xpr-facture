@@ -91,7 +91,7 @@ export function ForgotPasswordForm() {
                 )}
               </Field>
 
-              <Button type="submit" disabled={forgot.isPending}>
+              <Button type="submit" loading={forgot.isPending}>
                 {forgot.isPending ? t("common.submitting") : t("forgot.submit")}
               </Button>
 

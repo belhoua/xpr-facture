@@ -441,7 +441,7 @@ export function ConventionForm({ convention }: { convention?: Convention }) {
         ) : null}
 
         <div className="flex items-center gap-2">
-          <Button type="submit" disabled={isSubmitting || mutation.isPending}>
+          <Button type="submit" loading={isSubmitting || mutation.isPending}>
             {mutation.isPending ? (
               <Loader2 className="size-4 animate-spin" aria-hidden />
             ) : null}

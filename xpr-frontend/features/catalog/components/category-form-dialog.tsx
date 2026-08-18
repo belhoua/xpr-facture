@@ -204,7 +204,7 @@ export function CategoryFormDialog({
           >
             {t("form.cancel")}
           </Button>
-          <Button type="submit" form="category-form" disabled={mutation.isPending}>
+          <Button type="submit" form="category-form" loading={mutation.isPending}>
             {mutation.isPending ? t("form.saving") : t("form.save")}
           </Button>
         </DialogFooter>

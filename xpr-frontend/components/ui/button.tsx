@@ -1,5 +1,6 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
+import { Loader2 } from "lucide-react"
 import { Slot } from "radix-ui"
 
 import { cn } from "@/lib/utils"
@@ -41,15 +42,39 @@ const buttonVariants = cva(
   }
 )
 
+/**
+ * `loading` : l'action est PARTIE, l'application attend la réponse.
+ *
+ * Un `disabled={mutation.isPending}` seul ne dit rien à l'utilisateur : le
+ * bouton pâlit, mais rien ne distingue « en cours d'envoi » de « bouton
+ * inactif ». Sur une liaison lente — la cible de ce produit, c'est-à-dire un
+ * bureau au Maroc sur une connexion ordinaire — le clic sur « Enregistrer »
+ * semblait n'avoir aucun effet, et le réflexe est alors de recliquer.
+ *
+ * Le spinner s'insère en tête du contenu, dans le `gap` déjà prévu par les
+ * variantes de taille. Quand le bouton porte DÉJÀ une icône, celle-ci est
+ * masquée (cf. la règle sur `className`) : le spinner la remplace, plutôt que
+ * de faire cohabiter deux symboles pour un seul état.
+ *
+ * Sous `asChild`, aucun spinner n'est injecté — voir le rendu des enfants.
+ *
+ * `disabled` en découle : un bouton qui charge n'est jamais cliquable, sans
+ * qu'aucun appelant ait à poser les deux propriétés. `aria-busy` porte la même
+ * information aux lecteurs d'écran, qui ne voient pas l'animation.
+ */
 function Button({
   className,
   variant = "default",
   size = "default",
   asChild = false,
+  loading = false,
+  disabled,
+  children,
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
+    loading?: boolean
   }) {
   const Comp = asChild ? Slot.Root : "button"
 
@@ -58,9 +83,35 @@ function Button({
       data-slot="button"
       data-variant={variant}
       data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
+      // `asChild` délègue le rendu à l'enfant : y injecter un spinner
+      // casserait la règle d'enfant unique de Slot. L'état reste porté par
+      // l'attribut, que l'enfant peut styler.
+      aria-busy={loading || undefined}
+      disabled={asChild ? undefined : loading || disabled}
+      className={cn(
+        buttonVariants({ variant, size, className }),
+        // Le spinner PREND LA PLACE de l'icône du bouton au lieu de s'y
+        // ajouter : « ⟳ ✉ Envoi… » montrerait deux symboles pour un seul
+        // état, et élargirait le bouton au moment précis du clic. Masquer par
+        // le CSS évite de conditionner l'icône sur chaque site d'appel.
+        loading && !asChild && "[&>svg:not(.animate-spin)]:hidden",
+      )}
       {...props}
-    />
+    >
+      {/* `children` est passé SEUL et intact sous `asChild`. Un frère — même
+          un `null` issu d'un ternaire — ferait des enfants un TABLEAU, et
+          `Slot` exige un élément unique : « Slot failed to slot onto its
+          children ». L'erreur est d'exécution, pas de typage, et frappe tous
+          les boutons-liens (`<Button asChild><Link/></Button>`) et eux seuls. */}
+      {asChild ? (
+        children
+      ) : (
+        <>
+          {loading ? <Loader2 className="animate-spin" aria-hidden /> : null}
+          {children}
+        </>
+      )}
+    </Comp>
   )
 }
 

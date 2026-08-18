@@ -3,7 +3,6 @@
 import { Moon, Sun } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
-import { useEffect } from "react";
 
 import { NAVIGATION } from "@/components/layout/navigation";
 import {
@@ -24,8 +23,12 @@ import { useUiStore } from "@/stores/ui";
  * Elle lit la MÊME `NAVIGATION` que la sidebar : un écran ajouté au routeur
  * devient navigable au clavier sans une ligne de plus.
  *
- * Monté une seule fois dans le layout applicatif ; son ouverture vit dans le
- * store Zustand pour que n'importe quel bouton puisse la déclencher.
+ * Ce composant ne porte QUE le dialogue. Le raccourci clavier vit dans
+ * `CommandPaletteHost`, qui le monte seul dans la coquille applicative et ne
+ * télécharge ce fichier — et cmdk avec lui — qu'à la première ouverture. Les
+ * deux ne peuvent pas être réunis : un écouteur embarqué ici n'existerait
+ * qu'une fois le code chargé, c'est-à-dire jamais si l'utilisateur compte
+ * précisément sur ⌘K pour l'ouvrir.
  */
 export function CommandPalette() {
   const t = useTranslations();
@@ -34,20 +37,6 @@ export function CommandPalette() {
 
   const open = useUiStore((state) => state.commandPaletteOpen);
   const setOpen = useUiStore((state) => state.setCommandPaletteOpen);
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      // metaKey = ⌘ sur macOS, ctrlKey pour Windows/Linux.
-      if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        setOpen(!useUiStore.getState().commandPaletteOpen);
-      }
-    }
-
-    document.addEventListener("keydown", onKeyDown);
-
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [setOpen]);
 
   function go(href: string) {
     setOpen(false);

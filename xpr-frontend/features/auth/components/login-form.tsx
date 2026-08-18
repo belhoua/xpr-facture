@@ -107,7 +107,7 @@ export function LoginForm() {
               {t("login.remember")}
             </label>
 
-            <Button type="submit" disabled={login.isPending}>
+            <Button type="submit" loading={login.isPending}>
               {login.isPending ? t("common.submitting") : t("login.submit")}
             </Button>
 

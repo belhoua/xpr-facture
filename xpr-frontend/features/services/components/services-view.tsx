@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, MoreHorizontal, Pencil, Plus, Search, Wrench } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/patterns/confirm-dialog";
@@ -31,10 +32,22 @@ import {
   fetchProducts,
 } from "@/features/catalog/api/catalog";
 import type { Product } from "@/features/catalog/schemas/product";
-import { ServiceFormDialog } from "@/features/services/components/service-form-dialog";
 import { toProductFilters } from "@/features/services/schemas/service";
 import { toApiProblem } from "@/lib/api/client";
 import { formatMoney } from "@/lib/format";
+import { useDeferredMount } from "@/lib/use-deferred-mount";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+
+/**
+ * Panneau chargé à la demande : son code — formulaire complet, validation
+ * Zod, sélecteurs — n'a aucune raison de partir avec la liste, qui s'ouvre
+ * sur un tableau. Le téléchargement a lieu à la première ouverture
+ * (cf. `useDeferredMount`).
+ */
+const ServiceFormDialog = dynamic(
+  () => import("@/features/services/components/service-form-dialog").then((m) => m.ServiceFormDialog),
+  { ssr: false },
+);
 
 /**
  * Écran Services : le catalogue restreint aux prestations.
@@ -54,13 +67,17 @@ export function ServicesView() {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
+
+  // La valeur INTERROGÉE est retardée ; le champ, lui, reste immédiat.
+  // Sans cela, chaque caractère frappé partait en requête (cf. le hook).
+  const debouncedSearch = useDebouncedValue(search);
   const [categoryId, setCategoryId] = useState<string>("all");
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<Product | null>(null);
 
-  const filters = toProductFilters({ search, categoryId });
+  const filters = toProductFilters({ search: debouncedSearch, categoryId });
   const servicesQuery = useQuery({
     queryKey: catalogKeys.productList(filters),
     queryFn: () => fetchProducts(filters),
@@ -215,6 +232,8 @@ export function ServicesView() {
     },
   ];
 
+  const formOpenMounted = useDeferredMount(formOpen);
+
   return (
     <>
       <PageHeader
@@ -290,11 +309,13 @@ export function ServicesView() {
         />
       </div>
 
-      <ServiceFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        service={editing}
-      />
+      {formOpenMounted && (
+        <ServiceFormDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          service={editing}
+        />
+      )}
 
       <ConfirmDialog
         open={archiveTarget !== null}

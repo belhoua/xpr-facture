@@ -201,6 +201,7 @@ export function DocumentDetailSheet({
                   {isIssuable(data) && (
                     <Button
                       size="sm"
+                      loading={issueMutation.isPending}
                       disabled={pending || (data.items ?? []).length === 0}
                       onClick={() => issueMutation.mutate(data.id)}
                     >
@@ -239,6 +240,7 @@ export function DocumentDetailSheet({
                     <Button
                       size="sm"
                       variant="outline"
+                      loading={convertMutation.isPending}
                       disabled={pending}
                       onClick={() => convertMutation.mutate(data.id)}
                     >
@@ -251,6 +253,7 @@ export function DocumentDetailSheet({
                     <Button
                       size="sm"
                       variant="outline"
+                      loading={conventionMutation.isPending}
                       disabled={pending}
                       onClick={() => conventionMutation.mutate(data.id)}
                     >

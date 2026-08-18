@@ -1,6 +1,6 @@
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppTopbar } from "@/components/layout/app-topbar";
-import { CommandPalette } from "@/components/layout/command-palette";
+import { CommandPaletteHost } from "@/components/layout/command-palette-host";
 import { Toaster } from "@/components/ui/sonner";
 
 /**
@@ -22,7 +22,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
-      <CommandPalette />
+      <CommandPaletteHost />
       {/* Monté ICI, au niveau de la coquille : une seule file de
           notifications pour tout l'espace applicatif. */}
       <Toaster />

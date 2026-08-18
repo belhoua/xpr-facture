@@ -343,7 +343,7 @@ export function PartnerFormDialog({
           <Button
             type="submit"
             form="partner-form"
-            disabled={mutation.isPending}
+            loading={mutation.isPending}
           >
             {isEdit ? t("form.save") : t("form.create")}
           </Button>

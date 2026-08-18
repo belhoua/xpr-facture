@@ -1,8 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { FolderKanban, Plus, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 
 import { DataTable, type Column } from "@/components/patterns/data-table";
@@ -23,14 +24,30 @@ import {
   type ProjectFilters,
 } from "@/features/projects/api/projects";
 import { ProgressBar } from "@/features/projects/components/progress-bar";
-import { ProjectDetailSheet } from "@/features/projects/components/project-detail-sheet";
-import { ProjectFormDialog } from "@/features/projects/components/project-form-dialog";
 import { ProjectStatusBadge } from "@/features/projects/components/project-status-badge";
 import {
   PROJECT_STATUSES,
   type Project,
 } from "@/features/projects/schemas/project";
 import { toApiProblem } from "@/lib/api/client";
+import { useDeferredMount } from "@/lib/use-deferred-mount";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+
+/**
+ * Panneau chargé à la demande : son code — formulaire complet, validation
+ * Zod, sélecteurs — n'a aucune raison de partir avec la liste, qui s'ouvre
+ * sur un tableau. Le téléchargement a lieu à la première ouverture
+ * (cf. `useDeferredMount`).
+ */
+const ProjectDetailSheet = dynamic(
+  () => import("@/features/projects/components/project-detail-sheet").then((m) => m.ProjectDetailSheet),
+  { ssr: false },
+);
+
+const ProjectFormDialog = dynamic(
+  () => import("@/features/projects/components/project-form-dialog").then((m) => m.ProjectFormDialog),
+  { ssr: false },
+);
 
 /**
  * Avancement de projet : la liste, ses deux filtres, et le tiroir de détail.
@@ -47,16 +64,24 @@ export function ProjectsView() {
   const tCommon = useTranslations("common");
 
   const [search, setSearch] = useState("");
+
+  // La valeur INTERROGÉE est retardée ; le champ, lui, reste immédiat.
+  // Sans cela, chaque caractère frappé partait en requête (cf. le hook).
+  const debouncedSearch = useDebouncedValue(search);
   const [status, setStatus] = useState("all");
   const [partnerId, setPartnerId] = useState("all");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [formTarget, setFormTarget] = useState<Project | "new" | null>(null);
 
-  const filters: ProjectFilters = { search, status, partnerId };
+  const filters: ProjectFilters = { search: debouncedSearch, status, partnerId };
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: projectKeys.list(filters),
     queryFn: () => fetchProjects(filters),
+    // La liste PRÉCÉDENTE reste affichée pendant que la nouvelle arrive :
+    // sans cela, chaque recherche renvoyait le tableau à ses squelettes,
+    // et l'écran clignotait à chaque pause de frappe.
+    placeholderData: keepPreviousData,
   });
 
   // Le filtre par client a besoin du répertoire des tiers. `fetchPartners`
@@ -121,6 +146,11 @@ export function ProjectsView() {
       ),
     },
   ];
+
+  // Les deux panneaux ne sont montés — donc téléchargés — qu'à leur
+  // première ouverture.
+  const detailMounted = useDeferredMount(detailId !== null);
+  const formMounted = useDeferredMount(formTarget !== null);
 
   return (
     <div>
@@ -200,19 +230,23 @@ export function ProjectsView() {
         }}
       />
 
-      <ProjectDetailSheet
-        projectId={detailId}
-        onOpenChange={(open) => !open && setDetailId(null)}
-        onEdit={(project) => {
-          setDetailId(null);
-          setFormTarget(project);
-        }}
-      />
+      {detailMounted && (
+        <ProjectDetailSheet
+          projectId={detailId}
+          onOpenChange={(open) => !open && setDetailId(null)}
+          onEdit={(project) => {
+            setDetailId(null);
+            setFormTarget(project);
+          }}
+        />
+      )}
 
-      <ProjectFormDialog
-        target={formTarget}
-        onOpenChange={(open) => !open && setFormTarget(null)}
-      />
+      {formMounted && (
+        <ProjectFormDialog
+          target={formTarget}
+          onOpenChange={(open) => !open && setFormTarget(null)}
+        />
+      )}
     </div>
   );
 }

@@ -189,7 +189,7 @@ export function RegisterForm() {
               </Alert>
             )}
 
-            <Button type="submit" disabled={registration.isPending}>
+            <Button type="submit" loading={registration.isPending}>
               {registration.isPending
                 ? t("common.submitting")
                 : t("register.submit")}

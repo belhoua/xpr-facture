@@ -13,6 +13,7 @@ import { fetchPartners, partnerKeys } from "@/features/partners/api/partners";
 import type { Partner } from "@/features/partners/schemas/partner";
 import { toApiProblem } from "@/lib/api/client";
 import { Link } from "@/lib/i18n/navigation";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 
 /**
  * Point d'entrée « situations par client » : on choisit d'abord le client,
@@ -33,7 +34,11 @@ export function SituationsByClientView() {
 
   const [search, setSearch] = useState("");
 
-  const filters = { type: "client" as const, search };
+  // La valeur INTERROGÉE est retardée ; le champ, lui, reste immédiat.
+  // Sans cela, chaque caractère frappé partait en requête (cf. le hook).
+  const debouncedSearch = useDebouncedValue(search);
+
+  const filters = { type: "client" as const, search: debouncedSearch };
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: partnerKeys.list(filters),
     queryFn: () => fetchPartners(filters),

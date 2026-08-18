@@ -10,6 +10,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/patterns/confirm-dialog";
@@ -35,10 +36,21 @@ import {
   deleteCashMovement,
   fetchCashSummary,
 } from "@/features/cash/api/cash";
-import { CashMovementFormDialog } from "@/features/cash/components/cash-movement-form-dialog";
 import type { CashMovement } from "@/features/cash/schemas/cash";
 import { toApiProblem } from "@/lib/api/client";
 import { formatDate, formatMoney } from "@/lib/format";
+import { useDeferredMount } from "@/lib/use-deferred-mount";
+
+/**
+ * Panneau chargé à la demande : son code — formulaire complet, validation
+ * Zod, sélecteurs — n'a aucune raison de partir avec la liste, qui s'ouvre
+ * sur un tableau. Le téléchargement a lieu à la première ouverture
+ * (cf. `useDeferredMount`).
+ */
+const CashMovementFormDialog = dynamic(
+  () => import("@/features/cash/components/cash-movement-form-dialog").then((m) => m.CashMovementFormDialog),
+  { ssr: false },
+);
 
 const PERIODS = ["last7", "last30", "last90", "year"] as const;
 
@@ -194,6 +206,8 @@ export function CashView() {
     },
   ];
 
+  const formOpenMounted = useDeferredMount(formOpen);
+
   return (
     <>
       <PageHeader
@@ -256,11 +270,13 @@ export function CashView() {
         }}
       />
 
-      <CashMovementFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        movement={editing}
-      />
+      {formOpenMounted && (
+        <CashMovementFormDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          movement={editing}
+        />
+      )}
 
       <ConfirmDialog
         open={deleteTarget !== null}

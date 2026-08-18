@@ -679,7 +679,8 @@ export function DocumentFormDialog({
           <Button
             type="submit"
             form="document-form"
-            disabled={mutation.isPending || loadingDetail || detailQuery.isError}
+            loading={mutation.isPending || loadingDetail}
+            disabled={detailQuery.isError}
           >
             {isEdit
               ? t(mutation.isPending ? "form.saving" : "form.save")

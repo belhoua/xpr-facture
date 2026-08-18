@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { ClipboardList, Pencil, Plus, Printer, Search, Trash2 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
@@ -30,6 +35,7 @@ import { SITUATION_STATUSES } from "@/features/situations/schemas/situation";
 import { toApiProblem } from "@/lib/api/client";
 import { formatDate, formatMoney } from "@/lib/format";
 import { Link, useRouter } from "@/lib/i18n/navigation";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 
 /** Filtres proposés : le cycle de règlement, plus les situations annulées. */
 /** Sentinelle « tous les projets » : Radix interdit la chaîne vide en valeur. */
@@ -56,6 +62,10 @@ export function SituationsView() {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
+
+  // La valeur INTERROGÉE est retardée ; le champ, lui, reste immédiat.
+  // Sans cela, chaque caractère frappé partait en requête (cf. le hook).
+  const debouncedSearch = useDebouncedValue(search);
   const [status, setStatus] = useState("all");
   const [projectId, setProjectId] = useState(ALL_PROJECTS);
   // `"all"` demande TOUT le répertoire de projets : cet écran ne présuppose
@@ -66,7 +76,7 @@ export function SituationsView() {
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
 
   const filters: SituationFilters = {
-    search,
+    search: debouncedSearch,
     status,
     // « tous » est un état de l'interface, pas un filtre serveur.
     projectId: projectId === ALL_PROJECTS ? "" : projectId,
@@ -76,6 +86,10 @@ export function SituationsView() {
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: situationKeys.list(filters),
     queryFn: () => fetchSituations(filters),
+    // La liste PRÉCÉDENTE reste affichée pendant que la nouvelle arrive :
+    // sans cela, chaque recherche renvoyait le tableau à ses squelettes,
+    // et l'écran clignotait à chaque pause de frappe.
+    placeholderData: keepPreviousData,
   });
 
   const removal = useMutation({

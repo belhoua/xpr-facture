@@ -60,11 +60,14 @@ export function ConfirmDialog({
           >
             {tCommon("cancel")}
           </Button>
+          {/* `loading` et non `disabled` : la confirmation déclenche une
+              suppression ou un archivage, l'action la plus anxiogène de
+              l'écran. Le spinner atteste que le clic est parti. */}
           <Button
             type="button"
             variant={variant}
             onClick={onConfirm}
-            disabled={pending}
+            loading={pending}
           >
             {pending ? tCommon("saving") : confirmLabel}
           </Button>

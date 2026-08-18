@@ -262,6 +262,7 @@ export function ProjectDetailSheet({
 
                     <Button
                       size="sm"
+                      loading={progressMutation.isPending}
                       disabled={pending}
                       onClick={() =>
                         progressMutation.mutate({
@@ -313,6 +314,13 @@ export function ProjectDetailSheet({
                         <Button
                           size="icon"
                           variant="ghost"
+                          // `variables` cible LA ligne cliquée : sans cette
+                          // comparaison, retirer un livrable ferait tourner le
+                          // spinner sur tous les autres en même temps.
+                          loading={
+                            removeMutation.isPending &&
+                            removeMutation.variables === deliverable.id
+                          }
                           disabled={pending}
                           aria-label={t("actions.removeDeliverable")}
                           onClick={() => removeMutation.mutate(deliverable.id)}
@@ -355,6 +363,7 @@ export function ProjectDetailSheet({
                   <Button
                     size="sm"
                     variant="outline"
+                    loading={addMutation.isPending}
                     disabled={pending || !canSubmitDeliverable}
                     onClick={() =>
                       addMutation.mutate({

@@ -41,6 +41,23 @@ final class DashboardStatsService
 
         $invoices = Document::query()->ofType(DocumentType::Invoice)
             ->where('status', '!=', 'cancelled')
+            // Les SEULES colonnes que les six agrégats ci-dessous consultent.
+            // Sans cette liste, chaque facture était hydratée en entier —
+            // `notes`, `terms`, les adresses figées — pour ne fournir qu'un
+            // montant et un statut. Sur un exercice complet, c'est la
+            // différence entre quelques centaines de kilo-octets et plusieurs
+            // mégaoctets rapatriés puis castés à chaque ouverture du tableau
+            // de bord.
+            ->select([
+                'id',
+                'status',
+                'total_cents',
+                'currency',
+                'issued_at',
+                'created_at',
+                'partner_id',
+                'client_name',
+            ])
             ->where(function ($query) use ($from, $to): void {
                 $query
                     ->whereBetween('issued_at', [$from->toDateString(), $to->toDateString()])
@@ -52,13 +69,16 @@ final class DashboardStatsService
             })
             ->get();
 
-        $previousInvoices = Document::query()->ofType(DocumentType::Invoice)
+        $revenueCents = (int) $invoices->sum('total_cents');
+
+        // La période PRÉCÉDENTE ne sert qu'à une chose : le pourcentage
+        // d'évolution. Elle était rapatriée ligne à ligne pour n'en tirer
+        // qu'une somme — un `SUM()` la donne en base, sans hydrater un seul
+        // modèle. Le résultat est identique par construction.
+        $previousRevenueCents = (int) Document::query()->ofType(DocumentType::Invoice)
             ->where('status', '!=', 'cancelled')
             ->whereBetween('issued_at', [$previousFrom->toDateString(), $previousTo->toDateString()])
-            ->get();
-
-        $revenueCents = (int) $invoices->sum('total_cents');
-        $previousRevenueCents = (int) $previousInvoices->sum('total_cents');
+            ->sum('total_cents');
 
         $collectedCents = (int) $invoices->whereIn('status', [DocumentStatus::Paid, DocumentStatus::Partial])->sum('total_cents');
         $outstandingCents = (int) $invoices->whereIn('status', [DocumentStatus::Sent, DocumentStatus::Partial, DocumentStatus::Overdue])->sum('total_cents');
@@ -111,16 +131,31 @@ final class DashboardStatsService
      */
     private function cashFlow(Carbon $from, Carbon $to): array
     {
-        $movements = CashMovement::query()
+        // Les trois cumuls sont calculés EN BASE, en une passe. Ils l'étaient
+        // en PHP sur la collection entière des mouvements de la période : trois
+        // parcours d'une collection hydratée pour trois entiers. Le
+        // `FILTER (WHERE …)` de PostgreSQL fait les trois d'un coup, et rien ne
+        // remonte à part la ligne de résultat.
+        //
+        // `toBase()` court-circuite l'hydratation Eloquent — le scope tenant,
+        // lui, a déjà été appliqué au Builder par le trait BelongsToCompany.
+        /** @var object{balance: int|string|null, inflow: int|string|null, outflow: int|string|null} $row */
+        $row = CashMovement::query()
             ->whereBetween('occurred_at', [$from->toDateString(), $to->toDateString()])
-            ->get();
+            ->toBase()
+            ->selectRaw(<<<'SQL'
+                COALESCE(SUM(amount_cents), 0) AS balance,
+                COALESCE(SUM(amount_cents) FILTER (WHERE amount_cents > 0), 0) AS inflow,
+                COALESCE(SUM(amount_cents) FILTER (WHERE amount_cents < 0), 0) AS outflow
+            SQL)
+            ->first();
 
         return [
-            'cashBalanceCents' => (int) $movements->sum('amount_cents'),
-            'cashInflowCents' => (int) $movements->where('amount_cents', '>', 0)->sum('amount_cents'),
+            'cashBalanceCents' => (int) $row->balance,
+            'cashInflowCents' => (int) $row->inflow,
             // Valeur ABSOLUE : l'interface affiche « sorties » comme une
             // grandeur positive, le signe est porté par le libellé.
-            'cashOutflowCents' => (int) abs((int) $movements->where('amount_cents', '<', 0)->sum('amount_cents')),
+            'cashOutflowCents' => abs((int) $row->outflow),
         ];
     }
 

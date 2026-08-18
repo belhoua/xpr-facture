@@ -146,7 +146,7 @@ export function AdminNotesView() {
             <Button
               type="submit"
               className="mt-4 w-full"
-              disabled={mutation.isPending}
+              loading={mutation.isPending}
             >
               <Send aria-hidden />
               {mutation.isPending

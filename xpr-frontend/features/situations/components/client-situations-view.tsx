@@ -38,6 +38,7 @@ import { SITUATION_STATUSES } from "@/features/situations/schemas/situation";
 import { toApiProblem } from "@/lib/api/client";
 import { formatDate, formatMoney, formatNumber } from "@/lib/format";
 import { Link } from "@/lib/i18n/navigation";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 
 /** Filtres proposés : le cycle de règlement, plus les situations annulées. */
 const STATUS_FILTERS = [...SITUATION_STATUSES, "cancelled"] as const;
@@ -82,6 +83,10 @@ export function ClientSituationsView({ clientId }: { clientId: string }) {
   const locale = useLocale();
 
   const [search, setSearch] = useState("");
+
+  // La valeur INTERROGÉE est retardée ; le champ, lui, reste immédiat.
+  // Sans cela, chaque caractère frappé partait en requête (cf. le hook).
+  const debouncedSearch = useDebouncedValue(search);
   const [status, setStatus] = useState("all");
   const [projectId, setProjectId] = useState(ALL_PROJECTS);
 
@@ -93,7 +98,7 @@ export function ClientSituationsView({ clientId }: { clientId: string }) {
   // décrivent exactement les lignes affichées en dessous — y compris une fois
   // le chantier choisi.
   const filters: SituationFilters = {
-    search,
+    search: debouncedSearch,
     status,
     partnerId: clientId,
     projectId: projectId === ALL_PROJECTS ? "" : projectId,

@@ -10,6 +10,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 
 import { EmptyState } from "@/components/patterns/empty-state";
@@ -25,12 +26,50 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RevenueChart } from "@/features/dashboard/components/revenue-chart";
-import { StatusBreakdownChart } from "@/features/dashboard/components/status-breakdown-chart";
-import { TopClientsChart } from "@/features/dashboard/components/top-clients-chart";
 import { useDashboardStats } from "@/features/dashboard/hooks/use-dashboard-stats";
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format";
 import { toApiProblem } from "@/lib/api/client";
+
+/**
+ * Les TROIS graphiques sont chargés à la demande, pas avec la page.
+ *
+ * Ils sont les seuls consommateurs de Recharts dans toute l'application, et
+ * cette bibliothèque pèse à elle seule plus que le reste du tableau de bord.
+ * Importée statiquement, elle partait dans le lot initial : le navigateur
+ * téléchargeait, parsait et exécutait le moteur de graphiques AVANT de pouvoir
+ * afficher la moindre carte d'indicateur — alors que les six KPI, eux, n'en
+ * ont aucun besoin et sont ce que l'utilisateur lit en premier.
+ *
+ * `ssr: false` : `ResponsiveContainer` mesure son conteneur, il ne rend rien
+ * d'exploitable côté serveur. Le rendre y coûterait du HTML pour un cadre vide.
+ *
+ * `loading` reprend EXACTEMENT le squelette déjà affiché pendant la requête
+ * de statistiques : la transition « chargement → graphique » est la même,
+ * qu'elle attende les données ou le code.
+ */
+const RevenueChart = dynamic(
+  () =>
+    import("@/features/dashboard/components/revenue-chart").then(
+      (m) => m.RevenueChart,
+    ),
+  { ssr: false, loading: () => <Skeleton className="h-[340px] rounded-lg" /> },
+);
+
+const StatusBreakdownChart = dynamic(
+  () =>
+    import("@/features/dashboard/components/status-breakdown-chart").then(
+      (m) => m.StatusBreakdownChart,
+    ),
+  { ssr: false, loading: () => <Skeleton className="h-[340px] rounded-lg" /> },
+);
+
+const TopClientsChart = dynamic(
+  () =>
+    import("@/features/dashboard/components/top-clients-chart").then(
+      (m) => m.TopClientsChart,
+    ),
+  { ssr: false, loading: () => <Skeleton className="h-[360px] rounded-lg" /> },
+);
 
 const PERIODS = ["last7", "last30", "last90", "year"] as const;
 

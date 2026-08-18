@@ -11,17 +11,31 @@ import "../globals.css";
 
 // Typographie imposée (CLAUDE.md §11) : Inter pour le latin,
 // IBM Plex Sans Arabic pour l'arabe (bascule via --font-sans, cf. globals.css)
+//
+// Seule Inter est PRÉCHARGÉE. Les trois familles l'étaient, ce qui posait sur
+// chaque page — en français comme en anglais — un `<link rel="preload">` par
+// fichier de police, dont cinq pour des caractères que la page n'affichera
+// jamais : le préchargement est une PRIORITÉ HAUTE, il disputait la bande
+// passante aux ressources réellement rendues.
+//
+// `preload: false` ne retire pas la police, il retire son empressement :
+// le navigateur la télécharge quand une règle CSS la réclame vraiment,
+// c'est-à-dire en RTL pour l'arabe (`[dir="rtl"]` réécrit --font-sans) et sur
+// les quelques touches `<kbd>` pour la chasse fixe. `font-display: swap`,
+// posé par next/font, affiche le texte pendant ce temps.
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 const plexArabic = IBM_Plex_Sans_Arabic({
   subsets: ["arabic"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-plex-arabic",
+  preload: false,
 });
 
 const geistMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-geist-mono",
+  preload: false,
 });
 
 export function generateStaticParams() {

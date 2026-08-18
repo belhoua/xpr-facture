@@ -354,7 +354,7 @@ export function CashMovementFormDialog({
           >
             {tRoot("common.cancel")}
           </Button>
-          <Button type="submit" form="cash-form" disabled={mutation.isPending}>
+          <Button type="submit" form="cash-form" loading={mutation.isPending}>
             {mutation.isPending ? t("form.submitting") : t("form.submit")}
           </Button>
         </DialogFooter>

@@ -1,8 +1,14 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { FolderInput, Pencil, Plus, Printer, Search, Trash2 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/patterns/confirm-dialog";
@@ -25,7 +31,6 @@ import {
   type DepositFilters,
 } from "@/features/conventions/api/conventions";
 import { DepositStatusBadge } from "@/features/conventions/components/convention-status-badge";
-import { DepositFormDialog } from "@/features/conventions/components/deposit-form-dialog";
 import {
   DEPOSIT_STATUSES,
   type FileDeposit,
@@ -33,6 +38,19 @@ import {
 import { toApiProblem } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 import { Link } from "@/lib/i18n/navigation";
+import { useDeferredMount } from "@/lib/use-deferred-mount";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+
+/**
+ * Panneau chargé à la demande : son code — formulaire complet, validation
+ * Zod, sélecteurs — n'a aucune raison de partir avec la liste, qui s'ouvre
+ * sur un tableau. Le téléchargement a lieu à la première ouverture
+ * (cf. `useDeferredMount`).
+ */
+const DepositFormDialog = dynamic(
+  () => import("@/features/conventions/components/deposit-form-dialog").then((m) => m.DepositFormDialog),
+  { ssr: false },
+);
 
 /**
  * Suivi TRANSVERSE des dépôts de dossier : tous projets confondus.
@@ -49,15 +67,23 @@ export function DepositsView() {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
+
+  // La valeur INTERROGÉE est retardée ; le champ, lui, reste immédiat.
+  // Sans cela, chaque caractère frappé partait en requête (cf. le hook).
+  const debouncedSearch = useDebouncedValue(search);
   const [status, setStatus] = useState("all");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<FileDeposit | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FileDeposit | null>(null);
 
-  const filters: DepositFilters = { search, status };
+  const filters: DepositFilters = { search: debouncedSearch, status };
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: depositKeys.list(filters),
     queryFn: () => fetchDeposits(filters),
+    // La liste PRÉCÉDENTE reste affichée pendant que la nouvelle arrive :
+    // sans cela, chaque recherche renvoyait le tableau à ses squelettes,
+    // et l'écran clignotait à chaque pause de frappe.
+    placeholderData: keepPreviousData,
   });
 
   const removal = useMutation({
@@ -156,6 +182,8 @@ export function DepositsView() {
     },
   ];
 
+  const formOpenMounted = useDeferredMount(formOpen);
+
   return (
     <>
       <PageHeader
@@ -221,11 +249,13 @@ export function DepositsView() {
 
       {/* Sans `conventionId`, la boîte fait CHOISIR le dossier : depuis cet
           écran, rien ne dit de quel projet il s'agit. */}
-      <DepositFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        deposit={editing}
-      />
+      {formOpenMounted && (
+        <DepositFormDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          deposit={editing}
+        />
+      )}
 
       <ConfirmDialog
         open={deleteTarget !== null}

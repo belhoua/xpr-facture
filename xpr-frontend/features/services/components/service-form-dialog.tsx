@@ -377,7 +377,7 @@ export function ServiceFormDialog({
           >
             {t("form.cancel")}
           </Button>
-          <Button type="submit" form="service-form" disabled={mutation.isPending}>
+          <Button type="submit" form="service-form" loading={mutation.isPending}>
             {mutation.isPending
               ? t("form.saving")
               : isEdit

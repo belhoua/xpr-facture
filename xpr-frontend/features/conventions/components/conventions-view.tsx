@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { FileSignature, Pencil, Plus, Printer, Search, Trash2 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
@@ -32,6 +37,7 @@ import {
 import { toApiProblem } from "@/lib/api/client";
 import { formatDate, formatMoney } from "@/lib/format";
 import { Link, useRouter } from "@/lib/i18n/navigation";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 
 /**
  * Liste des contrats de convention.
@@ -49,14 +55,22 @@ export function ConventionsView() {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
+
+  // La valeur INTERROGÉE est retardée ; le champ, lui, reste immédiat.
+  // Sans cela, chaque caractère frappé partait en requête (cf. le hook).
+  const debouncedSearch = useDebouncedValue(search);
   const [status, setStatus] = useState("all");
   const [deleteTarget, setDeleteTarget] = useState<Convention | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const filters: ConventionFilters = { search, status };
+  const filters: ConventionFilters = { search: debouncedSearch, status };
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: conventionKeys.list(filters),
     queryFn: () => fetchConventions(filters),
+    // La liste PRÉCÉDENTE reste affichée pendant que la nouvelle arrive :
+    // sans cela, chaque recherche renvoyait le tableau à ses squelettes,
+    // et l'écran clignotait à chaque pause de frappe.
+    placeholderData: keepPreviousData,
   });
 
   const removal = useMutation({
