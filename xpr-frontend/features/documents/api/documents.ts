@@ -44,19 +44,34 @@ export async function fetchDocument(id: string): Promise<Document> {
 
 /**
  * Charge utile d'écriture. Ce qu'elle N'ENVOIE PAS est aussi important que le
- * reste : ni `status`, ni `number`, ni totaux. Le statut naît brouillon,
- * le numéro vient de `sequences` à l'émission, et les totaux sont recalculés
- * depuis les lignes — les transmettre permettrait de facturer un montant sans
- * rapport avec le détail affiché (cf. DocumentStoreRequest).
+ * reste : ni `status`, ni totaux. Le statut est déduit par le serveur, et les
+ * totaux sont recalculés depuis les lignes — les transmettre permettrait de
+ * facturer un montant sans rapport avec le détail affiché.
+ *
+ * Le `number` part dans les DEUX sens depuis le 2026-08-18, mais pour des
+ * raisons différentes. À la création (`type` fourni), il est facultatif : vide,
+ * la clé est omise et la séquence automatique reprend la main. En PATCH, il
+ * n'est émis que s'il a été saisi — la clé ABSENTE laisse le numéro intact,
+ * ce qui est le cas de tous les types que `DocumentType::allowsNumberEdit()`
+ * n'ouvre pas, et dont le formulaire n'affiche donc pas le champ.
  *
  * Unique frontière où les MAD saisis deviennent des centimes entiers (§7).
  */
 function toPayload(values: DocumentFormValues, type?: DocumentType) {
   const partnerId = values.partnerId === "" ? null : values.partnerId;
+  const number = values.number.trim();
 
   return {
     ...(type ? { type } : {}),
+    // Jamais de clé vide : à la création elle rendrait la main à la séquence
+    // — ce qu'on veut —, mais en PATCH le serveur la refuserait en 422, une
+    // pièce numérotée ne pouvant pas redevenir brouillon.
+    ...(number !== "" ? { number } : {}),
     partnerId,
+    // Toujours émis, `null` compris : la clé ABSENTE laisse le rattachement
+    // intact côté serveur, la clé à null le retire. Corriger une note ne doit
+    // pas détacher le chantier, mais vider le déroulant doit le détacher.
+    projectId: values.projectId === "" ? null : values.projectId,
     // Avec un tiers, l'identité vient du serveur (sa raison sociale) : on
     // n'envoie pas une saisie résiduelle du formulaire, qui prendrait le pas.
     clientName: partnerId === null ? values.clientName.trim() : null,
@@ -139,18 +154,6 @@ export async function issueDocument(
   return documentSchema.parse(data);
 }
 
-/** Devis accepté/refusé, facture réglée/échue. 409 si la transition est refusée. */
-export async function changeDocumentStatus(
-  id: string,
-  status: string,
-): Promise<Document> {
-  await ensureCsrfCookie();
-
-  const { data } = await api.post(`/documents/${id}/status`, { status });
-
-  return documentSchema.parse(data);
-}
-
 /** Annulation d'un document ÉMIS. Jamais un DELETE : la trace reste (§3). */
 export async function cancelDocument(id: string): Promise<Document> {
   await ensureCsrfCookie();
@@ -165,19 +168,6 @@ export async function convertDocument(id: string): Promise<Document> {
   await ensureCsrfCookie();
 
   const { data } = await api.post(`/documents/${id}/convert`);
-
-  return documentSchema.parse(data);
-}
-
-/**
- * Facture → avoir. Seule façon légale de corriger une facture émise (§3) :
- * l'avoir naît brouillon avec les lignes d'origine, que l'utilisateur peut
- * réduire avant de l'émettre (avoir partiel).
- */
-export async function createCreditNote(id: string): Promise<Document> {
-  await ensureCsrfCookie();
-
-  const { data } = await api.post(`/documents/${id}/credit-note`);
 
   return documentSchema.parse(data);
 }

@@ -7,6 +7,8 @@ namespace App\Modules\Documents\Models;
 use App\Modules\Accounting\Enums\DocumentType;
 use App\Modules\Documents\Enums\DocumentStatus;
 use App\Modules\Partners\Models\Partner;
+use App\Modules\Payments\Models\Payment;
+use App\Modules\Projects\Models\Project;
 use App\Modules\Shared\Concerns\BelongsToCompany;
 use Database\Factories\DocumentFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -27,6 +29,7 @@ use Illuminate\Support\Carbon;
  * @property string $company_id
  * @property DocumentType $type
  * @property string|null $partner_id
+ * @property string|null $project_id
  * @property string|null $parent_document_id
  * @property string|null $number
  * @property string $client_name
@@ -56,9 +59,24 @@ final class Document extends Model
     use HasUuids;
     use SoftDeletes;
 
+    /**
+     * Nom de la fiche client CRÉÉE en enregistrant ce document, le cas échéant.
+     *
+     * Hors base, et volontairement : ce n'est pas une propriété du document
+     * mais un fait sur l'écriture qui vient d'avoir lieu — l'interface doit
+     * pouvoir annoncer qu'une fiche est née d'un nom saisi librement et reste à
+     * compléter. Une colonne le figerait pour toujours ; un attribut Eloquent
+     * serait candidat à la persistance au prochain `save()`.
+     *
+     * `null` sur toute lecture, et sur toute écriture qui a RETROUVÉ un tiers
+     * existant plutôt que d'en créer un.
+     */
+    public ?string $autoCreatedPartnerName = null;
+
     protected $fillable = [
         'type',
         'partner_id',
+        'project_id',
         'parent_document_id',
         'number',
         'client_name',
@@ -105,8 +123,22 @@ final class Document extends Model
     }
 
     /**
-     * Document dont celui-ci découle : le devis pour une facture convertie,
-     * la facture pour un avoir.
+     * Projet que cette pièce facture, quand elle en relève.
+     *
+     * NULLABLE, et ce sera le cas le plus fréquent : une facture de fournitures
+     * ou un devis ponctuel ne relèvent d'aucun projet. La relation peut aussi
+     * être chargée ET nulle — `Project` porte un soft delete, la pièce fiscale
+     * lui survit.
+     *
+     * @return BelongsTo<Project, $this>
+     */
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
+    /**
+     * Document dont celui-ci découle : le devis pour une facture convertie.
      *
      * @return BelongsTo<self, $this>
      */
@@ -116,14 +148,32 @@ final class Document extends Model
     }
 
     /**
-     * Documents issus de celui-ci — la facture née du devis, les avoirs émis
-     * sur la facture.
+     * Documents issus de celui-ci — la facture née du devis.
      *
      * @return HasMany<self, $this>
      */
     public function children(): HasMany
     {
         return $this->hasMany(self::class, 'parent_document_id');
+    }
+
+    /**
+     * Règlements reçus sur ce document.
+     *
+     * Déclarée sur `Document` et non sur la seule facture : la table n'a qu'un
+     * type de document, et c'est le service d'écriture qui tient la règle « on
+     * ne règle qu'une facture émise ». Une relation qui n'existerait que pour
+     * un `type` ne serait de toute façon pas exprimable en Eloquent.
+     *
+     * Les règlements retirés en sont exclus : `Payment` est en soft delete, et
+     * la relation hérite de son global scope. Un encaissement supprimé demeure
+     * en base pour la trace, il ne doit plus peser dans aucun cumul.
+     *
+     * @return HasMany<Payment, $this>
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class, 'invoice_id');
     }
 
     /**

@@ -1,14 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Ban,
-  FileMinus,
-  FileOutput,
-  FileSignature,
-  Printer,
-  Send,
-} from "lucide-react";
+import { Ban, FileOutput, FileSignature, Printer, Send } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -16,13 +9,6 @@ import { ConfirmDialog } from "@/components/patterns/confirm-dialog";
 import { ErrorState } from "@/components/patterns/error-state";
 import { StatusBadge } from "@/components/patterns/status-badge";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -37,18 +23,14 @@ import {
 } from "@/features/conventions/api/conventions";
 import {
   cancelDocument,
-  changeDocumentStatus,
   convertDocument,
-  createCreditNote,
   documentKeys,
   fetchDocument,
   issueDocument,
 } from "@/features/documents/api/documents";
 import {
-  assignableStatuses,
   isCancellable,
   isConvertible,
-  isCreditable,
   isEditable,
   isIssuable,
   isTransferableToConvention,
@@ -67,6 +49,10 @@ import { Link, useRouter } from "@/lib/i18n/navigation";
  * L'interface se contente de ne PROPOSER que ce qui est plausible ; c'est le
  * serveur qui tranche et répond 409 s'il refuse la transition, message que
  * l'on réaffiche tel quel.
+ *
+ * Le statut de règlement (envoyée, partiellement payée, payée) se DÉDUIT des
+ * encaissements enregistrés : il n'est donc affiché qu'en lecture, jamais
+ * proposé au choix — un statut posé à la main mentirait sur la trésorerie.
  */
 export function DocumentDetailSheet({
   documentId,
@@ -86,7 +72,7 @@ export function DocumentDetailSheet({
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  const [confirm, setConfirm] = useState<"cancel" | "creditNote" | null>(null);
+  const [confirm, setConfirm] = useState<"cancel" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const { data, isPending, isError, error, refetch } = useQuery({
@@ -114,13 +100,6 @@ export function DocumentDetailSheet({
     onError: fail,
   });
 
-  const statusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) =>
-      changeDocumentStatus(id, status),
-    onSuccess: settle,
-    onError: fail,
-  });
-
   const cancelMutation = useMutation({
     mutationFn: (id: string) => cancelDocument(id),
     onSuccess: settle,
@@ -129,15 +108,6 @@ export function DocumentDetailSheet({
 
   const convertMutation = useMutation({
     mutationFn: (id: string) => convertDocument(id),
-    onSuccess: async (created) => {
-      await settle(created);
-      onConverted(created);
-    },
-    onError: fail,
-  });
-
-  const creditNoteMutation = useMutation({
-    mutationFn: (id: string) => createCreditNote(id),
     onSuccess: async (created) => {
       await settle(created);
       onConverted(created);
@@ -166,10 +136,8 @@ export function DocumentDetailSheet({
 
   const pending =
     issueMutation.isPending ||
-    statusMutation.isPending ||
     cancelMutation.isPending ||
     convertMutation.isPending ||
-    creditNoteMutation.isPending ||
     conventionMutation.isPending;
 
   // Calculé ici et non dans le JSX : `data` y est déjà resserré par le ternaire
@@ -255,32 +223,6 @@ export function DocumentDetailSheet({
                     </Button>
                   )}
 
-                  {data.status !== "draft" && (
-                    /* Document émis : son statut évolue le long du cycle de
-                       vie. Les états proposés viennent de la matrice du
-                       backend, le serveur reste juge de la transition. */
-                    <Select
-                      value=""
-                      onValueChange={(status) =>
-                        statusMutation.mutate({ id: data.id, status })
-                      }
-                      disabled={pending}
-                    >
-                      <SelectTrigger size="sm" className="w-44">
-                        <SelectValue placeholder={t("actions.changeStatus")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {assignableStatuses(data.type)
-                          .filter((status) => status !== data.status)
-                          .map((status) => (
-                            <SelectItem key={status} value={status}>
-                              {tStatus(status)}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-
                   {/* Impression : disponible sur un BROUILLON comme sur un
                       document émis — une proposition commerciale circule avant
                       d'être numérotée. La page d'impression le signale. */}
@@ -314,18 +256,6 @@ export function DocumentDetailSheet({
                     >
                       <FileSignature aria-hidden />
                       {t("actions.convention")}
-                    </Button>
-                  )}
-
-                  {isCreditable(data) && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={pending}
-                      onClick={() => setConfirm("creditNote")}
-                    >
-                      <FileMinus aria-hidden />
-                      {t("actions.creditNote")}
                     </Button>
                   )}
 
@@ -531,16 +461,6 @@ export function DocumentDetailSheet({
         confirmLabel={t("cancelConfirm.confirm")}
         pending={cancelMutation.isPending}
         onConfirm={() => data && cancelMutation.mutate(data.id)}
-      />
-
-      <ConfirmDialog
-        open={confirm === "creditNote"}
-        onOpenChange={(open) => !open && setConfirm(null)}
-        title={t("creditNoteConfirm.title")}
-        description={t("creditNoteConfirm.description")}
-        confirmLabel={t("creditNoteConfirm.confirm")}
-        pending={creditNoteMutation.isPending}
-        onConfirm={() => data && creditNoteMutation.mutate(data.id)}
       />
     </>
   );

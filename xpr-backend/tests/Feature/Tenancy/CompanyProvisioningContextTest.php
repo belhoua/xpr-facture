@@ -54,7 +54,14 @@ it('pose le contexte tenant avant la première écriture sous RLS', function ():
         }
     }
 
-    expect($contextPosedAt)->not->toBeNull('aucun set_config exécuté')
-        ->and($membershipWrittenAt)->not->toBeNull('aucune écriture dans company_user')
-        ->and($contextPosedAt)->toBeLessThan($membershipWrittenAt);
+    expect($contextPosedAt)->not->toBeNull('aucun set_config exécuté');
+    expect($membershipWrittenAt)->not->toBeNull('aucune écriture dans company_user');
+
+    // PHPStan ne propage pas le raffinement de type opéré par `not->toBeNull()`
+    // au maillon suivant de la chaîne : sans cette assertion, il voit encore
+    // `int|null` et refuse la comparaison. Elle ne peut pas échouer ici — les
+    // deux expectations ci-dessus l'ont déjà prouvée.
+    assert($contextPosedAt !== null && $membershipWrittenAt !== null);
+
+    expect($contextPosedAt)->toBeLessThan($membershipWrittenAt);
 });

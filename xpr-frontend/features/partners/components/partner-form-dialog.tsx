@@ -37,13 +37,19 @@ import {
   updatePartner,
 } from "@/features/partners/api/partners";
 import {
+  PARTNER_TYPES,
   partnerFormSchema,
   type Partner,
   type PartnerFormValues,
   type PartnerType,
 } from "@/features/partners/schemas/partner";
 
-const TYPES = ["client", "supplier", "both"] as const satisfies readonly PartnerType[];
+/**
+ * Types proposables à la saisie — les quatre du contrat, `intermediary`
+ * compris. Dérivés de l'énumération : une liste recopiée finit par diverger, et
+ * on ne s'en aperçoit qu'au type suivant.
+ */
+const TYPES: readonly PartnerType[] = PARTNER_TYPES;
 
 /** Champs mappables depuis une erreur de validation serveur (RFC 9457). */
 const SERVER_FIELDS = [

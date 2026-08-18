@@ -152,17 +152,19 @@ it('refuse de fonder une convention sur un document annulé', function (): void 
         ->assertStatus(409);
 });
 
-it('refuse de fonder une convention sur un avoir', function (): void {
+it('refuse de fonder une convention sur un bon de livraison', function (): void {
     [$user, $company] = workspaceAccount();
 
     app(TenantContext::class)->activateCompany($company->id);
-    $creditNote = Document::factory()->sent()->create([
+    // Seuls un devis et une facture portent des honoraires convenus : tout
+    // autre type est refusé, quel que soit son état.
+    $deliveryNote = Document::factory()->sent()->create([
         'company_id' => $company->id,
-        'type' => 'credit_note',
+        'type' => 'delivery_note',
     ]);
 
     actingAs($user)
-        ->postJson("/api/v1/conventions/from-document/{$creditNote->id}")
+        ->postJson("/api/v1/conventions/from-document/{$deliveryNote->id}")
         ->assertStatus(409);
 });
 

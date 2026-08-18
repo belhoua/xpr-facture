@@ -4,7 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { Controller, useForm } from "react-hook-form";
+import { useEffect, useRef } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -19,6 +20,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { applyProblemToForm } from "@/features/auth/hooks/use-auth";
 import { fetchPartners, partnerKeys } from "@/features/partners/api/partners";
+import { useClientProjects } from "@/features/projects/hooks/use-client-projects";
 import type { Document } from "@/features/documents/schemas/document";
 import {
   createSituation,
@@ -54,7 +56,10 @@ const STATUS_DOT: Record<SituationStatus, string> = {
  * le serveur parle de `totalCents` et `paidCents` là où le formulaire saisit
  * des MAD — ils sont remappés à la main plus bas.
  */
-const SERVER_FIELDS = ["partnerId", "subject", "issuedAt", "status", "notes"] as const;
+const SERVER_FIELDS = ["partnerId", "projectId", "subject", "issuedAt", "status", "notes"] as const;
+
+/** Valeur d'item pour « aucun projet » : Radix interdit la chaîne vide. */
+const NO_PROJECT = "__none__";
 
 /** Une heure : la liste des clients ne change pas en cours de saisie. */
 const REFERENCE_STALE_TIME = 60 * 60 * 1000;
@@ -93,11 +98,29 @@ export function SituationForm({ situation }: { situation?: Document }) {
     handleSubmit,
     register,
     setError,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<SituationFormValues>({
     resolver: zodResolver(situationFormSchema),
     defaultValues: situation ? toFormValues(situation) : emptySituation(),
   });
+
+  const partnerId = useWatch({ control, name: "partnerId" });
+  const { projects, isPending: projectsPending } = useClientProjects(partnerId);
+
+  // CHANGER DE CLIENT VIDE LE PROJET : garder le chantier du client précédent
+  // ferait répondre 422 au serveur au moment d'enregistrer, après toute la
+  // saisie. La première valeur observée est ignorée — en modification, elle
+  // vient du document et effacerait le rattachement qu'on vient de charger.
+  const previousPartnerId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (previousPartnerId.current !== null && previousPartnerId.current !== partnerId) {
+      setValue("projectId", "");
+    }
+
+    previousPartnerId.current = partnerId;
+  }, [partnerId, setValue]);
 
   const mutation = useMutation({
     mutationFn: (values: SituationFormValues) =>
@@ -166,6 +189,40 @@ export function SituationForm({ situation }: { situation?: Document }) {
           />
           <FieldError errors={[{ message: message(errors.partnerId?.message) }]} />
         </Field>
+
+        {/* PROJET, affiché seulement une fois le client choisi : les projets
+            lui appartiennent, il n'y a rien à proposer avant. */}
+        {partnerId !== "" && (
+          <Field data-invalid={errors.projectId ? true : undefined}>
+            <FieldLabel htmlFor="projectId">{t("form.project")}</FieldLabel>
+            <Controller
+              control={control}
+              name="projectId"
+              render={({ field }) => (
+                <Select
+                  value={field.value === "" ? NO_PROJECT : field.value}
+                  onValueChange={(value) =>
+                    field.onChange(value === NO_PROJECT ? "" : value)
+                  }
+                  disabled={projectsPending}
+                >
+                  <SelectTrigger id="projectId">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_PROJECT}>{t("form.noProject")}</SelectItem>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            <FieldError errors={[{ message: message(errors.projectId?.message) }]} />
+          </Field>
+        )}
 
         <Field data-invalid={errors.issuedAt ? true : undefined}>
           <FieldLabel htmlFor="issuedAt">{t("form.date")}</FieldLabel>

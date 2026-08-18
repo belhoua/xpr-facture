@@ -67,6 +67,15 @@ final class Partner extends Model
      * Filtre par rôle commercial. `both` doit remonter dans les DEUX listes :
      * un simple `where('type', 'client')` masquerait la moitié du répertoire.
      *
+     * `intermediary` ne remonte QUE sous son propre filtre : ce n'est pas un
+     * sens de facturation mais un rôle, et le faire entrer dans les clients ou
+     * les fournisseurs le proposerait à des écrans qui ne l'attendent pas
+     * (cf. PartnerType).
+     *
+     * Le `match` est exhaustif et sans branche par défaut : ajouter un cas à
+     * l'enum sans décider ici de sa place casse la compilation plutôt que de le
+     * ranger silencieusement au mauvais endroit.
+     *
      * @param  Builder<$this>  $query
      * @return Builder<$this>
      */
@@ -76,6 +85,7 @@ final class Partner extends Model
             PartnerType::Client => $query->whereIn('type', [PartnerType::Client->value, PartnerType::Both->value]),
             PartnerType::Supplier => $query->whereIn('type', [PartnerType::Supplier->value, PartnerType::Both->value]),
             PartnerType::Both => $query->where('type', PartnerType::Both->value),
+            PartnerType::Intermediary => $query->where('type', PartnerType::Intermediary->value),
         };
     }
 

@@ -26,8 +26,21 @@ export interface SituationFilters {
   search: string;
   /** "all" = pas de filtre serveur. */
   status: string;
+  /**
+   * Types de documents à retenir. Par défaut la seule situation ; l'écran d'un
+   * client demande `["situation", "invoice"]`, parce qu'un solde client qui
+   * ignorerait les factures ne serait pas un solde. Le devis en reste exclu :
+   * il propose, il ne crée aucune créance.
+   */
+  types?: readonly string[];
   /** Vide = toutes ; renseigné sur l'écran d'un client. */
   partnerId?: string;
+  /**
+   * Vide = tous les projets. Restreint la liste ET les quatre indicateurs :
+   * les deux requêtes partagent ces filtres, c'est ce qui garantit que les
+   * chiffres du haut décrivent les lignes du bas.
+   */
+  projectId?: string;
   /** Bornes de la date d'émission, au format ISO (YYYY-MM-DD). */
   from?: string;
   to?: string;
@@ -45,12 +58,15 @@ export const situationKeys = {
 /** Paramètres communs à la liste et aux totaux : les deux doivent concorder. */
 function toParams(filters: SituationFilters): Record<string, string | undefined> {
   return {
-    type: "situation",
+    // Liste séparée par des virgules, forme que `DocumentService::filtered()`
+    // accepte des deux côtés — un seul type ou plusieurs.
+    type: (filters.types ?? ["situation"]).join(","),
     search: filters.search.trim() || undefined,
     // "all" est un état de l'interface, pas un filtre serveur : l'envoyer
     // ferait rejeter une valeur d'enum inconnue.
     status: filters.status === "all" ? undefined : filters.status,
     partnerId: filters.partnerId || undefined,
+    projectId: filters.projectId || undefined,
     from: filters.from || undefined,
     to: filters.to || undefined,
   };
@@ -102,6 +118,9 @@ function toPayload(values: SituationFormValues, withType: boolean) {
   return {
     ...(withType ? { type: "situation" as const } : {}),
     partnerId: values.partnerId,
+    // Toujours émis, `null` compris : la clé absente laisserait le
+    // rattachement intact, la clé à null le retire (cf. DocumentWriteService).
+    projectId: values.projectId === "" ? null : values.projectId,
     subject: values.subject.trim(),
     issuedAt: values.issuedAt || null,
     status: values.status,

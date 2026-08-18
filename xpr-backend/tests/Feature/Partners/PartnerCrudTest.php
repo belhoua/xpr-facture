@@ -105,6 +105,80 @@ it('remonte les tiers `both` dans les listes clients ET fournisseurs', function 
         ->and($names($suppliers))->not->toContain('Client Pur');
 });
 
+it('crée un intermédiaire', function (): void {
+    [$user] = workspaceAccount();
+
+    actingAs($user)
+        ->postJson('/api/v1/partners', partnerPayload([
+            'type' => 'intermediary',
+            'legalName' => 'Cabinet Apporteur S.A.R.L.',
+        ]))
+        ->assertCreated()
+        ->assertJsonPath('type', 'intermediary');
+});
+
+it('garde l intermédiaire HORS des listes clients et fournisseurs', function (): void {
+    [$user, $company] = workspaceAccount();
+
+    app(TenantContext::class)->activateCompany($company->id);
+    Partner::factory()->intermediary()->create(['legal_name' => 'Apporteur Pur', 'ice' => null]);
+    Partner::factory()->both()->create(['legal_name' => 'Les Deux', 'ice' => null]);
+
+    $names = static fn (string $type): array => array_column(
+        actingAs($user)->getJson("/api/v1/partners?type={$type}")->assertOk()->json('data'),
+        'legalName',
+    );
+
+    // Un intermédiaire est un RÔLE, pas un sens de facturation (décision du
+    // 2026-08-17) : il ne doit être proposé ni pour facturer, ni pour acheter.
+    // `both`, lui, reste dans les deux — la nouvelle valeur n'a rien déplacé.
+    expect($names('client'))->not->toContain('Apporteur Pur')
+        ->and($names('supplier'))->not->toContain('Apporteur Pur')
+        ->and($names('intermediary'))->toContain('Apporteur Pur')
+        ->and($names('intermediary'))->not->toContain('Les Deux')
+        ->and($names('client'))->toContain('Les Deux')
+        ->and($names('supplier'))->toContain('Les Deux');
+});
+
+it('ne rapproche PAS un nom libre de facture sur une fiche intermédiaire', function (): void {
+    [$user, $company] = workspaceAccount();
+
+    app(TenantContext::class)->activateCompany($company->id);
+    $intermediary = Partner::factory()->intermediary()->create([
+        'legal_name' => 'Courtier Atlas S.A.',
+        'ice' => null,
+    ]);
+
+    // La saisie au nom libre ouvre une fiche CLIENT (2026-08-17). Elle ne doit
+    // pas atterrir sur l'intermédiaire homonyme : facturer l'apporteur au lieu
+    // du client apporté serait une erreur comptable, pas un détail d'affichage.
+    $partnerId = actingAs($user)
+        ->postJson('/api/v1/documents', [
+            'type' => 'invoice',
+            'clientName' => 'Courtier Atlas S.A.',
+            'items' => [['label' => 'Prestation', 'quantity' => '1', 'unitPriceCents' => 100_000]],
+        ])
+        ->assertCreated()
+        ->json('partnerId');
+
+    expect($partnerId)->not->toBe($intermediary->id);
+
+    app(TenantContext::class)->activateCompany($company->id);
+    /** @var Partner $created */
+    $created = Partner::query()->whereKey($partnerId)->firstOrFail();
+
+    expect($created->type->value)->toBe('client');
+});
+
+it('refuse un type de tiers inconnu', function (): void {
+    [$user] = workspaceAccount();
+
+    actingAs($user)
+        ->postJson('/api/v1/partners', partnerPayload(['type' => 'intermediaire']))
+        ->assertStatus(422)
+        ->assertJsonPath('errors.type.0', fn (string $message): bool => $message !== '');
+});
+
 it('recherche sur la raison sociale, l enseigne et l ICE', function (): void {
     [$user, $company] = workspaceAccount();
 

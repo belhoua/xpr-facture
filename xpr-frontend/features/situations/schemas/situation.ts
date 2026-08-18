@@ -42,6 +42,12 @@ export const situationFormSchema = z
      * client y serait invisible, donc absente des totaux.
      */
     partnerId: z.string().min(1, "validation.required"),
+    /**
+     * "" = aucun projet. Facultatif : une situation peut suivre un chantier
+     * identifié comme n'en suivre aucun. Le déroulant ne propose que les
+     * projets du client choisi ; la cohérence des deux se tient au serveur.
+     */
+    projectId: z.string(),
     subject: z
       .string()
       .trim()
@@ -93,6 +99,7 @@ export function emptySituation(): SituationFormValues {
 
   return {
     partnerId: "",
+    projectId: "",
     subject: "",
     issuedAt: today,
     // « Non payé » : l'état de très loin le plus fréquent à la création, et le
@@ -114,6 +121,7 @@ export function toFormValues(document: Document): SituationFormValues {
 
   return {
     partnerId: document.partnerId ?? "",
+    projectId: document.projectId ?? "",
     subject: document.subject ?? "",
     issuedAt: document.issuedAt ?? "",
     status: status ?? "sent",

@@ -159,7 +159,10 @@ it('filtre le catalogue par recherche, type et catégorie', function (): void {
     [$user, $company] = workspaceAccount();
 
     app(TenantContext::class)->activateCompany($company->id);
-    $matériel = Category::query()->where('name', 'Matériel')->firstOrFail();
+    // Le jeu de démonstration ne contient plus que des SERVICES depuis le
+    // 2026-08-18 : la catégorie « Matériel » a suivi et désigne désormais une
+    // famille de prestations.
+    $controle = Category::query()->where('name', 'Contrôle technique')->firstOrFail();
 
     actingAs($user)
         ->getJson('/api/v1/products?search=conseil')
@@ -167,13 +170,20 @@ it('filtre le catalogue par recherche, type et catégorie', function (): void {
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.reference', 'CONS-J');
 
+    // Le filtre par type RESTE fonctionnel — c'est lui qu'on éprouve ici, et
+    // non l'existence de biens : il n'y en a plus aucun à semer.
     actingAs($user)
         ->getJson('/api/v1/products?type=good')
         ->assertOk()
-        ->assertJsonCount(2, 'data');
+        ->assertJsonCount(0, 'data');
 
     actingAs($user)
-        ->getJson("/api/v1/products?categoryId={$matériel->id}")
+        ->getJson('/api/v1/products?type=service')
+        ->assertOk()
+        ->assertJsonPath('data', fn (array $rows): bool => $rows !== []);
+
+    actingAs($user)
+        ->getJson("/api/v1/products?categoryId={$controle->id}")
         ->assertOk()
         ->assertJsonCount(2, 'data');
 });
@@ -207,7 +217,10 @@ it('crée une catégorie et compte ses articles', function (): void {
     actingAs($user)
         ->getJson('/api/v1/categories')
         ->assertOk()
-        ->assertJsonPath('data.0.productCount', fn (int $count): bool => $count >= 0);
+        // `serviceCount` depuis le 2026-08-18 : l'écran ne présente plus que
+        // des catégories de SERVICES, et le compteur ne doit pas annoncer un
+        // nombre que la liste ne sait plus montrer.
+        ->assertJsonPath('data.0.serviceCount', fn (int $count): bool => $count >= 0);
 });
 
 it('refuse deux catégories homonymes, casse comprise', function (): void {
@@ -240,4 +253,32 @@ it('expose le référentiel des taux de TVA', function (): void {
         // Le catalogue standard marocain est partagé : il n'appartient à
         // aucune société.
         ->assertJsonPath('data.0.isGlobal', true);
+});
+
+it('ne compte QUE les services dans une catégorie', function (): void {
+    [$user, $company] = workspaceAccount();
+
+    app(TenantContext::class)->activateCompany($company->id);
+    // Nom EXPLICITE : la factory puise dans une liste fixe dont le jeu de
+    // démonstration se sert aussi, et l'unicité par société la refuserait.
+    $category = Category::factory()->create(['name' => 'Catégorie du compteur']);
+
+    Product::factory()->service()->create([
+        'company_id' => $company->id,
+        'category_id' => $category->id,
+    ]);
+    // Un bien physique existe encore en base — la société n'en vend plus, mais
+    // les jeux de données antérieurs en portent. Il ne doit pas gonfler un
+    // compteur intitulé « Services ».
+    Product::factory()->good()->create([
+        'company_id' => $company->id,
+        'category_id' => $category->id,
+    ]);
+
+    /** @var list<array<string, mixed>> $rows */
+    $rows = actingAs($user)->getJson('/api/v1/categories')->assertOk()->json('data');
+
+    $counts = array_column($rows, 'serviceCount', 'id');
+
+    expect($counts[$category->id])->toBe(1);
 });

@@ -452,8 +452,8 @@ const FR_NOUN_SCALE_ENDING = /\bmilli(?:on|ard)s?$/;
  * `amountInWords(23100000, "fr")`
  *   → « deux cent trente et un mille dirhams et zéro centime »
  *
- * Un montant négatif (avoir) est précédé de sa mention : le signe « − » ne se
- * lit pas sur du papier.
+ * Un montant négatif est précédé de sa mention : le signe « − » ne se lit pas
+ * sur du papier.
  */
 export function amountInWords(
   cents: number,

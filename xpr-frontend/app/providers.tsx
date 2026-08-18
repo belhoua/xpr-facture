@@ -14,7 +14,25 @@ export function Providers({ children }: { children: React.ReactNode }) {
     () =>
       new QueryClient({
         defaultOptions: {
-          queries: { staleTime: 30_000, retry: 1 },
+          queries: {
+            // 5 minutes. Les données de cette application changent à la vitesse
+            // d'une saisie humaine, pas d'un flux de marché : re-solliciter
+            // l'API toutes les 30 secondes pour une liste de factures que
+            // personne n'a touchée coûtait des requêtes sans jamais rien
+            // apprendre.
+            //
+            // Ce délai ne retarde AUCUNE mise à jour issue de l'application
+            // elle-même : chaque mutation invalide ses clés
+            // (`invalidateQueries`), ce qui refetch immédiatement. Il ne
+            // concerne que les écritures faites AILLEURS — un collègue, un
+            // autre onglet — dont l'apparition peut attendre.
+            staleTime: 5 * 60 * 1000,
+            // Revenir sur l'onglet ne recharge plus tous les écrans montés.
+            // C'était le gros du trafic inutile : passer sur sa boîte mail et
+            // revenir déclenchait autant de requêtes que d'écrans ouverts.
+            refetchOnWindowFocus: false,
+            retry: 1,
+          },
         },
       }),
   );

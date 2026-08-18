@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { applyProblemToForm } from "@/features/auth/hooks/use-auth";
+import { fetchPartners, partnerKeys } from "@/features/partners/api/partners";
 import {
   cashKeys,
   createCashMovement,
@@ -34,11 +35,15 @@ import {
   CASH_DIRECTIONS,
   PAYMENT_METHODS,
   cashMovementFormSchema,
+  isEditableMethod,
   type CashMovement,
   type CashMovementFormValues,
 } from "@/features/cash/schemas/cash";
 
 const CURRENCIES = ["MAD", "EUR", "USD"] as const;
+
+/** Valeur d'item pour « aucun tiers » : Radix interdit la chaîne vide. */
+const NO_PARTNER = "__none__";
 
 /**
  * Champs du formulaire mappables depuis une erreur de validation serveur.
@@ -46,6 +51,7 @@ const CURRENCIES = ["MAD", "EUR", "USD"] as const;
  * sens + montant) — une erreur serveur dessus retombe sur le message global.
  */
 const SERVER_FIELDS = [
+  "partnerId",
   "occurredAt",
   "label",
   "method",
@@ -59,6 +65,7 @@ function todayIso(): string {
 
 function emptyValues(): CashMovementFormValues {
   return {
+    partnerId: "",
     occurredAt: todayIso(),
     label: "",
     method: "cash",
@@ -72,10 +79,16 @@ function emptyValues(): CashMovementFormValues {
 /** Décompose le montant signé de l'API en (sens, montant positif). */
 function valuesFromMovement(movement: CashMovement): CashMovementFormValues {
   return {
+    // L'API renvoie `null` pour un mouvement sans tiers ; le Select manipule "".
+    partnerId: movement.partnerId ?? "",
     occurredAt: movement.occurredAt,
     label: movement.label,
-    method: movement.method,
-    registerName: movement.registerName,
+    // Seule une écriture SAISIE parvient ici — l'écran n'ouvre l'édition que
+    // sur `source === "cash"`. Les deux replis couvrent le typage d'une ligne
+    // de règlement, qui peut porter un mode et une caisse que le formulaire ne
+    // sait pas représenter ; ils ne décrivent aucun cas atteignable.
+    method: isEditableMethod(movement.method) ? movement.method : "cash",
+    registerName: movement.registerName ?? "",
     direction: movement.amountCents < 0 ? "outflow" : "inflow",
     amount: Math.abs(movement.amountCents) / 100,
     currency: movement.currency,
@@ -105,6 +118,15 @@ export function CashMovementFormDialog({
   const form = useForm<CashMovementFormValues>({
     resolver: zodResolver(cashMovementFormSchema),
     defaultValues: emptyValues(),
+  });
+
+  // Répertoire des tiers pour le déroulant. `client` seulement : la caisse de
+  // cet écran suit les encaissements, et proposer les fournisseurs allongerait
+  // la liste de noms qu'on n'y cherche pas.
+  const partnerFilters = { type: "client" as const };
+  const { data: partners } = useQuery({
+    queryKey: partnerKeys.list(partnerFilters),
+    queryFn: () => fetchPartners(partnerFilters),
   });
 
   useEffect(() => {
@@ -153,6 +175,43 @@ export function CashMovementFormDialog({
                 {errors.root.server.message}
               </p>
             )}
+
+            {/* Le TIERS d'abord : c'est lui qui donne son sens à l'écriture,
+                et le libellé se rédige plus vite une fois le client choisi.
+                Facultatif — un loyer ou un achat de fournitures n'en a pas. */}
+            <Field>
+              <FieldLabel htmlFor="cash-partner">{t("form.client")}</FieldLabel>
+              <Controller
+                control={form.control}
+                name="partnerId"
+                render={({ field }) => (
+                  <Select
+                    // Radix refuse la chaîne vide comme valeur d'item : le
+                    // sentinel NO_PARTNER porte « aucun tiers » dans la liste,
+                    // et redevient "" dans le formulaire.
+                    value={field.value === "" ? NO_PARTNER : field.value}
+                    onValueChange={(value) =>
+                      field.onChange(value === NO_PARTNER ? "" : value)
+                    }
+                  >
+                    <SelectTrigger id="cash-partner" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_PARTNER}>
+                        {t("form.noClient")}
+                      </SelectItem>
+                      {(partners?.data ?? []).map((partner) => (
+                        <SelectItem key={partner.id} value={partner.id}>
+                          {partner.legalName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              <FieldError>{fieldError(errors.partnerId?.message)}</FieldError>
+            </Field>
 
             <Field>
               <FieldLabel htmlFor="cash-label">{t("form.label")}</FieldLabel>

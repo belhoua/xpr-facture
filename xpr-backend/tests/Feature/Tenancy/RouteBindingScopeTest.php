@@ -39,7 +39,6 @@ it('ne résout pas un document appartenant à une autre société', function ():
     actingAs($userA)->postJson("/api/v1/documents/{$documentOfB->id}/issue")->assertNotFound();
     actingAs($userA)->postJson("/api/v1/documents/{$documentOfB->id}/cancel")->assertNotFound();
     actingAs($userA)->postJson("/api/v1/documents/{$documentOfB->id}/convert")->assertNotFound();
-    actingAs($userA)->postJson("/api/v1/documents/{$documentOfB->id}/credit-note")->assertNotFound();
 
     // Et le document de B est intact.
     app(TenantContext::class)->activateCompany($companyB->id);

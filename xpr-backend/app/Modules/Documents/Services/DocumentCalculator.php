@@ -22,9 +22,9 @@ use App\Modules\Documents\Exceptions\LineAmountOutOfRange;
  *
  * ARRONDI COMMERCIAL (§3) : au plus proche, la demi-unité s'arrondissant vers
  * le haut. `intdiv($n + $d / 2, $d)` l'exprime sans division flottante. Toutes
- * les grandeurs manipulées sont positives ou nulles — les avoirs portent des
- * montants positifs, leur sens vient de leur `type`, pas d'un signe — donc
- * `intdiv` tronque bien vers zéro et l'arrondi est exact.
+ * les grandeurs manipulées sont positives ou nulles — aucun type de document
+ * ne porte de montant négatif — donc `intdiv` tronque bien vers zéro et
+ * l'arrondi est exact.
  *
  * ORDRE DES OPÉRATIONS, imposé par le fisc et non par le code : on arrondit à
  * chaque étape (brut, puis remise, puis TVA). Calculer en pleine précision

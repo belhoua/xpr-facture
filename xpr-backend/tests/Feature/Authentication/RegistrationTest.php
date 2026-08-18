@@ -92,7 +92,7 @@ it("n'enregistre AUCUN compte si la création de la société échoue (rollback)
     expect(User::count())->toBe(0)->and(Company::count())->toBe(0);
 });
 
-it("crée le compte même si le transport mail est injoignable", function (): void {
+it('crée le compte même si le transport mail est injoignable', function (): void {
     // Sans worker de file d'attente — c'est le cas en serverless — l'envoi du
     // lien de vérification est synchrone : il part DANS la requête, et APRÈS le
     // commit. Une TransportException remontait alors en 500 sur un compte déjà

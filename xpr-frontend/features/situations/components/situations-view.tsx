@@ -24,6 +24,7 @@ import {
   situationKeys,
   type SituationFilters,
 } from "@/features/situations/api/situations";
+import { useClientProjects } from "@/features/projects/hooks/use-client-projects";
 import { SituationStatusBadge } from "@/features/situations/components/situation-status-badge";
 import { SITUATION_STATUSES } from "@/features/situations/schemas/situation";
 import { toApiProblem } from "@/lib/api/client";
@@ -31,6 +32,9 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { Link, useRouter } from "@/lib/i18n/navigation";
 
 /** Filtres proposés : le cycle de règlement, plus les situations annulées. */
+/** Sentinelle « tous les projets » : Radix interdit la chaîne vide en valeur. */
+const ALL_PROJECTS = "all";
+
 const STATUS_FILTERS = [...SITUATION_STATUSES, "cancelled"] as const;
 
 /**
@@ -53,11 +57,22 @@ export function SituationsView() {
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
+  const [projectId, setProjectId] = useState(ALL_PROJECTS);
+  // `"all"` demande TOUT le répertoire de projets : cet écran ne présuppose
+  // aucun client, contrairement au formulaire de saisie.
+  const { projects } = useClientProjects(ALL_PROJECTS);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
 
-  const filters: SituationFilters = { search, status, from, to };
+  const filters: SituationFilters = {
+    search,
+    status,
+    // « tous » est un état de l'interface, pas un filtre serveur.
+    projectId: projectId === ALL_PROJECTS ? "" : projectId,
+    from,
+    to,
+  };
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: situationKeys.list(filters),
     queryFn: () => fetchSituations(filters),
@@ -193,6 +208,26 @@ export function SituationsView() {
             className="ps-8"
           />
         </div>
+
+        {/* Filtre par PROJET. Cet écran n'a pas de client choisi au
+            préalable : on liste donc tout le répertoire de projets, et le nom
+            du client accompagne chaque titre — deux clients peuvent nommer
+            leur chantier de la même façon, et le titre seul ne trancherait
+            pas. */}
+        <Select value={projectId} onValueChange={setProjectId}>
+          <SelectTrigger className="w-56" aria-label={t("filters.project")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_PROJECTS}>{t("filters.allProjects")}</SelectItem>
+            {projects.map((project) => (
+              <SelectItem key={project.id} value={project.id}>
+                {project.title}
+                {project.clientName ? ` — ${project.clientName}` : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <Select value={status} onValueChange={setStatus}>
           <SelectTrigger className="w-40" aria-label={t("table.status")}>

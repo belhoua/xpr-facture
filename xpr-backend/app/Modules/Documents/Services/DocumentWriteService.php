@@ -11,9 +11,13 @@ use App\Modules\Documents\Exceptions\DocumentNotEditable;
 use App\Modules\Documents\Exceptions\InvalidStatusTransition;
 use App\Modules\Documents\Models\Document;
 use App\Modules\Documents\Models\DocumentItem;
+use App\Modules\Partners\Enums\PartnerType;
 use App\Modules\Partners\Models\Partner;
+use App\Modules\Projects\Models\Project;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 /**
@@ -23,8 +27,8 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
  *  1. **Un document naît TOUJOURS brouillon.** L'API ne permet pas de créer un
  *     document déjà émis. Le numéro s'attribue à l'émission, dans la même
  *     transaction — c'est la seule façon de garantir une séquence sans trou.
- *  2. **Un document émis est gelé.** Ni édition, ni suppression : la correction
- *     passe par un avoir, l'annulation par le statut `cancelled`.
+ *  2. **Un document émis est gelé.** Ni édition, ni suppression : l'annulation
+ *     passe par le statut `cancelled`, jamais par un DELETE.
  *
  * Les règles 1 et 2 souffrent UNE exception, la situation, et elle est portée
  * par l'enum (`numbersOnCreate()`, `freezesOnIssue()`) plutôt que par un
@@ -39,6 +43,21 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
  */
 final class DocumentWriteService
 {
+    /**
+     * Nom de la fiche client CRÉÉE au cours de l'écriture en cours, s'il y en a
+     * eu une.
+     *
+     * État intermédiaire assumé : `clientSnapshot()` ne rend que des colonnes,
+     * il n'a pas le document sous la main — celui-ci n'existe pas encore au
+     * moment où le tiers doit être résolu. La valeur est reportée sur le
+     * document rendu, puis oubliée.
+     *
+     * Remis à `null` à l'entrée de chaque écriture : le conteneur peut très
+     * bien servir la même instance à deux appels d'une même requête, et un
+     * drapeau qui traîne annoncerait une création qui n'a pas eu lieu.
+     */
+    private ?string $createdPartnerName = null;
+
     public function __construct(
         private readonly DocumentNumberService $numbers,
         private readonly DocumentCalculator $calculator,
@@ -46,35 +65,95 @@ final class DocumentWriteService
     ) {}
 
     /**
-     * Crée un document, toujours à l'état de BROUILLON.
+     * Crée un document.
      *
-     * Aucun paramètre ne permet d'émettre directement, et c'est délibéré :
-     * l'émission attribue un numéro fiscal définitif. La rendre implicite dans
-     * une création, c'est ouvrir la porte à des numéros consommés par des
-     * appels de test ou des doubles soumissions.
+     * Il naît BROUILLON pour les types qui ont une étape d'émission, et
+     * NUMÉROTÉ pour ceux que `numbersOnCreate()` désigne — la situation depuis
+     * le 2026-08-05, la facture et le devis depuis le 2026-08-14, sur décision
+     * de l'exploitant. Le coût de cette seconde levée (numéros brûlés par une
+     * double soumission, absence d'idempotence sur la route) est détaillé dans
+     * `DocumentType::numbersOnCreate()`.
+     *
+     * La bascule est portée par l'ENUM et par lui seul : aucun paramètre
+     * d'appel ne permet de numéroter un type qui ne le demande pas, sans quoi
+     * la règle deviendrait franchissable depuis n'importe quel point d'appel.
      *
      * @param  array<string, mixed>  $data
      */
     public function create(array $data): Document
     {
-        return DB::transaction(function () use ($data): Document {
-            $document = new Document($this->headerColumns($data));
-            $document->status = DocumentStatus::Draft;
-            $document->number = null;
-            $document->save();
+        $manualNumber = self::manualNumber($data);
+        $this->createdPartnerName = null;
 
-            // Les types à montant global (situation) n'ont pas de lignes : leur
-            // total est posé en en-tête par headerColumns(). Appeler
-            // replaceItems() les remettrait à zéro (refreshTotals recalcule
-            // depuis des lignes inexistantes).
-            if (! $document->type->hasGlobalAmount()) {
-                $this->replaceItems($document, self::itemsPayload($data));
+        try {
+            return DB::transaction(function () use ($data, $manualNumber): Document {
+                $document = new Document($this->headerColumns($data));
+                $document->status = DocumentStatus::Draft;
+                $document->number = null;
+                $document->save();
+
+                // Les types à montant global (situation) n'ont pas de lignes : leur
+                // total est posé en en-tête par headerColumns(). Appeler
+                // replaceItems() les remettrait à zéro (refreshTotals recalcule
+                // depuis des lignes inexistantes).
+                if (! $document->type->hasGlobalAmount()) {
+                    $this->replaceItems($document, self::itemsPayload($data));
+                }
+
+                $this->numberOnCreate(
+                    $document,
+                    self::requestedStatus($data, $document),
+                    $manualNumber,
+                );
+
+                return $this->withCreatedPartner($document->refresh()->load('items'));
+            });
+        } catch (UniqueConstraintViolationException $exception) {
+            // Le FormRequest a bien vérifié l'unicité, mais entre son contrôle
+            // et l'INSERT une autre requête a pu prendre le numéro. L'index
+            // `documents_company_number_unique` est le seul arbitre fiable ; ce
+            // catch traduit son verdict en 409 plutôt qu'en 500.
+            //
+            // Restreint au numéro MANUEL : sur une numérotation automatique, une
+            // violation d'unicité signalerait une séquence désynchronisée, un
+            // défaut qu'il vaut mieux voir remonter que masquer en 409.
+            if ($manualNumber === null) {
+                throw $exception;
             }
 
-            $this->numberOnCreate($document, self::requestedStatus($data, $document));
+            throw new ConflictHttpException(
+                __('This number is already used by another document.'),
+            );
+        }
+    }
 
-            return $document->refresh()->load('items');
-        });
+    /**
+     * Numéro saisi à la main, ou `null` si l'appelant laisse la séquence faire.
+     *
+     * Lu ICI et transmis en paramètre plutôt que d'être ajouté à
+     * `headerColumns()` : cette dernière sert aussi la mise à jour, et y placer
+     * `number` rendrait un document renumérotable par un simple PATCH.
+     *
+     * La chaîne est conservée telle quelle, zéros initiaux compris : « 007 »
+     * est un numéro que l'utilisateur a écrit, pas un entier à normaliser.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function manualNumber(array $data): ?string
+    {
+        $number = $data['number'] ?? null;
+
+        if (is_int($number)) {
+            $number = (string) $number;
+        }
+
+        if (! is_string($number)) {
+            return null;
+        }
+
+        $number = trim($number);
+
+        return $number === '' ? null : $number;
     }
 
     /**
@@ -93,7 +172,7 @@ final class DocumentWriteService
      */
     private static function requestedStatus(array $data, Document $document): ?DocumentStatus
     {
-        if (! $document->type->numbersOnCreate()) {
+        if (! $document->type->statusFollowsSettlement()) {
             return null;
         }
 
@@ -116,34 +195,103 @@ final class DocumentWriteService
 
     /**
      * Numérote immédiatement les types qui n'ont pas d'étape d'émission
-     * (situation), et pose leur état de règlement.
+     * (situation, facture, devis), et pose leur état de règlement.
      *
      * Appelé DANS la transaction ouverte par create() : DocumentNumberService
      * refuse d'opérer en dehors, le verrou de ligne sur `sequences` n'y
      * tiendrait pas.
      *
      * `issued_at` est renseignée d'office si l'appelant ne l'a pas fournie :
-     * elle désigne l'exercice, donc la séquence à incrémenter. Une situation
-     * sans date ne saurait pas dans quel millésime se numéroter.
+     * elle désigne l'exercice, donc la séquence à incrémenter. Un document sans
+     * date ne saurait pas dans quel millésime se numéroter.
      *
-     * `$requested` prime sur la déduction quand il est fourni : l'utilisateur
-     * qui déclare « en cours » sait quelque chose que les montants ne disent
-     * pas. À défaut, l'état reste déduit de l'avance.
+     * `$requested` prime sur la déduction quand il est fourni — mais seule la
+     * situation en fournit un (cf. `requestedStatus()`). Pour une facture ou un
+     * devis, l'état est TOUJOURS déduit : `settlementStatus()` rend `sent` dès
+     * lors qu'un numéro est posé et qu'aucune avance n'est saisie, ce qui est
+     * exactement l'état visé par la décision du 2026-08-14.
      */
-    private function numberOnCreate(Document $document, ?DocumentStatus $requested = null): void
-    {
+    private function numberOnCreate(
+        Document $document,
+        ?DocumentStatus $requested = null,
+        ?string $manualNumber = null,
+    ): void {
         if (! $document->type->numbersOnCreate()) {
             return;
         }
 
-        $document->issued_at ??= Carbon::now();
-        $document->number = $this->numbers->allocate($document->type, $document->issued_at);
+        // Même garde qu'à l'émission, et pour la même raison : un document sans
+        // contenu consommerait un numéro de séquence pour ne rien attester.
+        // Elle DEVAIT suivre la numérotation quand celle-ci a migré vers la
+        // création — la laisser sur le seul `issue()` l'aurait rendue
+        // inatteignable pour les types qui ne passent plus par là.
+        $this->assertHasContent($document);
+
+        // Variable locale et non `$document->issued_at` relu ensuite : la
+        // propriété reste typée `Carbon|null`, et c'est elle qui date la
+        // séquence à incrémenter — la garantie de non-nullité doit être visible.
+        $issuedAt = $document->issued_at ?? Carbon::now();
+        $document->issued_at = $issuedAt;
+
+        // L'ÉCHÉANCE par défaut suivait le numéro dans `issue()` : date
+        // d'émission + délai de règlement convenu avec le tiers. Elle devait
+        // donc le suivre ici aussi — sans elle, une facture qui ne passe plus
+        // par `issue()` naîtrait sans échéance, et ni le passage en `overdue`
+        // ni les relances n'auraient de date à laquelle se déclencher.
+        $document->due_at ??= $this->defaultDueDate($document);
+
+        $document->number = $this->resolveNumber($document, $issuedAt, $manualNumber);
         // Le numéro est posé JUSTE AVANT : settlementStatus() s'appuie sur
         // isIssued() pour savoir qu'il y a une créance à qualifier. Une
         // situation saisie avec une avance sort donc directement en « partiel »,
         // sans passer par un « non payé » qui n'aurait jamais été vrai.
         $document->status = $requested ?? $document->settlementStatus();
         $document->save();
+    }
+
+    /**
+     * Numéro du document : celui SAISI par l'utilisateur, ou celui de la
+     * séquence à défaut.
+     *
+     * Ouvert le 2026-08-14 à la demande de l'exploitant, contre l'avis porté
+     * par ce dépôt. Ce que cela coûte, dit ici pour que personne n'ait à le
+     * redécouvrir :
+     *
+     *  - la séquence N'AVANCE PAS sur un numéro saisi. Le compteur reste où il
+     *    était, et la numérotation automatique reprendra là où elle en était —
+     *    les pièces d'une même société ne sont donc plus dans un ordre unique ;
+     *  - le format n'est plus garanti. Un numéro saisi vaut « 42 », là où la
+     *    séquence produit « FAC-2026-0042 ». Deux conventions coexistent dans
+     *    la même colonne, et rien ne dit laquelle fait foi pour l'antériorité ;
+     *  - l'article 145 du CGI marocain exige une numérotation CONTINUE et sans
+     *    trou. Saisir « 42 » puis « 44 » crée un trou que rien ne comblera, et
+     *    le produit ne peut plus le détecter : il ne sait pas si « 43 » est un
+     *    oubli ou un numéro qui n'a jamais existé.
+     *
+     * Ce que cela ne casse PAS, et qu'il ne faut pas relâcher :
+     *  - l'unicité par société reste tenue par l'index partiel
+     *    `documents_company_number_unique`, doublé du contrôle du FormRequest ;
+     *  - la numérotation AUTOMATIQUE est inchangée : même verrou de ligne, même
+     *    exigence de transaction, mêmes garanties de continuité. Une société qui
+     *    ne saisit jamais de numéro ne perd rien de ce qui précède ;
+     *  - aucune COLLISION n'est possible entre les deux mondes tant que le
+     *    format des séquences porte un préfixe : « 42 » et « FAC-2026-0042 »
+     *    sont deux chaînes distinctes. Un format de séquence réduit aux seuls
+     *    chiffres ferait tomber cette garantie — et l'index remonterait alors
+     *    un 409 à la première rencontre, plutôt qu'un doublon silencieux.
+     */
+    private function resolveNumber(
+        Document $document,
+        Carbon $issuedAt,
+        ?string $manualNumber,
+    ): string {
+        if ($manualNumber !== null) {
+            return $manualNumber;
+        }
+
+        // Le millésime vient de l'EXERCICE couvrant la date d'émission, pas de
+        // l'année civile : les exercices décalés existent.
+        return $this->numbers->allocate($document->type, $issuedAt);
     }
 
     /**
@@ -154,9 +302,45 @@ final class DocumentWriteService
     public function update(Document $document, array $data): Document
     {
         $this->assertEditable($document);
+        $this->createdPartnerName = null;
 
+        try {
+            return $this->writeUpdate($document, $data);
+        } catch (UniqueConstraintViolationException $exception) {
+            // Le FormRequest a bien vérifié l'unicité, mais entre son contrôle
+            // et l'UPDATE une autre requête a pu prendre le numéro — d'autant
+            // plus probable depuis que la renumérotation est ouverte, la
+            // séquence continuant d'attribuer en parallèle. L'index
+            // `documents_company_number_unique` est le seul arbitre fiable ; ce
+            // catch traduit son verdict en 409 plutôt qu'en 500.
+            if (! array_key_exists('number', $data)) {
+                throw $exception;
+            }
+
+            throw new ConflictHttpException(
+                __('This number is already used by another document.'),
+            );
+        }
+    }
+
+    /**
+     * Le corps transactionnel de `update()`, isolé pour que la traduction de
+     * la collision d'unicité enveloppe la transaction ENTIÈRE — un `catch` posé
+     * à l'intérieur s'exécuterait avant le COMMIT, moment où PostgreSQL peut
+     * encore lever.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function writeUpdate(Document $document, array $data): Document
+    {
         return DB::transaction(function () use ($document, $data): Document {
             $document->fill($this->headerColumns($data, $document));
+
+            // Le NUMÉRO est traité ICI et non dans `headerColumns()`, partagée
+            // avec la création : l'y placer rendrait tout document
+            // renumérotable par un simple PATCH, y compris les types auxquels
+            // l'exploitant n'a rien demandé.
+            $this->applyRenumbering($document, $data);
 
             // Contrôle croisé APRÈS remplissage, sur l'état résultant : un PATCH
             // partiel peut ne porter que l'un des deux montants, et le
@@ -186,8 +370,78 @@ final class DocumentWriteService
                 $this->refreshSettlementStatus($document);
             }
 
-            return $document->refresh()->load('items');
+            return $this->withCreatedPartner($document->refresh()->load('items'));
         });
+    }
+
+    /**
+     * Réécrit le numéro d'une pièce déjà numérotée, quand son type l'autorise.
+     *
+     * ── Trois gardes, et aucune n'est décorative ─────────────────────────
+     *
+     * 1. Le TYPE doit ouvrir la renumérotation (`allowsNumberEdit()`, qui porte
+     *    le coût de cette levée). Le FormRequest le refuse déjà en 422 ; la
+     *    garde est reprise ici parce que ce service sert aussi les seeders, la
+     *    conversion et la console, qui ne passent par aucune validation HTTP.
+     * 2. La pièce doit DÉJÀ porter un numéro. Sur un brouillon, `number` reste
+     *    l'affaire de l'émission : le poser par un PATCH court-circuiterait
+     *    `numberOnCreate()`, donc la séquence, la garde de contenu et l'exercice
+     *    comptable qui date le millésime.
+     * 3. La clé ABSENTE ne touche à rien. Corriger une note ne doit pas
+     *    renuméroter, et le formulaire d'un autre type n'émet pas ce champ.
+     *
+     * ── Ce que cette méthode NE fait PAS ─────────────────────────────────
+     *
+     * Elle ne touche pas au compteur de `sequences`, et c'est délibéré : le
+     * faire avancer jusqu'au numéro saisi creuserait un trou de plusieurs
+     * numéros jamais attribués, le faire reculer réattribuerait des numéros
+     * déjà consommés — deux façons opposées de contredire l'article 145 du CGI.
+     * La conséquence, dite dans `allowsNumberEdit()`, est qu'une collision peut
+     * survenir bien plus tard, sur une pièce sans rapport ; l'index unique la
+     * refusera alors.
+     *
+     * Elle ne conserve pas non plus l'ancien numéro : le dépôt n'a pas de
+     * journal d'audit sur ce champ, et en improviser un ici — une colonne, une
+     * note automatique — serait une décision de conception prise en passant.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function applyRenumbering(Document $document, array $data): void
+    {
+        if (! array_key_exists('number', $data)) {
+            return;
+        }
+
+        if (! $document->type->allowsNumberEdit() || ! $document->isIssued()) {
+            return;
+        }
+
+        $number = self::manualNumber($data);
+
+        // Vide ou absent de fait : on ne rend pas une pièce à l'état non
+        // numéroté, ce qui libérerait son numéro pour une autre tout en
+        // laissant celle-ci circuler avec le numéro déjà imprimé.
+        if ($number === null) {
+            return;
+        }
+
+        $document->number = $number;
+    }
+
+    /**
+     * Reporte sur le document la fiche client créée en cours de route.
+     *
+     * Propriété PHP déclarée et non attribut Eloquent : un attribut serait
+     * candidat à la persistance au prochain `save()`, et `documents` n'a pas
+     * — et ne doit pas avoir — de colonne pour un fait qui ne concerne que la
+     * réponse en cours.
+     */
+    private function withCreatedPartner(Document $document): Document
+    {
+        $document->autoCreatedPartnerName = $this->createdPartnerName;
+        $this->createdPartnerName = null;
+
+        return $document;
     }
 
     /**
@@ -204,7 +458,7 @@ final class DocumentWriteService
      */
     private function refreshSettlementStatus(Document $document): void
     {
-        if (! $document->type->numbersOnCreate() || ! $document->isIssued()) {
+        if (! $document->type->statusFollowsSettlement() || ! $document->isIssued()) {
             return;
         }
 
@@ -237,12 +491,46 @@ final class DocumentWriteService
     }
 
     /**
+     * Un document sans contenu ne peut pas consommer un numéro : il occuperait
+     * une place dans la séquence pour ne rien attester.
+     *
+     * Ce que « contenu » veut dire dépend du type — une ligne au moins pour une
+     * facture ou un devis, un montant non nul pour une situation.
+     *
+     * Appelée depuis les DEUX points de numérotation, `issue()` et
+     * `numberOnCreate()`. C'était une garde de `issue()` seul jusqu'au
+     * 2026-08-14 ; depuis que la facture et le devis se numérotent à la
+     * création, ils ne passent plus par `issue()` et l'auraient contournée.
+     *
+     * @throws ConflictHttpException
+     */
+    private function assertHasContent(Document $document): void
+    {
+        if ($document->type->hasGlobalAmount()) {
+            if ($document->total_cents <= 0) {
+                throw new ConflictHttpException(__('A situation must carry an amount to be issued.'));
+            }
+
+            return;
+        }
+
+        if ($document->items()->count() === 0) {
+            throw new ConflictHttpException(__('A document must have at least one line to be issued.'));
+        }
+    }
+
+    /**
      * ÉMET le document : lui attribue son numéro et le gèle.
      *
-     * C'est le point de bascule fiscal. Trois gardes, dans cet ordre :
+     * Point de bascule fiscal pour les types qui ont encore une étape
+     * d'émission. Depuis le 2026-08-14, la facture, le devis et la situation
+     * n'en font plus partie : ils naissent numérotés, et cet endpoint leur
+     * répond 409 puisqu'ils ne sont plus `draft`. Il reste le chemin des types
+     * d'achat et d'expédition, et celui des brouillons créés AVANT la bascule.
+     *
+     * Trois gardes, dans cet ordre :
      *  - il doit être encore brouillon (on ne renumérote pas) ;
-     *  - il doit porter au moins une ligne — un document à 0 ligne consommerait
-     *    un numéro de la séquence pour ne rien attester ;
+     *  - il doit porter du contenu (`assertHasContent()`) ;
      *  - la numérotation se fait DANS la transaction, sinon le verrou de ligne
      *    de `sequences` ne tient pas (DocumentNumberService le refuse d'ailleurs).
      */
@@ -252,16 +540,7 @@ final class DocumentWriteService
             throw new ConflictHttpException(__('This document has already been issued.'));
         }
 
-        // Un document sans contenu consommerait un numéro de séquence pour ne
-        // rien attester. Ce que « contenu » veut dire dépend du type : une
-        // ligne au moins pour une facture, un montant non nul pour une situation.
-        if ($document->type->hasGlobalAmount()) {
-            if ($document->total_cents <= 0) {
-                throw new ConflictHttpException(__('A situation must carry an amount to be issued.'));
-            }
-        } elseif ($document->items()->count() === 0) {
-            throw new ConflictHttpException(__('A document must have at least one line to be issued.'));
-        }
+        $this->assertHasContent($document);
 
         return DB::transaction(function () use ($document, $issuedAt): Document {
             $document->issued_at = $issuedAt ?? $document->issued_at ?? Carbon::today();
@@ -515,13 +794,84 @@ final class DocumentWriteService
             unset($columns['type']);
         }
 
-        $partnerId = array_key_exists('partnerId', $data)
+        $partnerGiven = array_key_exists('partnerId', $data);
+
+        $partnerId = $partnerGiven
             ? (is_string($data['partnerId']) ? $data['partnerId'] : null)
             : $existing?->partner_id;
 
-        $columns += $this->clientSnapshot($data, $partnerId, $existing);
+        // Le snapshot a le dernier mot sur `partner_id` : il peut en poser un
+        // que l'appelant n'a pas transmis, quand le nom libre saisi ouvre une
+        // fiche. `+=` ne remplacerait pas la clé déjà présente.
+        $columns = array_merge($columns, $this->clientSnapshot($data, $partnerId, $partnerGiven, $existing));
+
+        // APRÈS le snapshot, jamais avant : le client du document n'est connu
+        // qu'une fois celui-ci résolu — une saisie au nom libre peut même
+        // l'avoir créé à l'instant.
+        $columns += $this->projectColumn($data, $columns, $existing);
 
         return $columns;
+    }
+
+    /**
+     * Projet facturé par ce document, vérifié contre SON client.
+     *
+     * ── La règle que la base ne sait pas écrire ──────────────────────────
+     *
+     * Un document ne peut porter que le projet de son propre client. La
+     * condition croise `documents.partner_id` et `projects.partner_id` : ni un
+     * CHECK ni une clé étrangère ne l'expriment, elle se tient donc ici. Sans
+     * elle, un identifiant deviné — ou un formulaire resté ouvert pendant qu'on
+     * change de client — rattacherait la facture d'un client au chantier d'un
+     * autre, et les totaux par projet deviendraient faux sans que rien ne
+     * l'annonce.
+     *
+     * 422 et non 409 : la faute porte sur un champ précis du formulaire, et
+     * l'écran doit pouvoir la poser sous le bon déroulant.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $columns  colonnes déjà résolues, `partner_id` compris
+     * @return array<string, mixed>
+     *
+     * @throws ValidationException
+     */
+    private function projectColumn(array $data, array $columns, ?Document $existing): array
+    {
+        if (! array_key_exists('projectId', $data)) {
+            return [];
+        }
+
+        $projectId = is_string($data['projectId']) && $data['projectId'] !== ''
+            ? $data['projectId']
+            : null;
+
+        // Détacher est toujours permis : un rattachement erroné doit pouvoir se
+        // défaire sans qu'on ait à en fournir un autre.
+        if ($projectId === null) {
+            return ['project_id' => null];
+        }
+
+        // Requête SCOPÉE, jamais une règle `exists` seule : celle-ci
+        // interrogerait `projects` sans le global scope tenant (§5.3).
+        $project = Project::query()->find($projectId);
+
+        if (! $project instanceof Project) {
+            throw ValidationException::withMessages([
+                'projectId' => [__('The selected project does not belong to this company.')],
+            ]);
+        }
+
+        $partnerId = array_key_exists('partner_id', $columns)
+            ? $columns['partner_id']
+            : $existing?->partner_id;
+
+        if ($project->partner_id !== $partnerId) {
+            throw ValidationException::withMessages([
+                'projectId' => [__('The selected project belongs to another client.')],
+            ]);
+        }
+
+        return ['project_id' => $project->id];
     }
 
     /**
@@ -571,20 +921,70 @@ final class DocumentWriteService
     }
 
     /**
-     * Identité du client à FIGER sur le document.
+     * Identité du client à FIGER sur le document, et le tiers auquel le
+     * rattacher.
+     *
+     * ── Le nom libre OUVRE UNE FICHE (décision du 2026-08-17) ─────────────
+     *
+     * Un document sans `partner_id` n'est rattaché à personne : il n'apparaît
+     * dans aucun écran par client, dans aucun encours, dans aucun classement —
+     * il porte le bon nom et reste pourtant introuvable par son propre client.
+     * C'est ce qui vidait l'écran « situations du client ».
+     *
+     * Le nom saisi librement crée donc désormais la fiche du tiers, et le
+     * document s'y rattache. Le « client de passage » disparaît en tant qu'état
+     * durable : il devient une SAISIE RAPIDE — on tape un nom, la fiche naît
+     * avec ce seul nom, on la complète plus tard.
+     *
+     * ── Réutiliser plutôt que dupliquer ──────────────────────────────────
+     *
+     * La recherche se fait sur la raison sociale, insensible à la casse et aux
+     * espaces de bord, parmi les tiers VIVANTS qui peuvent être clients
+     * (`client` ou `both`). Un tiers archivé l'a été délibérément : le
+     * ressusciter au détour d'une facture déciderait à la place de celui qui
+     * l'a rangé.
+     *
+     * Ce que ce rapprochement NE fait pas, et qu'il ne faut pas lui demander :
+     * reconnaître « ACME SARL » dans « Acme S.A.R.L. ». Deux graphies donnent
+     * deux fiches. C'est délibéré — un rapprochement approximatif attribuerait
+     * les créances d'un client à un autre, ce qui coûte bien plus cher qu'un
+     * doublon qu'on fusionne à la main.
+     *
+     * ── Corriger le nom sur une pièce déjà rattachée ─────────────────────
+     *
+     * Le tiers EXPLICITEMENT transmis gagne toujours : il est l'identité
+     * légale, et un `clientName` qui l'accompagnerait ne doit pas la contredire.
+     * Mais un PATCH partiel qui ne porte QUE `clientName` est autre chose — le
+     * tiers y est hérité du document, pas choisi. Corriger « Brouilon » en
+     * « Brouillon » désigne alors un autre client, et le traiter comme un nom
+     * libre est la seule lecture qui laisse la correction possible. Sans cela,
+     * la moindre coquille exigerait de passer par la fiche du tiers.
      *
      * @param  array<string, mixed>  $data
+     * @param  bool  $partnerGiven  le payload porte-t-il `partnerId` ?
      * @return array<string, mixed>
      */
-    private function clientSnapshot(array $data, ?string $partnerId, ?Document $existing): array
-    {
-        if ($partnerId !== null) {
+    private function clientSnapshot(
+        array $data,
+        ?string $partnerId,
+        bool $partnerGiven,
+        ?Document $existing,
+    ): array {
+        $name = $data['clientName'] ?? null;
+        $name = is_string($name) && trim($name) !== '' ? trim($name) : null;
+
+        // Un tiers HÉRITÉ du document cède au nom corrigé ; un tiers
+        // explicitement transmis, jamais.
+        $freeNameWins = $name !== null && ! $partnerGiven;
+
+        if ($partnerId !== null && ! $freeNameWins) {
             // Le scope tenant s'applique : un tiers d'une autre société est
             // introuvable, et le FormRequest l'a déjà écarté.
             $partner = Partner::query()->find($partnerId);
 
             if ($partner instanceof Partner) {
                 return [
+                    'partner_id' => $partner->id,
                     // La RAISON SOCIALE, pas l'enseigne : le document commercial
                     // engage l'entité légale.
                     'client_name' => $partner->legal_name,
@@ -594,13 +994,66 @@ final class DocumentWriteService
             }
         }
 
-        $name = $data['clientName'] ?? null;
+        if ($name !== null) {
+            $partner = $this->partnerForFreeName($name);
 
-        if (is_string($name) && trim($name) !== '') {
-            return ['client_name' => trim($name)];
+            return [
+                'partner_id' => $partner->id,
+                // Le nom FIGÉ reste celui de la fiche : les deux ne diffèrent
+                // que par les espaces de bord et la casse d'un tiers retrouvé,
+                // et c'est la fiche qui fait foi sur l'identité légale.
+                'client_name' => $partner->legal_name,
+                'client_ice' => $partner->ice,
+                'client_address' => $partner->address,
+            ];
         }
 
         return $existing !== null ? [] : ['client_name' => ''];
+    }
+
+    /**
+     * Le tiers portant ce nom, retrouvé ou créé.
+     *
+     * Appelée dans la transaction du document : une fiche créée pour une
+     * facture qui échoue ensuite ne doit pas rester derrière elle.
+     *
+     * La fiche naît avec le SEUL nom. Aucune valeur n'est devinée — ni ICE, ni
+     * adresse, ni téléphone : ce sont des mentions légales (§3), et en inventer
+     * une seule ferait imprimer sur une facture un identifiant fiscal que
+     * personne n'a vérifié. Les colonnes non renseignées gardent leurs défauts
+     * de schéma (`MAD`, `MA`, 30 jours), qui sont des conventions, pas des
+     * affirmations sur ce client.
+     *
+     * Le nom de la fiche CRÉÉE est exposé sur le document retourné
+     * (`autoCreatedPartnerName`) : l'interface doit pouvoir dire qu'une fiche
+     * vient de naître et reste à compléter. Un tiers simplement RETROUVÉ ne le
+     * renseigne pas — il n'y a rien à annoncer.
+     */
+    private function partnerForFreeName(string $name): Partner
+    {
+        $existing = Partner::query()
+            ->ofType(PartnerType::Client)
+            ->whereRaw('LOWER(BTRIM(legal_name)) = ?', [mb_strtolower($name)])
+            // Rien n'interdit deux fiches homonymes — l'unicité ne porte que
+            // sur l'ICE et le code. Sans ordre, PostgreSQL en rendrait une au
+            // hasard, et deux factures du même client pourraient partir sur
+            // deux fiches différentes. La PLUS ANCIENNE gagne : c'est celle qui
+            // porte déjà l'historique.
+            ->oldest()
+            ->first();
+
+        if ($existing instanceof Partner) {
+            return $existing;
+        }
+
+        $partner = Partner::query()->create([
+            'type' => PartnerType::Client->value,
+            'legal_name' => $name,
+        ]);
+
+        $this->createdPartnerName = $partner->legal_name;
+
+        return $partner;
     }
 
     /**
@@ -631,9 +1084,9 @@ final class DocumentWriteService
         }
 
         // Les types qui ne gèlent pas restent modifiables une fois numérotés :
-        // la situation (2026-08-05), la facture et le devis (2026-08-06), puis
-        // l'avoir (2026-08-07) — décisions de l'exploitant. Aucune pièce
-        // commerciale n'est donc plus figée après émission ; seul l'état
+        // la situation (2026-08-05), la facture et le devis (2026-08-06) —
+        // décisions de l'exploitant. Aucune pièce commerciale de vente n'est
+        // donc plus figée après émission ; seul l'état
         // terminal, contrôlé juste au-dessus, ferme encore un document. La
         // brèche dans l'immuabilité du §3 est
         // bornée par l'enum — jamais par un drapeau transmis par l'appelant,

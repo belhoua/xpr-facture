@@ -2,7 +2,6 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowDownLeft,
   ArrowUpRight,
   MoreHorizontal,
   Pencil,
@@ -40,16 +39,28 @@ import { CashMovementFormDialog } from "@/features/cash/components/cash-movement
 import type { CashMovement } from "@/features/cash/schemas/cash";
 import { toApiProblem } from "@/lib/api/client";
 import { formatDate, formatMoney } from "@/lib/format";
-import { cn } from "@/lib/utils";
 
 const PERIODS = ["last7", "last30", "last90", "year"] as const;
 
 /**
- * Suivi des flux de caisse : trois soldes en tête, journal des mouvements
- * dessous, CRUD complet. Les décaissements sont affichés en négatif ET en
- * rouge — redonder le signe par la couleur évite de lire un « -1 250 » comme
- * un encaissement en diagonale. Aucune immuabilité ici : un mouvement se
- * corrige et se supprime librement.
+ * Suivi des ENCAISSEMENTS : un total en tête, le journal des entrées dessous.
+ *
+ * L'écran ne montre volontairement ni solde ni décaissements. C'est un état des
+ * recettes, pas une balance de trésorerie — deux lectures distinctes qui, mises
+ * côte à côte, se faisaient concurrence sans que rien ne dise laquelle
+ * répondait à la question posée.
+ *
+ * Le filtrage est demandé au SERVEUR (`direction: "inflow"`) et non appliqué
+ * ici : trier ou filtrer une liste déjà reçue ne porterait que sur ce qui a été
+ * transmis. Les trois cumuls, eux, restent calculés sur la période entière —
+ * `inflowCents` est donc le total encaissé, que le filtre soit posé ou non.
+ *
+ * La liste a DEUX sources, fusionnées par le serveur : les écritures saisies
+ * ici, et les règlements reçus sur les factures. Le champ `source` les
+ * distingue, et c'est la seule différence que l'écran en tire — un règlement ne
+ * se corrige que depuis sa facture, qui en dérive le cumul encaissé et le
+ * statut. Une écriture saisie, elle, se corrige et se supprime librement :
+ * aucune immuabilité de ce côté.
  */
 export function CashView() {
   const t = useTranslations("cash");
@@ -64,8 +75,8 @@ export function CashView() {
   const [deleteTarget, setDeleteTarget] = useState<CashMovement | null>(null);
 
   const { data, isPending, isError, error, refetch } = useQuery({
-    queryKey: cashKeys.summary(period),
-    queryFn: () => fetchCashSummary(period),
+    queryKey: cashKeys.summary(period, "inflow"),
+    queryFn: () => fetchCashSummary(period, "inflow"),
   });
 
   const deleteMutation = useMutation({
@@ -96,6 +107,17 @@ export function CashView() {
         </span>
       ),
     },
+    {
+      id: "client",
+      header: t("columns.client"),
+      cell: (row) =>
+        row.clientName ?? (
+          // `null` recouvre deux cas — mouvement sans tiers, ou tiers archivé.
+          // Un tiret les dit tous les deux sans prétendre les distinguer, ce
+          // que la donnée reçue ne permet de toute façon pas.
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
     { id: "label", header: t("columns.label"), cell: (row) => row.label },
     {
       id: "method",
@@ -110,20 +132,21 @@ export function CashView() {
       header: t("columns.register"),
       hideBelow: "lg",
       cell: (row) => (
-        <span className="text-muted-foreground">{row.registerName}</span>
+        // `null` sur un règlement de facture : il n'entre dans aucune caisse
+        // physique — un virement arrive en banque. Le tiret le dit sans
+        // inventer un tiroir-caisse qui n'existe pas.
+        <span className="text-muted-foreground">{row.registerName ?? "—"}</span>
       ),
     },
     {
       id: "amount",
       header: t("columns.amount"),
       align: "end",
+      // Plus de branche sur le signe : la liste ne porte que des encaissements,
+      // et conserver le rouge du décaissement laisserait croire qu'il pourrait
+      // encore s'en afficher un.
       cell: (row) => (
-        <span
-          className={cn(
-            "amount font-medium",
-            row.amountCents < 0 ? "text-status-overdue" : "text-status-paid",
-          )}
-        >
+        <span className="amount text-status-paid font-medium">
           {formatMoney(row.amountCents, locale, row.currency)}
         </span>
       ),
@@ -132,7 +155,16 @@ export function CashView() {
       id: "actions",
       header: t("columns.actions"),
       align: "end",
-      cell: (row) => (
+      cell: (row) =>
+        // Un RÈGLEMENT ne se corrige que depuis sa facture, dont il dérive le
+        // cumul encaissé et le statut. Les deux actions retomberaient d'ailleurs
+        // sur un 404 — l'identifiant n'est pas celui d'un mouvement — mais
+        // c'est bien la règle métier, pas la route absente, qui les retire ici.
+        row.source === "payment" ? (
+          <span className="text-muted-foreground" title={t("readOnly")}>
+            —
+          </span>
+        ) : (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -158,7 +190,7 @@ export function CashView() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      ),
+        ),
     },
   ];
 
@@ -189,29 +221,17 @@ export function CashView() {
         }
       />
 
-      <div className="mb-3 grid gap-3 sm:grid-cols-3">
+      {/* Seule carte de l'écran, et volontairement PAS étirée sur toute la
+          largeur : un chiffre unique perdu au milieu d'un bandeau de 1200 px se
+          lit moins bien qu'une tuile à sa mesure. C'est le fait d'être seule,
+          non sa taille, qui la met en valeur. */}
+      <div className="mb-3 sm:max-w-sm">
         <StatCard
-          label={t("balance")}
-          icon={Wallet}
-          loading={isPending}
-          value={
-            data ? formatMoney(data.balanceCents, locale, data.currency) : "—"
-          }
-        />
-        <StatCard
-          label={t("inflow")}
+          label={t("inflowTotal")}
           icon={ArrowUpRight}
           loading={isPending}
           value={
             data ? formatMoney(data.inflowCents, locale, data.currency) : "—"
-          }
-        />
-        <StatCard
-          label={t("outflow")}
-          icon={ArrowDownLeft}
-          loading={isPending}
-          value={
-            data ? formatMoney(data.outflowCents, locale, data.currency) : "—"
           }
         />
       </div>

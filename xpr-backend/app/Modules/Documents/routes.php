@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use App\Modules\Documents\Controllers\DocumentCancelController;
 use App\Modules\Documents\Controllers\DocumentConvertController;
-use App\Modules\Documents\Controllers\DocumentCreditNoteController;
 use App\Modules\Documents\Controllers\DocumentDeleteController;
 use App\Modules\Documents\Controllers\DocumentIssueController;
 use App\Modules\Documents\Controllers\DocumentListController;
@@ -68,10 +67,4 @@ Route::middleware(['api', 'auth:sanctum', 'tenant'])
         // Conversion devis → facture : crée un document, d'où `documents.create`.
         Route::post('documents/{document}/convert', DocumentConvertController::class)
             ->middleware('permission:'.Permission::DocumentsCreate->value);
-
-        // Avoir sur facture. Créer l'avoir, c'est créer un document — mais
-        // c'est aussi défaire une facture émise : la permission d'ANNULATION
-        // est exigée en plus, comme pour `cancel`.
-        Route::post('documents/{document}/credit-note', DocumentCreditNoteController::class)
-            ->middleware('permission:'.Permission::DocumentsCancel->value);
     });

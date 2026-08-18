@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Catalog\Models;
 
+use App\Modules\Catalog\Enums\ProductType;
 use App\Modules\Shared\Concerns\BelongsToCompany;
 use Database\Factories\CategoryFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -41,14 +42,34 @@ final class Category extends Model
     ];
 
     /**
-     * Articles de la catégorie. `nullOnDelete` en base : archiver une catégorie
-     * ne retire pas ses produits du catalogue, elle les déclasse.
+     * Tout ce que la catégorie classe. `nullOnDelete` en base : archiver une
+     * catégorie ne retire rien du catalogue, elle déclasse.
+     *
+     * Conservée pour la contrainte de suppression et les lectures internes ;
+     * l'INTERFACE, elle, ne parle plus que de services (cf. `services()`).
      *
      * @return HasMany<Product, $this>
      */
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);
+    }
+
+    /**
+     * SERVICES de la catégorie — les seules prestations que la société vend
+     * (décision de l'exploitant, 2026-08-18 : l'entreprise ne commercialise
+     * aucun bien physique).
+     *
+     * Relation distincte plutôt qu'un filtre posé par chaque appelant : le
+     * compteur de l'écran Catégories doit dire « 4 services », et un
+     * `withCount('products')` y ferait entrer un article d'un autre type le
+     * jour où il en existerait un — sans que rien ne le signale.
+     *
+     * @return HasMany<Product, $this>
+     */
+    public function services(): HasMany
+    {
+        return $this->hasMany(Product::class)->where('type', ProductType::Service->value);
     }
 
     /**

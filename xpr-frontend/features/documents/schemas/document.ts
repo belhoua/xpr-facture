@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { DOCUMENT_STATUSES } from "@/components/patterns/status-badge";
+import { paymentSchema } from "@/features/payments/schemas/payment";
 
 /** Miroir de `Accounting\Enums\DocumentType`. */
 export const DOCUMENT_TYPES = [
@@ -10,7 +11,6 @@ export const DOCUMENT_TYPES = [
   "purchase_order",
   "delivery_note",
   "shipping_slip",
-  "credit_note",
   "purchase_invoice",
   "situation",
 ] as const;
@@ -64,6 +64,21 @@ export const documentSchema = z.object({
   number: z.string().nullable(),
   status: z.enum(DOCUMENT_STATUSES),
   partnerId: z.uuid().nullable(),
+  /** Projet facturé. `null` sur la plupart des pièces, qui n'en relèvent d'aucun. */
+  projectId: z.uuid().nullable(),
+  /**
+   * Titre du projet, rendu seulement quand la relation a été chargée — et
+   * `null` si le projet a été archivé depuis, l'écran affichant alors « — »
+   * plutôt qu'un titre inventé.
+   */
+  projectTitle: z.string().nullable().optional(),
+  /**
+   * Nom de la fiche client OUVERTE par cet enregistrement, quand un nom saisi
+   * librement n'en a retrouvé aucune. Renseigné sur la seule réponse d'une
+   * écriture — jamais en lecture — et `null` quand une fiche existante a été
+   * retrouvée : il n'y a alors rien à annoncer.
+   */
+  autoCreatedPartnerName: z.string().nullable().optional(),
   parentDocumentId: z.uuid().nullable(),
   parentNumber: z.string().nullable().optional(),
   /** Identité FIGÉE à l'émission : elle ne suit pas un renommage du tiers. */
@@ -88,6 +103,12 @@ export const documentSchema = z.object({
   terms: z.string().nullable(),
   items: z.array(documentItemSchema).optional(),
   taxSummary: z.array(taxSummaryLineSchema).optional(),
+  /**
+   * Historique d'encaissement, du plus récent au plus ancien. Absent quand le
+   * serveur n'a pas chargé la relation — d'où l'`optional()` plutôt qu'un
+   * tableau vide, qui ferait passer « pas demandé » pour « aucun règlement ».
+   */
+  payments: z.array(paymentSchema).optional(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
 });
@@ -142,13 +163,23 @@ export const documentItemFormSchema = z.object({
 
 export type DocumentItemFormValues = z.infer<typeof documentItemFormSchema>;
 
-export const documentFormSchema = z
+const baseDocumentFormSchema = z
   .object({
     /**
      * "" = client de passage, non répertorié. Un `<Select>` ne peut pas
      * porter une valeur nulle, d'où la chaîne vide plutôt qu'un null.
      */
     partnerId: z.string(),
+    /**
+     * "" = aucun projet. Facultatif : la plupart des pièces ne relèvent
+     * d'aucun chantier, et l'exiger obligerait à en inventer un par vente.
+     *
+     * Ce que ce schéma NE vérifie PAS : que le projet appartienne au client
+     * choisi. La règle croise deux entités et ne se tient qu'au serveur, qui
+     * répond 422 sur `projectId` — le formulaire se contente de ne proposer
+     * que les projets du client sélectionné.
+     */
+    projectId: z.string(),
     clientName: z.string().trim().max(255, "validation.tooLong"),
     /**
      * Objet du document — « Objet » du devis imprimé. Facultatif ici : seule
@@ -157,27 +188,80 @@ export const documentFormSchema = z
     subject: z.string().trim().max(255, "validation.tooLong"),
     /** Ville d'établissement du document. Vide ⇒ repli d'affichage (BRAND). */
     issueCity: z.string().trim().max(100, "validation.tooLong"),
+    /**
+     * Numéro de la pièce. La contrainte de format est posée par
+     * `documentFormSchema(mode)` — elle n'est pas la même à la création et en
+     * modification.
+     *
+     * Le champ reste une CHAÎNE et non un `number` : « 007 » est un numéro que
+     * l'utilisateur a écrit, et le typer en nombre lui ôterait ses zéros
+     * initiaux avant même l'envoi.
+     *
+     * L'unicité, elle, n'est pas vérifiable ici — elle dépend de ce que la base
+     * contient. C'est le serveur qui répond, en 422 puis en 409 sur une
+     * collision concurrente.
+     */
+    number: z.string().trim().max(30, "validation.tooLong"),
     issuedAt: z.string(),
     dueAt: z.string(),
     notes: z.string().trim().max(5000, "validation.tooLong"),
     terms: z.string().trim().max(5000, "validation.tooLong"),
     items: z.array(documentItemFormSchema).max(200),
-  })
-  .refine(
-    (values) =>
-      values.issuedAt === "" ||
-      values.dueAt === "" ||
-      values.dueAt >= values.issuedAt,
-    { path: ["dueAt"], message: "validation.dueBeforeIssued" },
-  )
-  // Miroir de `required_without:partnerId` côté FormRequest : avec un tiers,
-  // le serveur recopie sa raison sociale et le champ est masqué.
-  .refine(
-    (values) => values.partnerId !== "" || values.clientName.trim().length >= 2,
-    { path: ["clientName"], message: "validation.clientName" },
-  );
+  });
 
-export type DocumentFormValues = z.infer<typeof documentFormSchema>;
+export type DocumentFormValues = z.infer<typeof baseDocumentFormSchema>;
+
+/**
+ * Schéma de saisie d'un document, dépendant du MODE.
+ *
+ * Seul le champ `number` diffère, et il diffère parce que la règle SERVEUR
+ * diffère (cf. `DocumentStoreRequest` et `DocumentUpdateRequest`) :
+ *
+ *  - à la CRÉATION, c'est un compteur qu'on impose à une pièce qui n'a pas
+ *    encore d'identité : des chiffres, et rien d'autre. Vide, la séquence
+ *    reprend la main ;
+ *  - en MODIFICATION, le champ porte le numéro TEL QU'IL S'AFFICHE
+ *    (« FAC-2026-0003 ») et ne peut plus être vidé — une pièce numérotée ne
+ *    redevient pas brouillon.
+ *
+ * Une fabrique plutôt que deux schémas jumeaux : tout le reste est commun, et
+ * le dupliquer les ferait diverger au premier champ ajouté. Les deux contrôles
+ * croisés sont appliqués APRÈS l'extension — un `.refine()` rend un ZodEffects,
+ * qui n'expose plus `.extend()`.
+ */
+export function documentFormSchema(mode: "create" | "edit") {
+  return baseDocumentFormSchema
+    .extend({
+      number:
+        mode === "create"
+          ? z
+              .string()
+              .trim()
+              .regex(/^\d*$/u, "validation.numberDigits")
+              .max(20, "validation.tooLong")
+          : z
+              .string()
+              .trim()
+              .min(1, "validation.required")
+              .regex(
+                /^[A-Za-z0-9][A-Za-z0-9/\-_.]{0,29}$/u,
+                "validation.numberFormat",
+              ),
+    })
+    .refine(
+      (values) =>
+        values.issuedAt === "" ||
+        values.dueAt === "" ||
+        values.dueAt >= values.issuedAt,
+      { path: ["dueAt"], message: "validation.dueBeforeIssued" },
+    )
+    // Miroir de `required_without:partnerId` côté FormRequest : avec un tiers,
+    // le serveur recopie sa raison sociale et le champ est masqué.
+    .refine(
+      (values) => values.partnerId !== "" || values.clientName.trim().length >= 2,
+      { path: ["clientName"], message: "validation.clientName" },
+    );
+}
 
 /* ------------------------------------------------------- Règles d'affichage */
 
@@ -195,25 +279,19 @@ const TERMINAL_STATUSES: readonly string[] = ["cancelled", "refused", "converted
  * `DocumentType::freezesOnIssue()` :
  *  - la SITUATION, pièce de suivi et non pièce fiscale (2026-08-05) ;
  *  - la FACTURE et le DEVIS, sur décision explicite de l'exploitant
- *    (2026-08-06) ;
- *  - l'AVOIR, même décision (2026-08-07).
+ *    (2026-08-06).
  *
- * Plus aucune pièce commerciale n'est donc figée après émission : seul l'état
- * TERMINAL ferme encore un document. Ce que chaque levée coûte est documenté
- * côté backend, dans l'enum ; en retirer une ici sans l'y révoquer ne ferait
- * que masquer l'écriture, pas l'empêcher.
+ * Plus aucune pièce commerciale de vente n'est donc figée après émission : seul
+ * l'état TERMINAL ferme encore un document. Ce que chaque levée coûte est
+ * documenté côté backend, dans l'enum ; en retirer une ici sans l'y révoquer ne
+ * ferait que masquer l'écriture, pas l'empêcher.
  */
-const EDITABLE_ONCE_ISSUED: readonly string[] = [
-  "situation",
-  "invoice",
-  "quote",
-  "credit_note",
-];
+const EDITABLE_ONCE_ISSUED: readonly string[] = ["situation", "invoice", "quote"];
 
 /**
  * Types qu'on peut encore SUPPRIMER une fois numérotés. Miroir de
  * `DocumentType::deletableOnceIssued()` : la situation et la facture
- * (2026-08-06), puis le devis et l'avoir (2026-08-07).
+ * (2026-08-06), puis le devis (2026-08-07).
  *
  * La liste reste DISTINCTE de `EDITABLE_ONCE_ISSUED` bien qu'elle porte
  * aujourd'hui les mêmes valeurs : les deux actes se décident séparément côté
@@ -225,7 +303,6 @@ const DELETABLE_ONCE_ISSUED: readonly string[] = [
   "situation",
   "invoice",
   "quote",
-  "credit_note",
 ];
 
 /**
@@ -269,7 +346,19 @@ export function isDeletable(document: Document): boolean {
   );
 }
 
-/** L'émission consomme un numéro : elle exige au moins une ligne. */
+/**
+ * L'action « Émettre » ne s'affiche que sur un BROUILLON.
+ *
+ * Depuis le 2026-08-14, la facture et le devis naissent numérotés : le bouton
+ * disparaît donc de lui-même sur tout ce que le produit crée désormais, sans
+ * qu'aucun écran n'ait à connaître la règle.
+ *
+ * La fonction n'est PAS supprimée pour autant, et c'est délibéré : les bases
+ * antérieures à la bascule contiennent des brouillons, et les types d'achat et
+ * d'expédition gardent leur étape d'émission. La retirer laisserait ces
+ * documents sans aucun chemin vers leur numéro — un cul-de-sac dans l'écran,
+ * pour supprimer un bouton que plus personne ne voit.
+ */
 export function isIssuable(document: Document): boolean {
   return document.status === "draft";
 }
@@ -337,8 +426,6 @@ export function listRoute(type: DocumentType): string | null {
       return "/quotes";
     case "invoice":
       return "/invoices";
-    case "credit_note":
-      return "/credit-notes";
     case "situation":
       return "/situations";
     default:
@@ -367,15 +454,6 @@ export function isTransferableToConvention(document: Document): boolean {
   );
 }
 
-/** Corriger une facture émise = lui rattacher un avoir, jamais la modifier. */
-export function isCreditable(document: Document): boolean {
-  return (
-    document.type === "invoice" &&
-    document.status !== "draft" &&
-    document.status !== "cancelled"
-  );
-}
-
 /**
  * États proposés par l'action « changer de statut ». Miroir de
  * `DocumentStatus::manuallyAssignableFor()` : `draft` en est exclu (revenir au
@@ -392,8 +470,6 @@ export function assignableStatuses(type: DocumentType): readonly string[] {
     case "invoice":
     case "purchase_invoice":
       return ["sent", "partial", "paid", "overdue"];
-    case "credit_note":
-      return ["sent", "paid"];
     default:
       return ["sent", "accepted"];
   }

@@ -2,7 +2,6 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  FileMinus,
   FileOutput,
   FileSignature,
   FileText,
@@ -13,6 +12,7 @@ import {
   Printer,
   Search,
   Trash2,
+  Wallet,
 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
@@ -44,17 +44,16 @@ import {
 } from "@/features/conventions/api/conventions";
 import {
   convertDocument,
-  createCreditNote,
   deleteDocument,
   documentKeys,
   fetchDocuments,
 } from "@/features/documents/api/documents";
 import { DocumentDetailSheet } from "@/features/documents/components/document-detail-sheet";
 import { DocumentFormDialog } from "@/features/documents/components/document-form-dialog";
+import { PaymentsModal } from "@/features/payments/components/payments-modal";
 import {
   assignableStatuses,
   isConvertible,
-  isCreditable,
   isDeletable,
   isEditable,
   isTransferableToConvention,
@@ -100,7 +99,9 @@ export function DocumentsView({ type }: { type: DocumentType }) {
   const [editing, setEditing] = useState<Document | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
-  const [creditTarget, setCreditTarget] = useState<Document | null>(null);
+  // Règlements : réservés aux FACTURES, l'entrée de menu n'apparaît pas
+  // ailleurs. Le serveur le tient de son côté — un devis reçoit 409.
+  const [paymentTarget, setPaymentTarget] = useState<Document | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   /**
@@ -168,7 +169,6 @@ export function DocumentsView({ type }: { type: DocumentType }) {
     queryClient.setQueryData(documentKeys.detail(created.id), created);
     await queryClient.invalidateQueries({ queryKey: documentKeys.all });
 
-    setCreditTarget(null);
     setActionError(null);
 
     const destination = listRoute(created.type);
@@ -191,17 +191,10 @@ export function DocumentsView({ type }: { type: DocumentType }) {
     // converti, si la facture est annulée…) : on réaffiche SON message plutôt
     // que d'en inventer un depuis l'interface.
     setActionError(problem.detail ?? problem.title);
-    setCreditTarget(null);
   };
 
   const convertMutation = useMutation({
     mutationFn: (id: string) => convertDocument(id),
-    onSuccess: settleTransfer,
-    onError: failTransfer,
-  });
-
-  const creditNoteMutation = useMutation({
-    mutationFn: (id: string) => createCreditNote(id),
     onSuccess: settleTransfer,
     onError: failTransfer,
   });
@@ -230,9 +223,7 @@ export function DocumentsView({ type }: { type: DocumentType }) {
   });
 
   const transferring =
-    convertMutation.isPending ||
-    creditNoteMutation.isPending ||
-    conventionMutation.isPending;
+    convertMutation.isPending || conventionMutation.isPending;
 
   const openCreate = () => {
     setEditing(null);
@@ -252,8 +243,14 @@ export function DocumentsView({ type }: { type: DocumentType }) {
    */
   const deletingNumber = deleteTarget?.number ?? null;
 
-  /** Statuts filtrables : ceux du cycle du type, brouillon et annulé compris. */
-  const statusFilters = ["all", "draft", ...assignableStatuses(type), "cancelled"];
+  /**
+   * Statuts filtrables : ceux du cycle du type, plus `cancelled`.
+   *
+   * `draft` en est retiré depuis le 2026-08-15 : la facture et le devis
+   * naissent numérotés, le produit n'en crée donc plus aucun. Proposer un
+   * filtre qui ne peut plus rien ramener, c'est promettre une liste vide.
+   */
+  const statusFilters = ["all", ...assignableStatuses(type), "cancelled"];
 
   const columns: readonly Column<Document>[] = [
     {
@@ -329,11 +326,22 @@ export function DocumentsView({ type }: { type: DocumentType }) {
                 {t("actions.view")}
               </DropdownMenuItem>
 
-              {/* Transferts. Les mêmes règles que le panneau de détail —
-                  `isConvertible` / `isCreditable` — parce que c'est le même
-                  acte : un devis ÉMIS devient une facture, une facture émise
-                  s'annule par un avoir. Un brouillon n'est transférable ni dans
-                  un cas ni dans l'autre : il n'engage encore rien. */}
+              {/* RÈGLEMENTS — factures seulement. Un devis n'ouvre aucune
+                  créance : il n'y a rien à solder tant qu'il n'est pas devenu
+                  facture. Le brouillon en est exclu aussi : sans numéro, la
+                  pièce n'existe pas fiscalement et l'encaissement n'aurait
+                  rien à quoi se rattacher. */}
+              {row.type === "invoice" && row.status !== "draft" && (
+                <DropdownMenuItem onSelect={() => setPaymentTarget(row)}>
+                  <Wallet aria-hidden />
+                  {t("actions.payments")}
+                </DropdownMenuItem>
+              )}
+
+              {/* Transferts. La même règle que le panneau de détail —
+                  `isConvertible` — parce que c'est le même acte : un devis
+                  ÉMIS devient une facture. Un brouillon n'est pas
+                  transférable : il n'engage encore rien. */}
               {isConvertible(row) && (
                 <DropdownMenuItem
                   disabled={transferring}
@@ -341,19 +349,6 @@ export function DocumentsView({ type }: { type: DocumentType }) {
                 >
                   <FileOutput aria-hidden />
                   {t("actions.convert")}
-                </DropdownMenuItem>
-              )}
-
-              {/* L'avoir passe par une confirmation, pas la conversion : il
-                  DÉFAIT comptablement une facture émise, quand la conversion ne
-                  fait que proposer un brouillon de plus. */}
-              {isCreditable(row) && (
-                <DropdownMenuItem
-                  disabled={transferring}
-                  onSelect={() => setCreditTarget(row)}
-                >
-                  <FileMinus aria-hidden />
-                  {t("actions.creditNote")}
                 </DropdownMenuItem>
               )}
 
@@ -541,16 +536,11 @@ export function DocumentsView({ type }: { type: DocumentType }) {
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
       />
 
-      <ConfirmDialog
-        open={creditTarget !== null}
-        onOpenChange={(open) => !open && setCreditTarget(null)}
-        title={t("creditNoteConfirm.title")}
-        description={t("creditNoteConfirm.description")}
-        confirmLabel={t("creditNoteConfirm.confirm")}
-        pending={creditNoteMutation.isPending}
-        onConfirm={() =>
-          creditTarget && creditNoteMutation.mutate(creditTarget.id)
-        }
+      <PaymentsModal
+        invoiceId={paymentTarget?.id ?? null}
+        invoiceNumber={paymentTarget?.number ?? null}
+        open={paymentTarget !== null}
+        onOpenChange={(next) => !next && setPaymentTarget(null)}
       />
     </>
   );

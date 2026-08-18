@@ -50,6 +50,22 @@ final class TenantContext
     }
 
     /**
+     * Un utilisateur est authentifié, mais aucune société n'est active.
+     *
+     * Distingue les deux façons d'être « hors contexte », que `currentId()`
+     * seul confond :
+     *   - une requête HTTP d'un compte détaché de toute société → il ne doit
+     *     RIEN voir (cf. le scope de BelongsToCompany) ;
+     *   - un traitement hors requête (console, seeder, migration) → il doit
+     *     tout voir, sans quoi plus aucune commande d'administration ne
+     *     fonctionne.
+     */
+    public function hasUserWithoutCompany(): bool
+    {
+        return $this->userId !== null && $this->companyId === null;
+    }
+
+    /**
      * Exécute un traitement dans le contexte d'une société, puis restaure le
      * contexte précédent.
      *

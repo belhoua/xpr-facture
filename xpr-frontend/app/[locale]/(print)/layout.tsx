@@ -7,8 +7,7 @@
  * de saisie ni contrôle de pilotage (recherche, calculatrice, sélecteurs de
  * langue et de thème) qui donnerait à croire qu'une valeur du document se
  * modifie ici. Une pièce comptable se consulte, elle ne s'édite pas : la
- * correction passe par le formulaire, et pour un document émis par un avoir
- * (§3).
+ * correction passe par le formulaire (§3).
  *
  * C'est un groupe de routes distinct de `(app)` et non un masquage CSS : le
  * chrome n'est pas caché, il n'est pas monté. Les URL, elles, ne bougent pas —

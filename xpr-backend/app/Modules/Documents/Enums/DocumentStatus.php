@@ -50,7 +50,7 @@ enum DocumentStatus: string
     /** Facture échue et non réglée. */
     case Overdue = 'overdue';
 
-    /** Annulé. Terminal. La correction se fait par avoir, jamais par DELETE (§3). */
+    /** Annulé. Terminal. La trace reste en base, jamais de DELETE (§3). */
     case Cancelled = 'cancelled';
 
     /**
@@ -73,11 +73,6 @@ enum DocumentStatus: string
             DocumentType::Invoice, DocumentType::PurchaseInvoice => [
                 self::Draft, self::Sent, self::Partial,
                 self::Paid, self::Overdue, self::Cancelled,
-            ],
-
-            // Un avoir se rembourse ou s'impute : `paid` marque le dénouement.
-            DocumentType::CreditNote => [
-                self::Draft, self::Sent, self::Paid, self::Cancelled,
             ],
 
             // La situation suit un cycle d'encaissement, comme la facture, mais
@@ -110,8 +105,8 @@ enum DocumentStatus: string
      * ramener au brouillon le laisserait modifiable — l'immuabilité tomberait
      * (§3). `cancelled` et `converted` en sont exclus aussi, mais pour une
      * autre raison : ils ont chacun leur endpoint, qui applique des règles
-     * propres (l'un vérifie qu'il n'y a pas déjà d'avoir, l'autre crée la
-     * facture fille).
+     * propres (l'un clôt la pièce et interdit toute réouverture, l'autre crée
+     * la facture fille).
      *
      * @return list<self>
      */

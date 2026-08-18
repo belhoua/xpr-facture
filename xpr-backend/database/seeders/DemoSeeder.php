@@ -38,27 +38,38 @@ final class DemoSeeder extends Seeder
     /** E-mail du propriétaire (owner) — mot de passe : `password` */
     private const OWNER_EMAIL = 'kamal.bennani@bcat-demo.ma';
 
-    /** Sociétés fictives marocaines de démo. */
+    /**
+     * Sociétés de démonstration.
+     *
+     * La PREMIÈRE porte les coordonnées RÉELLES de l'exploitant : ce sont elles
+     * qui s'impriment au pied de chaque devis et de chaque facture, et un ICE ou
+     * un RIB inventé sur une pièce commerciale n'est pas un détail
+     * d'affichage (§3). Les suivantes restent fictives — elles ne servent qu'à
+     * éprouver l'isolation entre sociétés.
+     *
+     * Le code postal vit dans `city` (« OUJDA 60000 ») : la table n'a pas de
+     * colonne dédiée, et c'est la forme usuelle des en-têtes marocains.
+     */
     private const COMPANIES = [
         [
             'legal_name' => 'BCAT S.A.R.L.',
-            'trade_name' => 'BCAT',
+            'trade_name' => 'BCAT.sarl',
             'tagline' => 'Bureau de Contrôle & Assistance Technique',
             'legal_form' => 'sarl',
-            'ice' => '001234567890123',
-            'if_number' => '12345678',
-            'rc_number' => '123456',
-            'rc_city' => 'Casablanca',
+            'ice' => '002091111000017',
+            'if_number' => '26066474',
+            'rc_number' => '32577',
+            'rc_city' => 'Oujda',
             'patente' => '10100485',
             'cnss' => '1144864',
             'vat_regime' => 'debit',
             'vat_exempt' => false,
             'share_capital' => 10_000_000_00, // 10 000 000 DH en centimes
-            'address' => '45, Bd Anfa, 7ème étage',
-            'city' => 'Casablanca',
+            'address' => '8 BD Moulay Ahmed Lagrari 6ème Étage App N°25',
+            'city' => 'OUJDA 60000',
             'country' => 'MA',
-            'phone' => '+212 522 000 001',
-            'email' => 'contact@bcat-demo.ma',
+            'phone' => '0536686883 / 0661940997',
+            'email' => 'bcatcontrol@gmail.com',
             'bank_rib' => '011640000032210000180410',
             'default_currency' => 'MAD',
             'timezone' => 'Africa/Casablanca',
@@ -337,9 +348,9 @@ final class DemoSeeder extends Seeder
             ['category' => 'Licences & abonnements', 'color' => '#7C3AED', 'name' => 'Licence XPR Facture', 'reference' => 'LIC-XPR', 'type' => 'service', 'unit' => 'an', 'price' => 1_200_000, 'cost' => null, 'tax' => $standard],
             ['category' => 'Licences & abonnements', 'color' => '#7C3AED', 'name' => 'Hébergement mutualisé', 'reference' => 'HEB-M', 'type' => 'service', 'unit' => 'mois', 'price' => 45_000, 'cost' => 18_000, 'tax' => $reduced],
             ['category' => 'Maintenance', 'color' => '#4B5563', 'name' => 'Maintenance applicative', 'reference' => 'MNT-M', 'type' => 'service', 'unit' => 'mois', 'price' => 350_000, 'cost' => 150_000, 'tax' => $standard],
-            ['category' => 'Matériel informatique', 'color' => '#059669', 'name' => 'Ordinateur portable 14"', 'reference' => 'MAT-PC14', 'type' => 'good', 'unit' => 'unité', 'price' => 950_000, 'cost' => 780_000, 'tax' => $standard],
-            ['category' => 'Matériel informatique', 'color' => '#059669', 'name' => 'Écran 27" 4K', 'reference' => 'MAT-E27', 'type' => 'good', 'unit' => 'unité', 'price' => 320_000, 'cost' => 245_000, 'tax' => $standard],
-            ['category' => 'Fournitures de bureau', 'color' => '#D97706', 'name' => 'Ramette papier A4', 'reference' => 'FRN-A4', 'type' => 'good', 'unit' => 'ramette', 'price' => 5_500, 'cost' => 3_800, 'tax' => $standard],
+            ['category' => 'Contrôle technique', 'color' => '#059669', 'name' => 'Mission de contrôle technique', 'reference' => 'CTC-M', 'type' => 'service', 'unit' => 'mission', 'price' => 950_000, 'cost' => 780_000, 'tax' => $standard],
+            ['category' => 'Contrôle technique', 'color' => '#059669', 'name' => 'Visite de chantier', 'reference' => 'CTC-V', 'type' => 'service', 'unit' => 'intervention', 'price' => 320_000, 'cost' => 245_000, 'tax' => $standard],
+            ['category' => 'Études', 'color' => '#D97706', 'name' => 'Étude de sol', 'reference' => 'ETU-SOL', 'type' => 'service', 'unit' => 'forfait', 'price' => 5_500, 'cost' => 3_800, 'tax' => $standard],
         ];
 
         // Idempotence : une société déjà pourvue n'est pas re-seedée, on relit
@@ -380,7 +391,10 @@ final class DemoSeeder extends Seeder
                 'tax_rate_id' => $article['tax']['id'] ?? null,
                 // Seuls les biens sont suivis : la contrainte CHECK
                 // `products_stock_goods_only_check` refuserait un service coché.
-                'track_stock' => $article['type'] === 'good',
+                // Toujours faux : le jeu de démonstration ne sème plus que des
+                // services (2026-08-18), et la contrainte
+                // `products_stock_goods_only_check` en refuserait un coché.
+                'track_stock' => false,
                 'is_active' => true,
                 'created_at' => $now,
                 'updated_at' => $now,
@@ -580,14 +594,13 @@ final class DemoSeeder extends Seeder
                 'updated_at' => $now,
             ], 'id');
 
-            foreach (['invoice', 'quote', 'credit_note'] as $type) {
+            foreach (['invoice', 'quote'] as $type) {
                 DB::table('sequences')->insert([
                     'company_id' => $companyId,
                     'fiscal_year_id' => $fiscalYearId,
                     'document_type' => $type,
                     'format' => match ($type) {
                         'quote' => 'DEV-{YYYY}-{0000}',
-                        'credit_note' => 'AV-{YYYY}-{0000}',
                         default => 'FAC-{YYYY}-{0000}',
                     },
                     'next_number' => 1,

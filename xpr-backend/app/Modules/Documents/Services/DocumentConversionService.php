@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Documents\Services;
 
 use App\Modules\Accounting\Enums\DocumentType;
+use App\Modules\Accounting\Services\DocumentNumberService;
 use App\Modules\Documents\Enums\DocumentStatus;
 use App\Modules\Documents\Models\Document;
 use Illuminate\Support\Carbon;
@@ -12,20 +13,26 @@ use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 /**
- * Transformations d'un document en un autre : **devis → facture** et
- * **facture → avoir**.
+ * Transformations d'un document en un autre : **devis → facture**.
  *
- * C'est le bénéfice concret de la table unique : les deux opérations sont une
- * COPIE DE LIGNES au sein d'un même schéma, pas une traduction entre deux
- * modèles. Aucune règle de TVA n'est réécrite — les montants figés sur les
- * lignes d'origine sont repris tels quels.
+ * C'est le bénéfice concret de la table unique : l'opération est une COPIE DE
+ * LIGNES au sein d'un même schéma, pas une traduction entre deux modèles.
+ * Aucune règle de TVA n'est réécrite — les montants figés sur les lignes
+ * d'origine sont repris tels quels.
  *
- * Le document produit est toujours un BROUILLON : la conversion propose, elle
- * n'émet pas. L'utilisateur relit, ajuste éventuellement, puis émet — ce qui
- * consomme alors un numéro de la séquence du type CIBLE.
+ * Le document produit était un BROUILLON jusqu'au 2026-08-14 : la conversion
+ * proposait, elle n'émettait pas. Depuis que la facture se numérote à la
+ * création, la facture issue d'un devis est NUMÉROTÉE elle aussi. Ce n'est pas
+ * une décision distincte, c'est la conséquence nécessaire de la précédente :
+ * l'écran n'offre plus d'action « émettre », et une facture née brouillon y
+ * serait restée bloquée, sans aucun chemin vers son numéro.
  */
 final class DocumentConversionService
 {
+    public function __construct(
+        private readonly DocumentNumberService $numbers,
+    ) {}
+
     /**
      * Devis → facture.
      *
@@ -71,43 +78,8 @@ final class DocumentConversionService
     }
 
     /**
-     * Facture → avoir (note de crédit).
-     *
-     * L'avoir porte des montants POSITIFS : son sens comptable vient de son
-     * `type`, pas d'un signe négatif. Stocker des montants négatifs obligerait
-     * chaque agrégat du produit — dashboard, états, déclaration de TVA — à
-     * connaître la convention de signe, et un seul oubli inverserait un KPI.
-     *
-     * La facture d'origine n'est PAS modifiée : elle est immuable (§3). C'est
-     * l'avoir qui vient s'imputer dessus, et le lien de parenté qui les relie.
-     * L'annulation totale d'une facture reste, elle, le statut `cancelled`
-     * accompagné d'un avoir de la totalité.
-     */
-    public function invoiceToCreditNote(Document $invoice): Document
-    {
-        if ($invoice->type !== DocumentType::Invoice) {
-            throw new ConflictHttpException(__('A credit note can only be issued against an invoice.'));
-        }
-
-        // Sans numéro, la facture n'a jamais existé fiscalement : il n'y a rien
-        // à corriger. Le brouillon se modifie ou se supprime directement.
-        if (! $invoice->isIssued()) {
-            throw new ConflictHttpException(__('Only an issued invoice can be credited.'));
-        }
-
-        return DB::transaction(fn (): Document => $this->copyInto($invoice, DocumentType::CreditNote, [
-            'issued_at' => Carbon::today(),
-            'due_at' => null,
-            // Le rattachement est écrit noir sur blanc dans le document : la
-            // mention « avoir sur facture n° X » est une obligation de forme,
-            // et elle doit survivre même si la relation était un jour rompue.
-            'notes' => __('Credit note for invoice :number', ['number' => (string) $invoice->number]),
-        ]));
-    }
-
-    /**
      * Copie l'en-tête et les lignes d'un document source vers un nouveau
-     * document du type demandé, à l'état de brouillon et sans numéro.
+     * document du type demandé.
      *
      * Les lignes sont dupliquées AVEC leurs montants déjà calculés, pas
      * recalculées : le taux de TVA de la ligne source est un instantané légal
@@ -152,6 +124,18 @@ final class DocumentConversionService
             $copy = $item->replicate(['document_id', 'created_at', 'updated_at']);
             $copy->document_id = $target->id;
             $copy->save();
+        }
+
+        // Numérotation APRÈS la copie des lignes, jamais avant : un numéro posé
+        // sur un document encore vide serait consommé sans rien attester, et le
+        // rollback de la transaction ne le rendrait pas à la séquence.
+        //
+        // L'appelant a déjà ouvert la transaction (DocumentNumberService refuse
+        // d'opérer hors transaction) et `issued_at` est posée par les overrides.
+        if ($type->numbersOnCreate()) {
+            $target->number = $this->numbers->allocate($type, $target->issued_at ?? Carbon::today());
+            $target->status = $target->settlementStatus();
+            $target->save();
         }
 
         return $target->refresh()->load('items');

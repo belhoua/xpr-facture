@@ -14,6 +14,8 @@ use App\Modules\Documents\Enums\DocumentStatus;
 use App\Modules\Documents\Models\Document;
 use App\Modules\Documents\Services\DocumentWriteService;
 use App\Modules\Partners\Models\Partner;
+use App\Modules\Projects\Models\Deliverable;
+use App\Modules\Projects\Models\Project;
 use App\Modules\Tenancy\Models\Company;
 use App\Modules\Tenancy\Services\TenantContext;
 use Illuminate\Support\Carbon;
@@ -79,7 +81,92 @@ final class WorkspaceDemoDataService
         $products = $this->seedCatalog();
 
         $this->seedDocuments($partners, $products);
-        $this->seedCashMovements($company);
+        $this->seedCashMovements($company, $partners);
+        $this->seedProjects($partners);
+    }
+
+    /**
+     * Projets d'avancement et livrables remis.
+     *
+     * Les quatre états sont représentés, chacun avec un avancement cohérent :
+     * un écran de démonstration où tout serait « en cours » ne montrerait ni
+     * les badges, ni le comportement d'un projet clos. Les livrables ne sont
+     * posés que sur les projets qui en ont produit — un projet annulé n'a rien
+     * remis, et lui en inventer un rendrait la démonstration trompeuse.
+     *
+     * @param  array<string, Partner>  $partners
+     */
+    private function seedProjects(array $partners): void
+    {
+        $today = Carbon::today();
+
+        $rows = [
+            [
+                'partner' => 'Société Immobilière Anfa',
+                'title' => 'Résidence Al Manar — lot A',
+                'status' => 'in_progress',
+                'progress' => 65,
+                'description' => 'Contrôle technique et suivi de chantier, 42 logements.',
+                'deliverables' => [
+                    ['title' => 'Notice technique', 'days' => 90],
+                    ['title' => 'Rapport d\'avancement n°1', 'days' => 45],
+                    ['title' => 'Rapport d\'avancement n°2', 'days' => 12],
+                ],
+            ],
+            [
+                'partner' => 'Atlas Distribution S.A.R.L.',
+                'title' => 'Entrepôt logistique Zenata',
+                'status' => 'completed',
+                'progress' => 100,
+                'description' => 'Mission achevée, dossier remis au maître d\'ouvrage.',
+                'deliverables' => [
+                    ['title' => 'Notice technique', 'days' => 150],
+                    ['title' => 'Procès-verbal de réception', 'days' => 20],
+                ],
+            ],
+            [
+                'partner' => 'TechMaroc Solutions',
+                'title' => 'Extension usine Aïn Sebaâ',
+                'status' => 'monitoring',
+                'progress' => 100,
+                'description' => 'Période de garantie : réserves en cours de levée.',
+                'deliverables' => [
+                    ['title' => 'Procès-verbal de réception', 'days' => 60],
+                ],
+            ],
+            [
+                'partner' => 'Riad Azur',
+                'title' => 'Villa Palmeraie — suivi de chantier',
+                'status' => 'canceled',
+                'progress' => 15,
+                'description' => 'Projet abandonné par le maître d\'ouvrage.',
+                'deliverables' => [],
+            ],
+        ];
+
+        foreach ($rows as $row) {
+            $partner = $partners[$row['partner']] ?? null;
+
+            if (! $partner instanceof Partner) {
+                continue;
+            }
+
+            $project = Project::create([
+                'partner_id' => $partner->id,
+                'title' => $row['title'],
+                'status' => $row['status'],
+                'progress_percentage' => $row['progress'],
+                'description' => $row['description'],
+            ]);
+
+            foreach ($row['deliverables'] as $deliverable) {
+                Deliverable::create([
+                    'project_id' => $project->id,
+                    'title' => $deliverable['title'],
+                    'delivery_date' => $today->copy()->subDays($deliverable['days']),
+                ]);
+            }
+        }
     }
 
     /**
@@ -143,7 +230,7 @@ final class WorkspaceDemoDataService
             ['name' => 'Prestation', 'color' => '#2563EB'],
             ['name' => 'Maintenance', 'color' => '#059669'],
             ['name' => 'Licences & abonnements', 'color' => '#7C3AED'],
-            ['name' => 'Matériel', 'color' => '#DC2626'],
+            ['name' => 'Contrôle technique', 'color' => '#DC2626'],
         ] as $row) {
             $categories[$row['name']] = Category::query()->firstOrCreate(
                 ['name' => $row['name']],
@@ -157,8 +244,8 @@ final class WorkspaceDemoDataService
             ['name' => 'Maintenance applicative', 'reference' => 'MNT-M', 'category' => 'Maintenance', 'type' => ProductType::Service, 'unit' => 'mois', 'price' => 350_000, 'cost' => 150_000, 'tax' => $standard],
             ['name' => 'Licence XPR Facture', 'reference' => 'LIC-XPR', 'category' => 'Licences & abonnements', 'type' => ProductType::Service, 'unit' => 'an', 'price' => 1_200_000, 'cost' => null, 'tax' => $standard],
             ['name' => 'Hébergement mutualisé', 'reference' => 'HEB-M', 'category' => 'Licences & abonnements', 'type' => ProductType::Service, 'unit' => 'mois', 'price' => 45_000, 'cost' => 18_000, 'tax' => $reduced],
-            ['name' => 'Ordinateur portable 14"', 'reference' => 'MAT-PC14', 'category' => 'Matériel', 'type' => ProductType::Good, 'unit' => 'unité', 'price' => 950_000, 'cost' => 780_000, 'tax' => $standard],
-            ['name' => 'Écran 27" 4K', 'reference' => 'MAT-E27', 'category' => 'Matériel', 'type' => ProductType::Good, 'unit' => 'unité', 'price' => 320_000, 'cost' => 245_000, 'tax' => $standard],
+            ['name' => 'Mission de contrôle technique', 'reference' => 'CTC-M', 'category' => 'Contrôle technique', 'type' => ProductType::Service, 'unit' => 'mission', 'price' => 950_000, 'cost' => 780_000, 'tax' => $standard],
+            ['name' => 'Visite de chantier', 'reference' => 'CTC-V', 'category' => 'Contrôle technique', 'type' => ProductType::Service, 'unit' => 'intervention', 'price' => 320_000, 'cost' => 245_000, 'tax' => $standard],
         ];
 
         $products = [];
@@ -173,9 +260,13 @@ final class WorkspaceDemoDataService
                 'unit_price_cents' => $row['price'],
                 'cost_price_cents' => $row['cost'],
                 'tax_rate_id' => $row['tax']?->id,
-                // Seuls les biens sont suivis : la contrainte CHECK en base
-                // refuserait un service coché.
-                'track_stock' => $row['type'] === ProductType::Good,
+                // Jamais suivi en stock : le jeu de démonstration ne contient
+                // plus que des SERVICES depuis le 2026-08-18, et
+                // `products_stock_goods_only_check` refuserait un service
+                // coché. La comparaison au type qui figurait ici est tombée
+                // avec le dernier bien — PHPStan la signalait comme toujours
+                // fausse, ce qu'elle était devenue.
+                'track_stock' => false,
             ]);
         }
 
@@ -195,7 +286,7 @@ final class WorkspaceDemoDataService
         $today = Carbon::today();
 
         $rows = [
-            ['client' => 'Société Immobilière Anfa', 'days' => 60, 'status' => DocumentStatus::Cancelled, 'lines' => [['MAT-PC14', '12'], ['MAT-E27', '12']]],
+            ['client' => 'Société Immobilière Anfa', 'days' => 60, 'status' => DocumentStatus::Cancelled, 'lines' => [['CTC-M', '12'], ['CTC-V', '12']]],
             ['client' => 'Boulangerie Al Fath', 'days' => 45, 'status' => DocumentStatus::Paid, 'lines' => [['HEB-M', '12'], ['MNT-M', '1']]],
             ['client' => 'Atlas Distribution S.A.R.L.', 'days' => 25, 'status' => DocumentStatus::Overdue, 'lines' => [['CONS-J', '6'], ['DEV-H', '30']]],
             ['client' => 'Café Maure', 'days' => 18, 'status' => DocumentStatus::Sent, 'lines' => [['LIC-XPR', '1']]],
@@ -206,14 +297,15 @@ final class WorkspaceDemoDataService
         foreach ($rows as $row) {
             $issuedAt = $this->daysAgo($row['days']);
 
+            // Depuis le 2026-08-14, `create()` numérote la facture et la pose
+            // en `sent` : l'appel à `issue()` qui suivait est devenu inutile —
+            // et fautif, puisqu'il répond 409 sur un document déjà numéroté.
             $document = $this->documents->create([
                 'type' => DocumentType::Invoice->value,
                 'partnerId' => $partners[$row['client']]->id,
                 'issuedAt' => $issuedAt->toDateString(),
                 'items' => $this->lines($products, $row['lines']),
             ]);
-
-            $document = $this->documents->issue($document, $issuedAt);
 
             // `cancelled` a son endpoint dédié : il refuse par exemple
             // d'annuler deux fois, ce qu'un simple UPDATE ne verrait pas.
@@ -238,12 +330,11 @@ final class WorkspaceDemoDataService
             'items' => $this->lines($products, [['CONS-J', '10'], ['MNT-M', '6']]),
         ]);
 
-        $this->documents->changeStatus(
-            $this->documents->issue($quote, $this->daysAgo(5)),
-            DocumentStatus::Accepted,
-        );
+        $this->documents->changeStatus($quote, DocumentStatus::Accepted);
 
-        // Un brouillon : sans numéro tant qu'il n'est pas émis (§3).
+        // Une facture à client libre — sans fiche tiers au répertoire. Elle
+        // naît numérotée comme les autres depuis le 2026-08-14 ; l'écran n'a
+        // plus de brouillon à montrer, puisque le produit n'en crée plus.
         $this->documents->create([
             'type' => DocumentType::Invoice->value,
             'clientName' => 'Studio Créatif Casablanca',
@@ -279,21 +370,39 @@ final class WorkspaceDemoDataService
             ->first();
     }
 
-    private function seedCashMovements(Company $company): void
+    /**
+     * Journal de caisse.
+     *
+     * Les ENCAISSEMENTS portent leur tiers, les DÉCAISSEMENTS n'en ont pas :
+     * un loyer et un achat de fournitures ne s'adressent à aucun client du
+     * répertoire. C'est ce que l'écran doit savoir montrer, et une démonstration
+     * où tout serait rattaché ne l'exercerait jamais.
+     *
+     * @param  array<string, Partner>  $partners
+     */
+    private function seedCashMovements(Company $company, array $partners): void
     {
         $today = Carbon::today();
 
         $movements = [
-            ['occurred_at' => $today->copy()->subDays(2), 'label' => 'Encaissement Riad Azur', 'method' => 'transfer', 'register_name' => 'Caisse principale', 'amount_cents' => 3200000],
-            ['occurred_at' => $today->copy()->subDays(5), 'label' => 'Achat fournitures bureau', 'method' => 'cash', 'register_name' => 'Caisse principale', 'amount_cents' => -45000],
-            ['occurred_at' => $today->copy()->subDays(8), 'label' => 'Acompte TechMaroc', 'method' => 'cheque', 'register_name' => 'Caisse principale', 'amount_cents' => 4000000],
-            ['occurred_at' => $today->copy()->subDays(12), 'label' => 'Paiement loyer', 'method' => 'transfer', 'register_name' => 'Caisse principale', 'amount_cents' => -850000],
-            ['occurred_at' => $today->copy()->subDays(15), 'label' => 'Encaissement Boulangerie Al Fath', 'method' => 'cash', 'register_name' => 'Petite caisse', 'amount_cents' => 980000],
+            ['occurred_at' => $today->copy()->subDays(2), 'partner' => 'Riad Azur', 'label' => 'Encaissement Riad Azur', 'method' => 'transfer', 'register_name' => 'Caisse principale', 'amount_cents' => 3200000],
+            ['occurred_at' => $today->copy()->subDays(5), 'partner' => null, 'label' => 'Achat fournitures bureau', 'method' => 'cash', 'register_name' => 'Caisse principale', 'amount_cents' => -45000],
+            ['occurred_at' => $today->copy()->subDays(8), 'partner' => 'TechMaroc Solutions', 'label' => 'Acompte TechMaroc', 'method' => 'cheque', 'register_name' => 'Caisse principale', 'amount_cents' => 4000000],
+            ['occurred_at' => $today->copy()->subDays(12), 'partner' => null, 'label' => 'Paiement loyer', 'method' => 'transfer', 'register_name' => 'Caisse principale', 'amount_cents' => -850000],
+            ['occurred_at' => $today->copy()->subDays(15), 'partner' => 'Boulangerie Al Fath', 'label' => 'Encaissement Boulangerie Al Fath', 'method' => 'cash', 'register_name' => 'Petite caisse', 'amount_cents' => 980000],
+            ['occurred_at' => $today->copy()->subDays(19), 'partner' => 'Société Immobilière Anfa', 'label' => 'Encaissement Société Immobilière Anfa', 'method' => 'cheque', 'register_name' => 'Caisse principale', 'amount_cents' => 5400000],
+            ['occurred_at' => $today->copy()->subDays(24), 'partner' => 'Atlas Distribution S.A.R.L.', 'label' => 'Acompte Atlas Distribution', 'method' => 'transfer', 'register_name' => 'Caisse principale', 'amount_cents' => 2750000],
         ];
 
         foreach ($movements as $row) {
+            $partnerName = $row['partner'];
+            $partner = $partnerName === null ? null : ($partners[$partnerName] ?? null);
+
+            unset($row['partner']);
+
             CashMovement::create([
                 ...$row,
+                'partner_id' => $partner instanceof Partner ? $partner->id : null,
                 'currency' => $company->default_currency,
             ]);
         }

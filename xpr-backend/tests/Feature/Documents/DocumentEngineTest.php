@@ -175,17 +175,20 @@ it('refuse un article appartenant à une autre société', function (): void {
 
 // ── Conversion devis → facture ────────────────────────────────────────────
 
-it('convertit un devis en facture brouillon en recopiant ses lignes', function (): void {
+it('convertit un devis en facture numérotée en recopiant ses lignes', function (): void {
     [$user] = workspaceAccount();
     $quote = Document::query()->where('type', 'quote')->firstOrFail();
+    $year = now()->format('Y');
 
     $invoice = actingAs($user)
         ->postJson("/api/v1/documents/{$quote->id}/convert")
         ->assertCreated()
         ->assertJsonPath('type', 'invoice')
-        // La conversion PROPOSE, elle n'émet pas : pas de numéro consommé.
-        ->assertJsonPath('status', 'draft')
-        ->assertJsonPath('number', null)
+        // La facture produite est numérotée d'emblée depuis le 2026-08-14 :
+        // conséquence nécessaire de la bascule, l'interface n'offrant plus
+        // d'action « émettre » où le numéro aurait pu se consommer ensuite.
+        ->assertJsonPath('status', 'sent')
+        ->assertJsonPath('number', "FAC-{$year}-0008")
         ->assertJsonPath('parentDocumentId', $quote->id)
         ->assertJsonPath('totalCents', $quote->total_cents)
         ->json();
@@ -220,19 +223,17 @@ it('refuse de convertir deux fois le même devis', function (): void {
 });
 
 it('refuse de convertir un devis encore en brouillon', function (): void {
-    [$user] = workspaceAccount();
+    [$user, $company] = workspaceAccount();
 
-    $id = actingAs($user)
-        ->postJson('/api/v1/documents', [
-            'type' => 'quote',
-            'clientName' => 'Prospect',
-            'items' => [['label' => 'Étude', 'quantity' => '1', 'unitPriceCents' => 500_000]],
-        ])
-        ->json('id');
+    // Fabriqué directement : l'API ne crée plus de devis brouillon depuis le
+    // 2026-08-14. La garde reste néanmoins exigible — les bases antérieures à
+    // la bascule portent des brouillons, et rien ne doit les laisser passer.
+    app(TenantContext::class)->activateCompany($company->id);
+    $draft = Document::factory()->quote()->draft()->create(['company_id' => $company->id]);
 
     // Facturer une proposition jamais envoyée, c'est réclamer un paiement sur
     // un document que le client n'a pas vu.
-    actingAs($user)->postJson("/api/v1/documents/{$id}/convert")->assertStatus(409);
+    actingAs($user)->postJson("/api/v1/documents/{$draft->id}/convert")->assertStatus(409);
 });
 
 it('refuse de convertir une facture', function (): void {
@@ -247,62 +248,13 @@ it('numérote la facture issue d un devis dans la séquence des FACTURES', funct
     $quote = Document::query()->where('type', 'quote')->firstOrFail();
     $year = now()->format('Y');
 
-    $id = actingAs($user)->postJson("/api/v1/documents/{$quote->id}/convert")->json('id');
-
     // Le devis portait DEV-…, la facture prend FAC-… : chaque type a sa
-    // séquence, la clé étant (société, type, exercice).
-    actingAs($user)
-        ->postJson("/api/v1/documents/{$id}/issue")
-        ->assertOk()
-        ->assertJsonPath('number', "FAC-{$year}-0007");
-});
-
-// ── Avoirs ────────────────────────────────────────────────────────────────
-
-it('crée un avoir brouillon rattaché à la facture d origine', function (): void {
-    [$user] = workspaceAccount();
-    $invoice = Document::query()->where('type', 'invoice')->where('status', 'sent')->firstOrFail();
+    // séquence, la clé étant (société, type, exercice). La conversion ne
+    // reconsomme pas la séquence du PARENT — c'est ce que ce test protège.
+    expect($quote->number)->toBe("DEV-{$year}-0001");
 
     actingAs($user)
-        ->postJson("/api/v1/documents/{$invoice->id}/credit-note")
+        ->postJson("/api/v1/documents/{$quote->id}/convert")
         ->assertCreated()
-        ->assertJsonPath('type', 'credit_note')
-        ->assertJsonPath('status', 'draft')
-        ->assertJsonPath('parentDocumentId', $invoice->id)
-        // Montants POSITIFS : le sens vient du type, pas d'un signe.
-        ->assertJsonPath('totalCents', $invoice->total_cents);
-});
-
-it('ne modifie pas la facture d origine lors de la création d un avoir', function (): void {
-    [$user] = workspaceAccount();
-    $invoice = Document::query()->where('type', 'invoice')->where('status', 'sent')->firstOrFail();
-    $before = $invoice->only(['status', 'number', 'total_cents']);
-
-    actingAs($user)->postJson("/api/v1/documents/{$invoice->id}/credit-note")->assertCreated();
-
-    // §3 : une facture émise est immuable. L'avoir s'impute dessus, il ne la
-    // corrige pas.
-    expect($invoice->refresh()->only(['status', 'number', 'total_cents']))->toBe($before);
-});
-
-it('refuse un avoir sur une facture jamais émise', function (): void {
-    [$user] = workspaceAccount();
-    $draft = Document::query()->where('type', 'invoice')->where('status', 'draft')->firstOrFail();
-
-    // Sans numéro, la facture n'existe pas fiscalement : il n'y a rien à
-    // corriger, le brouillon se modifie directement.
-    actingAs($user)->postJson("/api/v1/documents/{$draft->id}/credit-note")->assertStatus(409);
-});
-
-it('numérote l avoir dans sa propre séquence', function (): void {
-    [$user] = workspaceAccount();
-    $invoice = Document::query()->where('type', 'invoice')->where('status', 'sent')->firstOrFail();
-    $year = now()->format('Y');
-
-    $id = actingAs($user)->postJson("/api/v1/documents/{$invoice->id}/credit-note")->json('id');
-
-    actingAs($user)
-        ->postJson("/api/v1/documents/{$id}/issue")
-        ->assertOk()
-        ->assertJsonPath('number', "AV-{$year}-0001");
+        ->assertJsonPath('number', "FAC-{$year}-0008");
 });

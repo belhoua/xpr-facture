@@ -37,7 +37,16 @@ final class PartnerFactory extends Factory
         $company = $this->faker->randomElement(self::COMPANIES);
 
         return [
-            'type' => $this->faker->randomElement(PartnerType::values()),
+            // Les TROIS types commerciaux, jamais `intermediary` : celui-ci ne
+            // remonte dans aucune liste de facturation (cf. PartnerType), et
+            // l'introduire au hasard rendrait intermittents des tests qui
+            // demandent simplement « un tiers ». Il se demande explicitement,
+            // par l'état `intermediary()`.
+            'type' => $this->faker->randomElement([
+                PartnerType::Client->value,
+                PartnerType::Supplier->value,
+                PartnerType::Both->value,
+            ]),
             'code' => null,
             'legal_name' => $company['legal'],
             'trade_name' => $company['trade'],
@@ -74,6 +83,12 @@ final class PartnerFactory extends Factory
     public function both(): static
     {
         return $this->state(fn (array $a): array => ['type' => PartnerType::Both->value]);
+    }
+
+    /** Apporteur d'affaires, courtier : un rôle, pas un sens de facturation. */
+    public function intermediary(): static
+    {
+        return $this->state(fn (array $a): array => ['type' => PartnerType::Intermediary->value]);
     }
 
     /** Particulier : ni ICE ni IF ni RC. */

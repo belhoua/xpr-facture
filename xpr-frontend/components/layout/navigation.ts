@@ -1,11 +1,11 @@
 import {
   ClipboardList,
   Contact,
-  FileMinus,
   FilePlus,
   FileSignature,
   FileText,
   FolderInput,
+  FolderKanban,
   LayoutDashboard,
   MessageSquareText,
   Package,
@@ -62,12 +62,6 @@ export const NAVIGATION: readonly NavGroup[] = [
       { href: "/invoices", titleKey: "nav.invoices", icon: FileText, shortcut: "F" },
       { href: "/quotes", titleKey: "nav.quotes", icon: ReceiptText, shortcut: "V" },
       {
-        href: "/credit-notes",
-        titleKey: "nav.creditNotes",
-        icon: FileMinus,
-        shortcut: "A",
-      },
-      {
         href: "/situations",
         titleKey: "nav.situations",
         icon: ClipboardList,
@@ -103,6 +97,15 @@ export const NAVIGATION: readonly NavGroup[] = [
           // niveau laisserait croire à un module autonome.
           { href: "/deposits", titleKey: "nav.deposits", icon: FolderInput },
         ],
+      },
+      // Entrée de PREMIER niveau : l'avancement de projet ne dépend d'aucun
+      // autre écran — un projet existe sans devis, sans convention et sans
+      // facture. Le ranger sous l'un d'eux laisserait croire l'inverse.
+      {
+        href: "/projects",
+        titleKey: "nav.projects",
+        icon: FolderKanban,
+        shortcut: "J",
       },
       { href: "/services", titleKey: "nav.services", icon: Wrench, shortcut: "S" },
       { href: "/catalog", titleKey: "nav.catalog", icon: Package, shortcut: "P" },

@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { ApiCompany } from "@/features/auth/types/auth";
 import { useMe } from "@/features/auth/hooks/use-auth";
 import { documentKeys, fetchDocument } from "@/features/documents/api/documents";
+import { EditableSheet } from "@/features/documents/components/editable-sheet";
 import {
   LegalFooter,
   Letterhead,
@@ -44,6 +45,14 @@ import { Link } from "@/lib/i18n/navigation";
  *
  * Aucun `useEffect` n'ouvre la boîte d'impression au montage : une page qui
  * s'imprime toute seule est ingérable quand on voulait seulement la relire.
+ *
+ * ── Édition libre avant impression (2026-08-15) ────────────────────────────
+ *
+ * La feuille est un `contentEditable` : tout se corrige au clavier, comme dans
+ * un traitement de texte. Voir `EditableSheet`, qui explique pourquoi la
+ * sous-arborescence est figée côté React — et ce que cela coûte : les totaux ne
+ * se recalculent plus, et une facture émise retouchée ici produit un papier qui
+ * ne correspond plus à la pièce enregistrée.
  */
 export function InvoicePrintView({ id }: { id: string }) {
   const t = useTranslations("documents");
@@ -90,7 +99,7 @@ export function InvoicePrintView({ id }: { id: string }) {
 
   return (
     <div className="print-document">
-      <div className="mx-auto mb-4 flex w-full max-w-[210mm] items-center gap-2 print:hidden">
+      <div className="no-print mx-auto mb-4 flex w-full max-w-[210mm] flex-wrap items-center gap-2 print:hidden">
         <Button variant="outline" asChild>
           <Link href="/invoices">
             <ArrowLeft className="size-4 rtl:rotate-180" aria-hidden />
@@ -102,6 +111,11 @@ export function InvoicePrintView({ id }: { id: string }) {
           {t("print.invoice.action")}
         </Button>
 
+        {/* Dit une fois, sobrement : la page se corrige au clavier, et rien de
+            ce qu'on y tape n'est enregistré. Sans cette phrase, un utilisateur
+            qui retouche sa pièce peut croire l'avoir corrigée en base. */}
+        <p className="text-muted-foreground text-sm">{t("print.edit.hint")}</p>
+
         {/* Un brouillon n'a pas encore de numéro : il ne l'obtient qu'à
             l'émission (§3). On laisse relire et imprimer le projet de facture,
             mais on le dit — un document sans numéro n'est pas une pièce
@@ -111,11 +125,11 @@ export function InvoicePrintView({ id }: { id: string }) {
         ) : null}
       </div>
 
-      <article className="print-sheet bg-card ring-border mx-auto w-full max-w-[210mm] p-[14mm] text-[11pt] leading-snug ring-1 print:ring-0">
+      <EditableSheet>
         <Letterhead />
         <InvoiceBody invoice={invoice} company={company} />
         <LegalFooter company={company} />
-      </article>
+      </EditableSheet>
     </div>
   );
 }

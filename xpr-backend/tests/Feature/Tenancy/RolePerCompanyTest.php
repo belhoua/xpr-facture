@@ -82,8 +82,10 @@ it('refuse à un commercial d annuler une facture', function (): void {
     $company = companyWithAccounting();
     memberOf($user, $company, Role::Sales, default: true);
 
-    // Création ET émission autorisées : un commercial doit pouvoir envoyer sa
-    // facture sans attendre une validation comptable.
+    // Création autorisée : un commercial doit pouvoir établir sa facture sans
+    // attendre une validation comptable. Depuis le 2026-08-14, cette seule
+    // création la numérote et l'envoie — la permission `documents.create`
+    // emporte donc désormais la consommation d'un numéro fiscal.
     $document = actingAs($user)
         ->postJson('/api/v1/documents', [
             'type' => 'invoice',
@@ -92,15 +94,12 @@ it('refuse à un commercial d annuler une facture', function (): void {
             'items' => [['label' => 'Prestation', 'quantity' => '1', 'unitPriceCents' => 250_000]],
         ])
         ->assertCreated()
+        ->assertJsonPath('status', 'sent')
         ->json('id');
-
-    actingAs($user)->postJson("/api/v1/documents/{$document}/issue")->assertOk();
 
     // … mais l'annulation est un acte fiscal réservé (§3), la suppression aussi
     actingAs($user)->postJson("/api/v1/documents/{$document}/cancel")->assertForbidden();
     actingAs($user)->deleteJson("/api/v1/documents/{$document}")->assertForbidden();
-    // L'avoir défait une facture émise : même permission que l'annulation.
-    actingAs($user)->postJson("/api/v1/documents/{$document}/credit-note")->assertForbidden();
 });
 
 it('cantonne un lecteur à la lecture', function (): void {

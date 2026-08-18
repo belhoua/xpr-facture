@@ -68,8 +68,16 @@ enum Role: string
                 Permission::ConventionsDelete,
                 Permission::DepositsView,
                 Permission::DepositsManage,
+                Permission::ProjectsView,
+                Permission::ProjectsCreate,
+                Permission::ProjectsUpdate,
+                Permission::ProjectsDelete,
+                Permission::ServicesView,
+                Permission::ServicesManage,
                 Permission::CashView,
                 Permission::CashManage,
+                Permission::PaymentsView,
+                Permission::PaymentsManage,
                 Permission::UsersView,
                 Permission::AdminNotesView,
                 Permission::AdminNotesCreate,
@@ -103,7 +111,23 @@ enum Role: string
                 // commercial que l'on appelle pour savoir où il en est.
                 Permission::DepositsView,
                 Permission::DepositsManage,
+                // Le commercial suit l'avancement du projet qu'il a vendu et
+                // date ce qu'il remet au client. SUPPRIMER lui est refusé :
+                // effacer un suivi ferait disparaître la trace des livrables
+                // remis, seule preuve qu'ils l'ont été.
+                Permission::ProjectsView,
+                Permission::ProjectsCreate,
+                Permission::ProjectsUpdate,
+                // Lire le référentiel, pas le tenir : le commercial classe son
+                // projet sous un service existant, il n'en invente pas.
+                Permission::ServicesView,
                 Permission::CashView,
+                // Encaisser relève du suivi client : c'est le commercial qui
+                // reçoit le chèque. Le geste reste réversible — retirer un
+                // règlement réaligne la facture — là où annuler une pièce
+                // consomme définitivement son numéro.
+                Permission::PaymentsView,
+                Permission::PaymentsManage,
                 Permission::UsersView,
                 Permission::AdminNotesView,
                 Permission::AdminNotesCreate,
@@ -117,7 +141,10 @@ enum Role: string
                 Permission::DocumentsView,
                 Permission::ConventionsView,
                 Permission::DepositsView,
+                Permission::ProjectsView,
+                Permission::ServicesView,
                 Permission::CashView,
+                Permission::PaymentsView,
                 Permission::UsersView,
                 Permission::AdminNotesView,
                 Permission::SettingsView,

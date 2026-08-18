@@ -4,16 +4,30 @@ import {
   type CashMovement,
   type CashMovementFormValues,
   type CashSummary,
+  type PaymentMethod,
 } from "@/features/cash/schemas/cash";
 import { api, ensureCsrfCookie } from "@/lib/api/client";
 
 export const cashKeys = {
   all: ["cash"] as const,
-  summary: (period: string) => [...cashKeys.all, "summary", period] as const,
+  summary: (period: string, direction?: string) =>
+    [...cashKeys.all, "summary", period, direction ?? "all"] as const,
 };
 
-export async function fetchCashSummary(period: string): Promise<CashSummary> {
-  const { data } = await api.get("/cash/movements", { params: { period } });
+/**
+ * Journal de caisse d'une période.
+ *
+ * `direction` ne filtre que la LISTE : les trois cumuls renvoyés portent
+ * toujours sur la période entière. C'est ce qui permet à l'écran Caisses de
+ * n'afficher que les encaissements tout en montrant un total encaissé juste.
+ */
+export async function fetchCashSummary(
+  period: string,
+  direction?: "inflow" | "outflow",
+): Promise<CashSummary> {
+  const { data } = await api.get("/cash/movements", {
+    params: { period, direction },
+  });
 
   return cashSummarySchema.parse(data);
 }
@@ -24,9 +38,16 @@ export async function fetchCashSummary(period: string): Promise<CashSummary> {
  * signé — négatif pour un décaissement (§7).
  */
 export interface CashMovementPayload {
+  /** `null` = aucun tiers rattaché ; le serveur accepte l'absence. */
+  partnerId: string | null;
   occurredAt: string;
   label: string;
-  method: CashMovement["method"];
+  /**
+   * Le sous-ensemble SAISISSABLE, pas celui que le journal sait afficher : la
+   * table des mouvements ignore `lcn` et `deposit`, qui n'existent que sur un
+   * règlement de facture.
+   */
+  method: PaymentMethod;
   registerName: string;
   amountCents: number;
   currency: string;
@@ -38,6 +59,7 @@ export function toCashPayload(
   const cents = Math.round(values.amount * 100);
 
   return {
+    partnerId: values.partnerId || null,
     occurredAt: values.occurredAt,
     label: values.label.trim(),
     method: values.method,

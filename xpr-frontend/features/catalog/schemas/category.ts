@@ -3,7 +3,7 @@ import { z } from "zod";
 /**
  * Contrat de `GET /api/v1/categories`. Miroir de `CategoryResource`.
  *
- * `productCount` est OPTIONNEL et non nullable : le backend ne l'expose que
+ * `serviceCount` est OPTIONNEL et non nullable : le backend ne l'expose que
  * lorsque la liste a fait le `withCount` (`whenCounted`). Une valeur absente
  * n'est pas « zéro article », c'est « non compté » — les traiter pareil
  * afficherait « 0 » sur une catégorie pleine.
@@ -14,7 +14,7 @@ export const categorySchema = z.object({
   description: z.string().nullable(),
   color: z.string().nullable(),
   isActive: z.boolean(),
-  productCount: z.int().nonnegative().optional(),
+  serviceCount: z.int().nonnegative().optional(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
 });

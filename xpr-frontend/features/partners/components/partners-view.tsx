@@ -37,18 +37,40 @@ import {
   partnerKeys,
 } from "@/features/partners/api/partners";
 import { PartnerFormDialog } from "@/features/partners/components/partner-form-dialog";
-import type {
-  Partner,
-  PartnerType,
+import {
+  PARTNER_TYPES,
+  type Partner,
+  type PartnerType,
 } from "@/features/partners/schemas/partner";
 import { toApiProblem } from "@/lib/api/client";
 
-const TYPE_FILTERS = ["all", "client", "supplier", "both"] as const;
+/**
+ * Options du filtre. Dérivées de l'énumération, non recopiées : un type ajouté
+ * au contrat apparaît ici sans qu'on y pense, et c'est précisément ce qu'on
+ * oublie de faire à la main.
+ */
+const TYPE_FILTERS = ["all", ...PARTNER_TYPES] as const;
 
 /**
- * Répertoire des tiers : clients et fournisseurs dans une seule liste, filtrée
- * par rôle commercial. Un tiers `both` remonte dans les deux filtres — c'est le
- * serveur qui applique cette règle, l'interface ne la rejoue pas.
+ * Traitement visuel du badge par type. Table exhaustive plutôt qu'un ternaire :
+ * ajouter un type au contrat sans lui donner d'apparence casse la compilation,
+ * là où un `?:` l'aurait rangé dans la branche « sinon » sans le dire.
+ */
+const BADGE_VARIANTS: Record<
+  PartnerType,
+  "default" | "secondary" | "outline"
+> = {
+  client: "secondary",
+  supplier: "secondary",
+  both: "default",
+  intermediary: "outline",
+};
+
+/**
+ * Répertoire des tiers : clients, fournisseurs et intermédiaires dans une seule
+ * liste, filtrée par rôle. Un tiers `both` remonte dans les deux filtres
+ * commerciaux, un `intermediary` seulement sous le sien — c'est le serveur qui
+ * applique cette règle, l'interface ne la rejoue pas.
  *
  * Les filtres font partie de la CLÉ de requête TanStack Query ; les mutations
  * invalident `partnerKeys.all` plutôt que de patcher chaque cache filtré.
@@ -109,10 +131,13 @@ export function PartnersView() {
     {
       id: "type",
       header: t("columns.type"),
+      // Trois traitements pour quatre valeurs, et c'est voulu : `client` et
+      // `supplier` sont le régime ordinaire (secondaire, discret), `both` se
+      // signale parce qu'il vaut pour deux, et `intermediary` se distingue des
+      // trois parce qu'il n'est PAS un sens de facturation — le contour dit
+      // « à part » sans introduire une couleur de plus (§11).
       cell: (row) => (
-        <Badge variant={row.type === "both" ? "default" : "secondary"}>
-          {t(`types.${row.type}`)}
-        </Badge>
+        <Badge variant={BADGE_VARIANTS[row.type]}>{t(`types.${row.type}`)}</Badge>
       ),
     },
     {

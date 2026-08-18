@@ -22,11 +22,32 @@ trait BelongsToCompany
     public static function bootBelongsToCompany(): void
     {
         static::addGlobalScope('company', function (Builder $builder): void {
-            $companyId = app(TenantContext::class)->currentId();
+            $context = app(TenantContext::class);
+            $companyId = $context->currentId();
 
             if ($companyId !== null) {
                 $builder->where($builder->qualifyColumn('company_id'), $companyId);
+
+                return;
             }
+
+            // Utilisateur authentifié SANS société active : ne rien filtrer
+            // reviendrait à tout montrer. C'était le comportement — un compte
+            // détaché (invitation en attente, société retirée, rattachement
+            // perdu) lisait les lignes de TOUTES les sociétés à travers
+            // n'importe quelle liste. La RLS l'aurait arrêté en production,
+            // mais elle est la SECONDE ligne de défense, pas la première, et
+            // elle ne s'applique ni au rôle owner ni aux tests (§15).
+            //
+            // On renvoie donc l'ensemble vide : les écrans affichent leur état
+            // vide en 200 au lieu d'exposer la base entière.
+            if ($context->hasUserWithoutCompany()) {
+                $builder->whereRaw('1 = 0');
+            }
+
+            // Aucun utilisateur authentifié (console, seeders, migrations,
+            // jobs avant TenantAware) : pas de filtre, comme auparavant.
+            // Y toucher casserait tout traitement hors requête.
         });
 
         static::creating(function (Model $model): void {

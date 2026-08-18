@@ -9,6 +9,9 @@ use App\Modules\Conventions\Providers\ConventionsServiceProvider;
 use App\Modules\Dashboard\Providers\DashboardServiceProvider;
 use App\Modules\Documents\Providers\DocumentsServiceProvider;
 use App\Modules\Partners\Providers\PartnersServiceProvider;
+use App\Modules\Payments\Providers\PaymentsServiceProvider;
+use App\Modules\Projects\Providers\ProjectsServiceProvider;
+use App\Modules\Services\Providers\ServicesServiceProvider;
 use App\Modules\Tenancy\Providers\TenancyServiceProvider;
 use App\Providers\AppServiceProvider;
 
@@ -23,7 +26,11 @@ return [
     // Après Documents : le transfert devis → convention s'appuie sur son
     // DocumentService.
     ConventionsServiceProvider::class,
+    // Après Partners : un projet exige un client de la société active.
+    ProjectsServiceProvider::class,
+    ServicesServiceProvider::class,
     CashServiceProvider::class,
+    PaymentsServiceProvider::class,
     DashboardServiceProvider::class,
     AdminNotesServiceProvider::class,
 ];

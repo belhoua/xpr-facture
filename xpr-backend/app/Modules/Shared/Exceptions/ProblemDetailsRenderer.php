@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Shared\Exceptions;
 
+use App\Modules\Tenancy\Exceptions\TenantContextMissing;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
@@ -44,6 +45,21 @@ final class ProblemDetailsRenderer
         } elseif ($e instanceof ModelNotFoundException) {
             $status = 404;
             $title = __('Resource not found');
+        } elseif ($e instanceof TenantContextMissing) {
+            // Compte authentifié, mais rattaché à AUCUNE société : les écrans
+            // métier n'ont pas de périmètre où travailler. C'est un état de
+            // compte, pas une panne — le laisser remonter en 500 affichait
+            // « Une erreur est survenue » sur tous les écrans à la fois, sans
+            // jamais dire que la seule chose qui manquait était une société.
+            //
+            // 409 et non 403 : le front déconnecte sur 401/403, et un 403 ici
+            // renverrait vers /login un utilisateur dont les identifiants sont
+            // parfaitement valides — une boucle de reconnexion sans issue.
+            // 409 dit exactement ce qui se passe : la requête est légitime,
+            // l'état du compte l'empêche.
+            $status = 409;
+            $title = __('No active company');
+            $detail = __('This account is not attached to any company yet.');
         } elseif ($e instanceof HttpExceptionInterface) {
             $status = $e->getStatusCode();
             $title = Response::$statusTexts[$status] ?? 'Error';

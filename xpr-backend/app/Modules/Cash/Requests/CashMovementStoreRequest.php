@@ -26,6 +26,13 @@ final class CashMovementStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // Tiers concerné. FACULTATIF : un décaissement n'en a souvent
+            // aucun (loyer, fournitures). Validé comme un UUID mais son
+            // EXISTENCE ne l'est pas ici — `Rule::exists('partners', 'id')`
+            // interroge la table sans le global scope de société et accepterait
+            // le tiers d'un autre tenant. La vérification revient au service,
+            // qui la fait sous le scope (§5.3).
+            'partnerId' => ['nullable', 'uuid'],
             'occurredAt' => ['required', 'date'],
             'label' => ['required', 'string', 'min:2', 'max:255'],
             'method' => ['required', Rule::in(['cash', 'cheque', 'transfer', 'card', 'effect'])],

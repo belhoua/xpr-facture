@@ -113,9 +113,8 @@ final class ConventionDraftingService
 
     /**
      * Seuls un DEVIS et une FACTURE portent des honoraires convenus avec le
-     * maître d'ouvrage. Un avoir les défait, une situation en suit l'avancement,
-     * un bon de livraison n'en parle pas : aucun des trois ne peut fonder un
-     * contrat.
+     * maître d'ouvrage. Une situation en suit l'avancement, un bon de livraison
+     * n'en parle pas : ni l'une ni l'autre ne peut fonder un contrat.
      */
     private function assertTransferable(Document $document): void
     {

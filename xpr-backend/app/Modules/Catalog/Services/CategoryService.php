@@ -20,9 +20,14 @@ final class CategoryService
      */
     public function paginate(array $filters): LengthAwarePaginator
     {
-        // withCount plutôt qu'un chargement des produits : l'écran n'affiche
-        // qu'un compteur, charger les lignes serait un N+1 déguisé.
-        $query = Category::query()->withCount('products');
+        // withCount plutôt qu'un chargement des lignes : l'écran n'affiche
+        // qu'un compteur, les charger serait un N+1 déguisé.
+        //
+        // Sur `services` et non `products` : l'écran Catalogue ne présente plus
+        // que des catégories DE SERVICES (2026-08-18), et un compteur qui
+        // engloberait un autre type d'article annoncerait un nombre que la
+        // liste ne sait plus montrer.
+        $query = Category::query()->withCount('services');
 
         if (($search = $filters['search'] ?? null) !== null && trim($search) !== '') {
             $query->search(trim($search));

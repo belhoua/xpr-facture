@@ -3,8 +3,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
+import { toast } from "sonner";
 
 import { ErrorState } from "@/components/patterns/error-state";
 import { Button } from "@/components/ui/button";
@@ -47,12 +48,14 @@ import {
 } from "@/features/documents/schemas/document";
 import { computeTotals } from "@/features/documents/utils/totals";
 import { fetchPartners, partnerKeys } from "@/features/partners/api/partners";
+import { useClientProjects } from "@/features/projects/hooks/use-client-projects";
 import { toApiProblem } from "@/lib/api/client";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/format";
 
 /** Champs mappables depuis une erreur de validation serveur (RFC 9457). */
 const SERVER_FIELDS = [
   "partnerId",
+  "projectId",
   "clientName",
   "subject",
   "issueCity",
@@ -61,6 +64,9 @@ const SERVER_FIELDS = [
   "notes",
   "terms",
 ] as const;
+
+/** Valeur d'item pour « aucun projet » : Radix interdit la chaîne vide. */
+const NO_PROJECT = "__none__";
 
 /** Une heure : le référentiel de TVA et le catalogue ne bougent pas en séance. */
 const REFERENCE_STALE_TIME = 60 * 60 * 1000;
@@ -76,9 +82,13 @@ function todayIso(): string {
 function emptyValues(defaultTaxRateId: string): DocumentFormValues {
   return {
     partnerId: "",
+    projectId: "",
     clientName: "",
     subject: "",
     issueCity: "",
+    // Vide par défaut : la numérotation automatique reste le cas nominal, la
+    // saisie manuelle l'exception que l'utilisateur pose sciemment.
+    number: "",
     issuedAt: todayIso(),
     dueAt: "",
     notes: "",
@@ -91,9 +101,15 @@ function emptyValues(defaultTaxRateId: string): DocumentFormValues {
 function valuesFromDocument(document: Document): DocumentFormValues {
   return {
     partnerId: document.partnerId ?? "",
+    projectId: document.projectId ?? "",
     clientName: document.clientName,
     subject: document.subject ?? "",
     issueCity: document.issueCity ?? "",
+    // Le numéro EXISTANT est pré-rempli : il est modifiable depuis le
+    // 2026-08-18 sur les factures et les devis, et le champ doit donc partir
+    // de ce que la pièce porte réellement, jamais d'un champ vide qui
+    // laisserait croire qu'il n'y en a pas.
+    number: document.number ?? "",
     issuedAt: document.issuedAt ?? "",
     dueAt: document.dueAt ?? "",
     notes: document.notes ?? "",
@@ -114,7 +130,7 @@ function valuesFromDocument(document: Document): DocumentFormValues {
 }
 
 /**
- * Création / édition d'un document commercial (facture, devis, avoir).
+ * Création / édition d'un document commercial (facture, devis).
  *
  * Un seul composant pour les trois : ils partagent la même structure, seul le
  * `type` change — et il n'est transmis qu'à la CRÉATION, puisque muter un devis
@@ -140,8 +156,21 @@ export function DocumentFormDialog({
   const queryClient = useQueryClient();
   const isEdit = Boolean(document);
 
+  /**
+   * La pièce peut-elle être renumérotée ?
+   *
+   * Miroir de `DocumentType::allowsNumberEdit()` : facture et devis seulement,
+   * et une pièce DÉJÀ numérotée — sur un brouillon, le numéro reste l'affaire
+   * de l'émission. Le serveur reste juge et répond 422 ; ce test évite
+   * seulement d'afficher un champ dont la saisie serait rejetée.
+   */
+  const canEditNumber =
+    document != null &&
+    document.number !== null &&
+    (document.type === "invoice" || document.type === "quote");
+
   const form = useForm<DocumentFormValues>({
-    resolver: zodResolver(documentFormSchema),
+    resolver: zodResolver(documentFormSchema(isEdit ? "edit" : "create")),
     defaultValues: emptyValues(""),
   });
 
@@ -226,6 +255,33 @@ export function DocumentFormDialog({
   }, [open, document, editing, defaultTaxRateId, form]);
 
   const partnerId = useWatch({ control: form.control, name: "partnerId" });
+
+  /** Projets du client choisi — le déroulant n'en propose aucun autre. */
+  const { projects, isPending: projectsPending } = useClientProjects(partnerId);
+
+  // CHANGER DE CLIENT VIDE LE PROJET. Sans cela, un formulaire ouvert sur le
+  // client A puis basculé sur B garderait le chantier de A, et le serveur
+  // répondrait 422 au moment d'enregistrer — après la saisie des lignes, donc
+  // au pire moment. La comparaison porte sur le client PRÉCÉDENT et non sur un
+  // simple changement de `partnerId` : à l'ouverture en modification, la
+  // valeur passe de "" au client du document, ce qui effacerait le
+  // rattachement qu'on vient justement de charger.
+  const previousPartnerId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      previousPartnerId.current = null;
+
+      return;
+    }
+
+    if (previousPartnerId.current !== null && previousPartnerId.current !== partnerId) {
+      form.setValue("projectId", "");
+    }
+
+    previousPartnerId.current = partnerId;
+  }, [open, partnerId, form]);
+
   // Pas de `?? []` ici : la valeur de repli créerait un tableau neuf à chaque
   // rendu et invaliderait le mémo ci-dessous en permanence.
   const items = useWatch({ control: form.control, name: "items" });
@@ -254,6 +310,26 @@ export function DocumentFormDialog({
     onSuccess: async (saved) => {
       await queryClient.invalidateQueries({ queryKey: documentKeys.all });
       queryClient.setQueryData(documentKeys.detail(saved.id), saved);
+
+      // Un nom saisi librement a ouvert une fiche client. L'annoncer n'est pas
+      // décoratif : la fiche naît avec le seul nom, sans ICE ni adresse, et ces
+      // mentions sont obligatoires au pied d'une facture (§3). Sans ce rappel,
+      // personne ne saurait qu'il reste quelque chose à compléter.
+      if (saved.autoCreatedPartnerName) {
+        // Le répertoire vient de changer : le déroulant de tiers doit le
+        // savoir, sans quoi la fiche resterait absente jusqu'au rechargement.
+        await queryClient.invalidateQueries({ queryKey: partnerKeys.all });
+
+        toast.success(t("form.partnerCreated.title"), {
+          description: t("form.partnerCreated.description", {
+            name: saved.autoCreatedPartnerName,
+          }),
+          // Plus long que le défaut : la phrase demande une action différée, et
+          // quatre secondes ne suffisent pas à la lire puis à décider.
+          duration: 8000,
+        });
+      }
+
       onOpenChange(false);
     },
     onError: (error) => {
@@ -328,8 +404,12 @@ export function DocumentFormDialog({
                       <SelectValue placeholder={t("form.partnerPlaceholder")} />
                     </SelectTrigger>
                     <SelectContent>
-                      {/* Client de passage : le nom est saisi à la main, la
-                          fiche tiers n'est pas obligatoire pour facturer. */}
+                      {/* Saisie rapide : le nom est tapé à la main et le
+                          serveur en fait une fiche client — ou retrouve celle
+                          qui porte déjà ce nom. Ce n'est plus un « client de
+                          passage » : depuis le 2026-08-17, toute pièce est
+                          rattachée à un tiers, sans quoi elle n'apparaît dans
+                          aucun encours client. */}
                       <SelectItem value="walk-in">
                         {t("form.walkInClient")}
                       </SelectItem>
@@ -345,6 +425,59 @@ export function DocumentFormDialog({
               <FieldError>{fieldError(errors.partnerId?.message)}</FieldError>
             </Field>
 
+            {/* PROJET, affiché seulement quand un client répertorié est
+                choisi : les projets appartiennent à un client, et il n'y a
+                rien à proposer sans lui. Un déroulant vide et grisé
+                laisserait croire que le client n'a aucun chantier, alors
+                qu'aucune question n'a encore été posée. */}
+            {partnerId !== "" && (
+              <Field className="sm:col-span-2">
+                <FieldLabel htmlFor="document-project">
+                  {t("form.project")}
+                </FieldLabel>
+                <Controller
+                  control={form.control}
+                  name="projectId"
+                  render={({ field }) => (
+                    <Select
+                      // Radix refuse la chaîne vide comme valeur d'item : le
+                      // sentinel porte « aucun projet » dans la liste et
+                      // redevient "" dans le formulaire.
+                      value={field.value === "" ? NO_PROJECT : field.value}
+                      onValueChange={(value) =>
+                        field.onChange(value === NO_PROJECT ? "" : value)
+                      }
+                      disabled={projectsPending}
+                    >
+                      <SelectTrigger id="document-project" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_PROJECT}>
+                          {t("form.noProject")}
+                        </SelectItem>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {/* Le client n'a aucun chantier ouvert : le dire vaut mieux
+                    qu'un déroulant à une seule entrée « aucun projet », dont
+                    on ne saurait pas s'il est vide ou encore en train de
+                    charger. */}
+                {!projectsPending && projects.length === 0 && (
+                  <p className="text-muted-foreground text-xs">
+                    {t("form.noProjectForClient")}
+                  </p>
+                )}
+                <FieldError>{fieldError(errors.projectId?.message)}</FieldError>
+              </Field>
+            )}
+
             {/* Masqué dès qu'un tiers est choisi : le serveur recopie alors sa
                 raison sociale, et une saisie libre serait ignorée. */}
             {partnerId === "" && (
@@ -356,8 +489,18 @@ export function DocumentFormDialog({
                   id="document-client-name"
                   placeholder={t("form.clientPlaceholder")}
                   aria-invalid={Boolean(errors.clientName)}
+                  aria-describedby="document-client-name-hint"
                   {...form.register("clientName")}
                 />
+                {/* Dit AVANT l'enregistrement ce que le toast confirmera
+                    après : une fiche va naître. Découvrir la création une fois
+                    faite est un moins bon moment pour l'apprendre. */}
+                <p
+                  id="document-client-name-hint"
+                  className="text-muted-foreground text-xs"
+                >
+                  {t("form.clientNameHint")}
+                </p>
                 <FieldError>{fieldError(errors.clientName?.message)}</FieldError>
               </Field>
             )}
@@ -394,6 +537,41 @@ export function DocumentFormDialog({
               />
               <FieldError>{fieldError(errors.issueCity?.message)}</FieldError>
             </Field>
+
+            {/* NUMÉRO. À la CRÉATION, c'est un compteur facultatif imposé à
+                la séquence ; en MODIFICATION, c'est le numéro de la pièce, que
+                la facture et le devis peuvent réécrire depuis le 2026-08-18
+                (cf. DocumentType::allowsNumberEdit, qui porte le coût de cette
+                levée). Les autres types ne l'affichent pas en modification :
+                le serveur y répondrait 422.
+
+                `inputMode` suit le mode : des chiffres à la création, du texte
+                en modification, où le numéro complet se saisit. `type="number"`
+                serait faux dans les deux cas — il ôte les zéros initiaux et
+                affiche des flèches d'incrément qui n'ont aucun sens ici. */}
+            {(!isEdit || canEditNumber) && (
+              <Field>
+                <FieldLabel htmlFor="document-number">
+                  {t("form.number")}
+                </FieldLabel>
+                <Input
+                  id="document-number"
+                  inputMode={isEdit ? "text" : "numeric"}
+                  autoComplete="off"
+                  placeholder={t("form.numberPlaceholder")}
+                  aria-invalid={Boolean(errors.number)}
+                  aria-describedby="document-number-hint"
+                  {...form.register("number")}
+                />
+                <p
+                  id="document-number-hint"
+                  className="text-muted-foreground text-xs"
+                >
+                  {isEdit ? t("form.numberEditHint") : t("form.numberHint")}
+                </p>
+                <FieldError>{fieldError(errors.number?.message)}</FieldError>
+              </Field>
+            )}
 
             <Field>
               <FieldLabel htmlFor="document-issued-at">
@@ -492,13 +670,20 @@ export function DocumentFormDialog({
             {t("form.cancel")}
           </Button>
           {/* Enregistrer reste hors du formulaire (`form=`) mais suit son
-              état : tant que le détail charge, il n'y a rien à soumettre. */}
+              état : tant que le détail charge, il n'y a rien à soumettre.
+
+              Le libellé DIFFÈRE à la création : depuis le 2026-08-14, valider
+              ne met pas un brouillon de côté, cela consomme un numéro fiscal
+              définitif. Un bouton « Enregistrer » laisserait croire au geste
+              réversible qu'il n'est plus. En édition, il l'est resté. */}
           <Button
             type="submit"
             form="document-form"
             disabled={mutation.isPending || loadingDetail || detailQuery.isError}
           >
-            {mutation.isPending ? t("form.saving") : t("form.save")}
+            {isEdit
+              ? t(mutation.isPending ? "form.saving" : "form.save")
+              : t(mutation.isPending ? "form.submitting" : "form.submit")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -216,6 +216,31 @@
     unicode-bidi: isolate;
     white-space: nowrap;
   }
+
+  /* Feuille ÉDITABLE au clavier, à la manière d'un traitement de texte
+     (cf. `editable-sheet.tsx`).
+
+     Le liseré de focus du navigateur est retiré : il encadrerait la page
+     entière d'un trait bleu ou orange dès le premier clic, et se redessinerait
+     autour de chaque cellule de tableau parcourue. Sur un document destiné au
+     papier, ce cadre n'apporte rien — l'utilisateur voit le curseur clignoter,
+     c'est le repère dont il a besoin.
+
+     La règle vise AUSSI les descendants : dans un `contentEditable`, plusieurs
+     navigateurs posent leur propre contour sur la cellule ou le bloc en cours
+     d'édition, pas seulement sur la racine. */
+  .editable-sheet,
+  .editable-sheet :is(*, *:focus, *:focus-visible) {
+    outline: none;
+  }
+
+  /* Le curseur de texte partout : sur un document Word, on clique dans le
+     texte. Sans cela, la flèche par défaut sur les zones non textuelles
+     (cellules vides, marges internes) laisse croire qu'elles ne s'éditent
+     pas. */
+  .editable-sheet {
+    cursor: text;
+  }
 }
 /* ---------------------------------------------------------------- Impression
 
@@ -257,6 +282,27 @@
   aside,
   body header:not(main header) {
     display: none !important;
+  }
+
+  /* Commandes posées AUTOUR d'un document imprimable : barre d'outils, boutons
+     « Retour » et « Imprimer », mentions d'aide. Elles n'existent que pour
+     piloter l'écran ; sur le papier, elles n'ont rien à dire.
+
+     Classe explicite en plus de `print:hidden` : elle nomme l'intention
+     (« ceci ne s'imprime pas ») et survit à un remaniement des utilitaires
+     Tailwind du conteneur. */
+  .no-print {
+    display: none !important;
+  }
+
+  /* La feuille éditable s'imprime comme un document ordinaire : le lecteur du
+     papier n'a pas à deviner qu'elle était modifiable. Le curseur de texte n'a
+     évidemment pas d'effet ici, mais le contour de focus, lui, EST rendu par
+     certains navigateurs si l'impression est lancée pendant l'édition. */
+  .editable-sheet,
+  .editable-sheet * {
+    outline: none !important;
+    cursor: auto;
   }
 
   /* La zone de contenu perd ses contraintes d'écran (hauteur pleine, défilement
@@ -339,10 +385,37 @@
     break-inside: avoid;
   }
 
+  /* ------------------------------------------------- Pied de page légal
+
+     ANCRÉ EN BAS DE CHAQUE PAGE, et non posé à la suite du contenu.
+
+     `position: fixed` dans un contexte d'impression ne fige pas par rapport à
+     l'écran : le navigateur le répète sur CHAQUE feuille, ce qui est
+     exactement ce qu'on veut d'un pied légal — les mentions obligatoires (§3)
+     valent pour la page 2 d'une facture comme pour la page 1.
+
+     La contrepartie tient en une ligne : sorti du flux, il ne pousse plus le
+     contenu et le recouvrirait. C'est `@page { margin-bottom }` qui lui réserve
+     sa bande, plus bas — les deux valeurs vont ensemble, changer l'une sans
+     l'autre fait chevaucher le pied et la dernière ligne du tableau.
+
+     `margin-top: 0` annule le `mt-6` d'écran : entre le contenu et un pied
+     fixé au bas de la feuille, cette marge ne sépare plus rien. */
+  .print-legal-footer {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    margin-top: 0 !important;
+    background: white;
+  }
+
   @page {
     /* A4 : format du papier au Maroc, et la largeur sur laquelle les gabarits
        de documents sont calés. */
     size: A4;
-    margin: 14mm;
+    /* Bas plus généreux que les trois autres côtés : il porte la bande du pied
+       légal fixé (trois lignes en 8,5 pt + son filet ≈ 12 mm), plus la marge
+       normale. Sans cette réserve, le contenu passerait dessous. */
+    margin: 14mm 14mm 26mm;
   }
 }

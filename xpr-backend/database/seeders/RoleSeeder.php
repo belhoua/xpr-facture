@@ -21,6 +21,10 @@ use Spatie\Permission\PermissionRegistrar;
  *
  * Idempotent : `db:seed` rejoué ne duplique rien et resynchronise la matrice
  * si elle a évolué dans l'enum Role.
+ *
+ * Rejouable sur N'IMPORTE QUELLE base, y compris depuis un poste dont le cache
+ * de permissions a été peuplé par une autre — c'est ce que garantit le vidage
+ * en tête de `run()`, et ce qui manquait avant le 2026-08-18.
  */
 final class RoleSeeder extends Seeder
 {
@@ -32,9 +36,36 @@ final class RoleSeeder extends Seeder
         // société. Sans cela, findOrCreate en créerait un jeu par société.
         $registrar->setPermissionsTeamId(null);
 
+        // ── Le cache est vidé AVANT, et c'est le cœur de ce seeder ─────────
+        //
+        // `Permission::findOrCreate()` ne consulte PAS la base : il passe par
+        // `PermissionRegistrar::getPermissions()`, qui sert le cache — un
+        // ensemble d'objets Permission avec leurs identifiants AUTO-INCRÉMENTÉS.
+        //
+        // Ces identifiants n'ont de sens que pour la base qui les a produits.
+        // Le store de cache étant partagé (Redis, cf. config/permission.php),
+        // un cache peuplé depuis une autre base — un environnement local, un
+        // déploiement antérieur — fait croire à `findOrCreate` que la
+        // permission existe déjà : il ne la crée pas, et rend un objet portant
+        // un identifiant étranger. `syncPermissions` insère alors ce numéro
+        // dans `role_has_permissions`, et PostgreSQL refuse :
+        //
+        //     Key (permission_id)=(36) is not present in table "permissions"
+        //
+        // Vider après la synchronisation, comme on le faisait, arrive une
+        // opération trop tard : le mal est fait à la première lecture. C'est
+        // ce qui a fait échouer `sync_project_permissions` sur Neon le
+        // 2026-08-18.
+        $registrar->forgetCachedPermissions();
+
         foreach (PermissionEnum::values() as $permission) {
             Permission::findOrCreate($permission, 'web');
         }
+
+        // Second vidage : les créations ci-dessus ont peuplé la table, et la
+        // matrice qui suit doit résoudre chaque nom sur l'identifiant RÉEL que
+        // cette base vient d'attribuer.
+        $registrar->forgetCachedPermissions();
 
         foreach (RoleEnum::cases() as $case) {
             $role = Role::findOrCreate($case->value, 'web');

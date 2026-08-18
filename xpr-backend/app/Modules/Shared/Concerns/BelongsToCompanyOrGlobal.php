@@ -26,9 +26,19 @@ trait BelongsToCompanyOrGlobal
     public static function bootBelongsToCompanyOrGlobal(): void
     {
         static::addGlobalScope('companyOrGlobal', function (Builder $builder): void {
-            $companyId = app(TenantContext::class)->currentId();
+            $context = app(TenantContext::class);
+            $companyId = $context->currentId();
 
             if ($companyId === null) {
+                // Utilisateur authentifié sans société : il ne voit que le
+                // référentiel GLOBAL (taux de TVA standard), jamais les lignes
+                // qu'une société a ajoutées pour elle-même. Même raisonnement
+                // que dans BelongsToCompany, à ceci près qu'ici l'ensemble vide
+                // serait faux : le référentiel partagé n'appartient à personne.
+                if ($context->hasUserWithoutCompany()) {
+                    $builder->whereNull($builder->qualifyColumn('company_id'));
+                }
+
                 return;
             }
 

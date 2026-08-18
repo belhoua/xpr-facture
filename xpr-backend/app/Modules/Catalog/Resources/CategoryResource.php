@@ -27,7 +27,12 @@ final class CategoryResource extends JsonResource
             // Présent uniquement quand la liste a fait le withCount : une
             // valeur absente vaut mieux qu'un 0 qui laisserait croire que la
             // catégorie est vide.
-            'productCount' => $this->whenCounted('products'),
+            //
+            // Compte les SERVICES : la société n'en vend pas d'autre sorte, et
+            // l'écran ne parle plus d'articles. Le champ a été renommé plutôt
+            // que laissé sous son ancien nom — `productCount` aurait décrit
+            // faussement ce qu'il contient désormais.
+            'serviceCount' => $this->whenCounted('services'),
             'createdAt' => $this->created_at?->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String(),
         ];

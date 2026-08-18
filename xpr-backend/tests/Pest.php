@@ -6,8 +6,10 @@ use App\Modules\Accounting\Models\TaxRate;
 use App\Modules\Accounting\Services\CompanyAccountingProvisioning;
 use App\Modules\Authentication\Models\User;
 use App\Modules\Catalog\Services\CompanyCatalogProvisioning;
+use App\Modules\Documents\Models\Document;
 use App\Modules\Shared\Services\WorkspaceDemoDataService;
 use App\Modules\Tenancy\Models\Company;
+use App\Modules\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -47,6 +49,25 @@ function workspaceAccount(): array
     app(WorkspaceDemoDataService::class)->seedForCompany($company);
 
     return [$user, $company];
+}
+
+/**
+ * Facture ÉMISE de la démonstration, sans aucun règlement.
+ *
+ * Ici et non dans un fichier de test, pour la raison expliquée sous
+ * `conventionColumns` : deux suites s'en servent (`Payments\PaymentTest`,
+ * `Workspace\CashPaymentsTest`) et Pest n'inclut un fichier qu'au moment de
+ * l'exécuter — la fonction manquerait à l'une selon l'ordre de passage.
+ */
+function payableInvoice(string $companyId): Document
+{
+    app(TenantContext::class)->activateCompany($companyId);
+
+    return Document::query()
+        ->where('type', 'invoice')
+        ->where('status', 'sent')
+        ->where('paid_cents', 0)
+        ->firstOrFail();
 }
 
 /**

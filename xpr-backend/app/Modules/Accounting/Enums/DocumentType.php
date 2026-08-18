@@ -20,7 +20,6 @@ enum DocumentType: string
     case PurchaseOrder = 'purchase_order';
     case DeliveryNote = 'delivery_note';
     case ShippingSlip = 'shipping_slip';
-    case CreditNote = 'credit_note';
     case PurchaseInvoice = 'purchase_invoice';
 
     /**
@@ -40,7 +39,6 @@ enum DocumentType: string
             self::PurchaseOrder => 'BC-{YYYY}-{0000}',
             self::DeliveryNote => 'BL-{YYYY}-{0000}',
             self::ShippingSlip => 'FE-{YYYY}-{0000}',
-            self::CreditNote => 'AV-{YYYY}-{0000}',
             self::PurchaseInvoice => 'FA-{YYYY}-{0000}',
             self::Situation => 'SIT-{YYYY}-{0000}',
         };
@@ -68,16 +66,61 @@ enum DocumentType: string
     /**
      * Le numéro est-il attribué DÈS LA CRÉATION, sans émission explicite ?
      *
-     * Règle générale : non. Le numéro est un acte fiscal engageant, il se
-     * consomme par une action délibérée (§3) — sans quoi une double soumission
-     * ou un appel de test brûlerait des numéros.
+     * La règle d'origine était « non, sauf la SITUATION » (2026-08-05), qui
+     * n'atteste rien auprès de la DGI et n'a donc pas besoin d'une étape
+     * « émettre ».
      *
-     * La SITUATION y échappe (décision du 2026-08-05) parce qu'elle n'atteste
-     * rien auprès de la DGI : c'est un état d'avancement interne, qu'on saisit
-     * et corrige comme une ligne de suivi. Lui imposer une étape « émettre »
-     * ajouterait un geste pour une garantie dont elle n'a pas besoin.
+     * La FACTURE et le DEVIS l'ont rejointe le 2026-08-14, **sur décision
+     * explicite de l'exploitant**, contre l'avis porté par ce dépôt. Ce que
+     * cela coûte, dit ici pour que personne n'ait à le redécouvrir :
+     *
+     *  - une DOUBLE SOUMISSION du formulaire crée deux documents, donc consomme
+     *    deux numéros. Le second ne sera jamais réattribué : la séquence porte
+     *    un trou, et l'article 145 du CGI marocain exige une numérotation
+     *    continue. `POST /documents` n'est protégé par AUCUNE clé
+     *    d'idempotence à ce jour (la table `idempotency_keys` existe mais
+     *    n'est branchée sur aucune route) — c'est le premier chantier à ouvrir
+     *    si les trous deviennent visibles en exploitation ;
+     *  - un appel d'essai, une erreur de saisie abandonnée, un enregistrement
+     *    « pour voir » consomment eux aussi un numéro définitif. Il n'y a plus
+     *    de brouillon où se tromper sans conséquence ;
+     *  - la suppression reste ouverte (cf. `deletableOnceIssued()`), ce qui
+     *    permet de faire disparaître la pièce mais JAMAIS de rendre son numéro.
+     *
+     * Ce que la décision n'enlève pas : le numéro reste tiré de `sequences`
+     * dans la transaction de création, avec son verrou de ligne. Deux créations
+     * concurrentes ne peuvent pas obtenir le même numéro — le risque déplacé
+     * ici est celui du numéro consommé EN TROP, pas du numéro en double.
+     *
+     * Revenir en arrière tient en un caractère : rétablir `=== self::Situation`.
      */
     public function numbersOnCreate(): bool
+    {
+        return $this === self::Situation
+            || $this === self::Invoice
+            || $this === self::Quote;
+    }
+
+    /**
+     * L'ÉTAT du document se déduit-il des montants réglés, et se saisit-il à la
+     * création ?
+     *
+     * Distincte de `numbersOnCreate()` — et non déduite d'elle — depuis le
+     * 2026-08-14, date à laquelle la facture et le devis se sont mis à
+     * numéroter d'office. Les fusionner produirait deux régressions :
+     *
+     *  - un DEVIS « accepté » repasserait « envoyé » au moindre PATCH, parce
+     *    que `refreshSettlementStatus()` réaligne l'état sur une avance qu'un
+     *    devis ne porte pas. L'utilisateur perdrait un état commercial qu'il a
+     *    posé sciemment, en modifiant tout autre chose ;
+     *  - `status` deviendrait recevable en entrée sur une FACTURE, ce qui
+     *    permettrait d'en créer une « payée » sans qu'aucun règlement n'ait eu
+     *    lieu.
+     *
+     * Seule la SITUATION répond donc oui : son état est une donnée de suivi,
+     * pas la conséquence d'un cycle commercial.
+     */
+    public function statusFollowsSettlement(): bool
     {
         return $this === self::Situation;
     }
@@ -85,8 +128,8 @@ enum DocumentType: string
     /**
      * Le CONTENU du document est-il gelé une fois numéroté ?
      *
-     * Oui pour l'AVOIR et les types d'achat : une pièce opposable émise ne se
-     * modifie pas, la correction passe par un avoir (§3).
+     * Oui pour les types d'achat et d'expédition : une pièce opposable émise
+     * ne se modifie pas (§3).
      *
      * Non pour la SITUATION : elle n'est pas opposable à l'administration
      * fiscale. La contrepartie est assumée et documentée dans
@@ -98,7 +141,10 @@ enum DocumentType: string
      * ici pour que personne n'ait à le redécouvrir :
      *
      *  - une facture remise au client peut être modifiée après coup sans
-     *    laisser d'avoir, donc sans trace comptable de la correction ;
+     *    qu'aucune pièce n'atteste la correction. Depuis le retrait de l'avoir
+     *    (2026-08-13, demande de l'exploitant), le produit n'offre d'ailleurs
+     *    plus AUCUN instrument pour la matérialiser : seul `updated_at` en
+     *    garde trace ;
      *  - `docs/modules/documents-impression.md` et le §3 du CLAUDE.md décrivent
      *    toujours la règle d'origine : ils énoncent la cible, pas l'état.
      *
@@ -110,22 +156,6 @@ enum DocumentType: string
      * un devis déjà envoyé peut être modifié sans que le client le sache, et
      * deux versions d'un même `DEV-` peuvent circuler. Le numéro ne changeant
      * pas, seul l'horodatage `updated_at` en garde trace.
-     *
-     * Non pour l'AVOIR depuis le 2026-08-07, à la demande de l'exploitant.
-     * C'est la plus lourde des quatre levées, et il faut la nommer pour ce
-     * qu'elle est : l'avoir est l'instrument par lequel le §3 fait corriger une
-     * facture émise. Le rendre modifiable à son tour ferme la boucle — plus
-     * AUCUNE pièce commerciale de ce dépôt n'est désormais figée après
-     * émission, et la correction d'une correction ne laisse plus de trace
-     * ailleurs que dans `updated_at`. Concrètement : un avoir de 10 000 DH
-     * remis au client peut devenir un avoir de 2 000 DH sans qu'aucune pièce
-     * n'atteste l'écart, alors que c'est précisément l'écart qu'un contrôle
-     * fiscal vient chercher.
-     *
-     * Ce que cela n'enlève pas : l'avoir reste RATTACHÉ à sa facture
-     * (`parent_document_id`), son numéro `AV-` reste consommé, et sa séquence
-     * reste continue — cf. `deletableOnceIssued()`, que cette décision ne
-     * touche pas.
      *
      * Trois garde-fous SUBSISTENT et ne relèvent d'aucune de ces décisions :
      * un état TERMINAL reste clos (annulé, refusé, converti — cf.
@@ -139,8 +169,47 @@ enum DocumentType: string
     {
         return $this !== self::Situation
             && $this !== self::Invoice
-            && $this !== self::Quote
-            && $this !== self::CreditNote;
+            && $this !== self::Quote;
+    }
+
+    /**
+     * Le NUMÉRO déjà attribué peut-il être réécrit en modification ?
+     *
+     * Oui pour la FACTURE et le DEVIS depuis le 2026-08-18, **à la demande
+     * expresse de l'exploitant**. Distinct de `freezesOnIssue()` — et non
+     * déduit de lui — parce que les deux actes ne coûtent pas la même chose :
+     * corriger le contenu d'une pièce laisse son identité intacte, réécrire son
+     * numéro change l'identité même sous laquelle elle a été remise au client.
+     *
+     * Ce que cette levée coûte, dit ici pour que personne n'ait à le
+     * redécouvrir :
+     *
+     *  - le numéro qui figure sur l'exemplaire déjà remis au client ne
+     *    correspond plus à celui de la base. Deux pièces différentes portent
+     *    alors le même numéro dans la nature, ou une même pièce en porte deux ;
+     *  - **le compteur de `sequences` NE SUIT PAS.** Renuméroter une facture en
+     *    `FAC-2026-0042` alors que la séquence en est à 5 ne fait pas avancer
+     *    celle-ci : les factures suivantes prendront 5, 6, 7… jusqu'à heurter
+     *    42, où l'index unique refusera l'écriture. La collision n'arrive pas
+     *    au moment de la renumérotation mais des mois plus tard, sur une facture
+     *    sans rapport ;
+     *  - l'article 145 du CGI marocain exige une numérotation continue, sans
+     *    trou et sans réutilisation. Réécrire un numéro peut produire les deux :
+     *    un trou là où il était, un doublon là où il va — l'index n'empêchant
+     *    que le second ;
+     *  - aucune trace de l'ancien numéro n'est conservée. Seul `updated_at` dit
+     *    qu'une écriture a eu lieu, sans dire laquelle.
+     *
+     * NON pour tous les autres types, la SITUATION comprise : elle est déjà la
+     * plus permissive du dépôt, et rien n'a été demandé pour elle. Le périmètre
+     * reste le plus étroit possible — l'élargir plus tard tient en un `case`,
+     * le refermer suppose de retrouver les pièces déjà renumérotées.
+     *
+     * Revenir en arrière tient en un mot : rendre `false` sans condition.
+     */
+    public function allowsNumberEdit(): bool
+    {
+        return $this === self::Invoice || $this === self::Quote;
     }
 
     /**
@@ -154,25 +223,20 @@ enum DocumentType: string
      * Confondre les deux ferait ouvrir la suppression par simple effet de bord
      * le jour où l'on ouvre l'édition d'un type. Les deux actes ont donc bien
      * été demandés SÉPARÉMENT ici : la SITUATION (jamais opposable) et la
-     * FACTURE le 2026-08-06, puis le DEVIS et l'AVOIR le 2026-08-07, sur
-     * demande expresse de l'exploitant après que le coût lui a été exposé.
+     * FACTURE le 2026-08-06, puis le DEVIS le 2026-08-07, sur demande expresse
+     * de l'exploitant après que le coût lui a été exposé.
      *
      * Ce que la levée du 2026-08-07 coûte, dit ici pour que personne n'ait à le
-     * redécouvrir : les séquences `DEV-` et `AV-` peuvent désormais présenter
-     * des TROUS. Un numéro consommé puis supprimé n'est jamais réattribué, et
-     * l'article 145 du CGI marocain exige une numérotation continue et sans
-     * trou sur les pièces qu'il vise. Le trou est irréversible : aucune
-     * fonction de ce dépôt ne recompacte une séquence.
+     * redécouvrir : la séquence `DEV-` peut désormais présenter des TROUS. Un
+     * numéro consommé puis supprimé n'est jamais réattribué, et l'article 145
+     * du CGI marocain exige une numérotation continue et sans trou sur les
+     * pièces qu'il vise. Le trou est irréversible : aucune fonction de ce dépôt
+     * ne recompacte une séquence. La portée reste ici la plus faible possible :
+     * un devis n'atteste rien auprès de la DGI, il PROPOSE — un trou dans
+     * `DEV-` n'est opposable à personne. Le même raisonnement ne vaudrait pas
+     * sur une pièce fiscale.
      *
-     * La portée réelle diffère selon le type, et c'est ce qui rend la décision
-     * défendable sur l'un et discutable sur l'autre :
-     *  - le DEVIS n'atteste rien auprès de la DGI, il propose. Un trou dans
-     *    `DEV-` n'est opposable à personne ;
-     *  - l'AVOIR, lui, EST une pièce fiscale — c'est l'instrument qui corrige
-     *    une facture. Un trou dans `AV-` se voit lors d'un contrôle, et rien
-     *    dans la base ne dira ce qui occupait le numéro manquant.
-     *
-     * Les quatre types de cette liste sont, à ce jour, exactement ceux que
+     * Les trois types de cette liste sont, à ce jour, exactement ceux que
      * `freezesOnIssue()` laisse modifiables. La COÏNCIDENCE est fortuite : les
      * deux méthodes restent distinctes parce que les deux actes se décident
      * séparément, et les fusionner rendrait la prochaine levée d'édition
@@ -185,8 +249,7 @@ enum DocumentType: string
     {
         return $this === self::Situation
             || $this === self::Invoice
-            || $this === self::Quote
-            || $this === self::CreditNote;
+            || $this === self::Quote;
     }
 
     /**
@@ -198,6 +261,6 @@ enum DocumentType: string
      */
     public static function provisionedAtSignup(): array
     {
-        return [self::Invoice, self::Quote, self::CreditNote, self::Situation];
+        return [self::Invoice, self::Quote, self::Situation];
     }
 }

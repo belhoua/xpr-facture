@@ -25,17 +25,30 @@ final class CompanyMemberService
         $this->permissions->setPermissionsTeamId($company->id);
 
         try {
+            // Les RÔLES sont chargés avec la liste, et c'est le seul moyen :
+            // `preventLazyLoading` est actif hors production (AppServiceProvider),
+            // si bien que lire `$user->roles` membre par membre faisait échouer
+            // tout l'écran — pas seulement le rendre lent.
+            //
+            // Le chargement a lieu ICI, après `setPermissionsTeamId` : la
+            // relation `roles` de Spatie contraint le pivot sur le team COURANT
+            // au moment où la requête part. Remonter ce `with()` avant le
+            // périmètre lirait les rôles du périmètre précédent — soit `null`,
+            // qui n'en rend aucun.
             $members = $company->users()
                 ->withPivot(['invited_at', 'joined_at'])
+                ->with('roles')
                 ->orderBy('name')
                 ->get();
 
             $mapped = [];
 
             foreach ($members as $user) {
-                // Purge le cache de relation : les rôles Spatie dépendent du
-                // team courant, positionné juste au-dessus.
-                $user->unsetRelation('roles');
+                // Plus de `unsetRelation('roles')` ici : il vidait la relation
+                // qu'on vient de charger, et le rechargement qui suivait était
+                // précisément le lazy load interdit. Sa raison d'être — ne pas
+                // servir les rôles d'un autre périmètre — est désormais tenue
+                // par l'ordre des opérations plutôt que par une purge.
 
                 /** @var object{joined_at: ?string}|null $pivot */
                 $pivot = $user->getAttribute('pivot');

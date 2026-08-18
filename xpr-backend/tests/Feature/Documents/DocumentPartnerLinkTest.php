@@ -58,12 +58,13 @@ it('ne réécrit pas les documents émis quand le tiers est renommé', function 
         'ice' => null,
     ]);
 
+    // La facture naît ÉMISE depuis le 2026-08-14 : la création suffit à la
+    // numéroter, il n'y a plus d'appel à `/issue` à intercaler ici.
     $documentId = (string) actingAs($user)
         ->postJson('/api/v1/documents', linkedDocumentPayload(['partnerId' => $partner->id]))
         ->assertCreated()
+        ->assertJsonPath('status', 'sent')
         ->json('id');
-
-    actingAs($user)->postJson("/api/v1/documents/{$documentId}/issue")->assertOk();
 
     // Le tiers change de raison sociale…
     actingAs($user)
@@ -84,14 +85,135 @@ it('ne réécrit pas les documents émis quand le tiers est renommé', function 
         ->and($document->partner?->legal_name)->toBe('Nouvelle Raison S.A.');
 });
 
-it('accepte un client de passage sans tiers', function (): void {
-    [$user] = workspaceAccount();
+it('ouvre une fiche client depuis un nom saisi librement', function (): void {
+    [$user, $company] = workspaceAccount();
 
-    actingAs($user)
+    // Décision du 2026-08-17 : le « client de passage » n'existe plus comme
+    // état durable. Un document sans `partner_id` n'apparaît dans aucun écran
+    // par client — il porte le bon nom et reste introuvable par son propre
+    // client. Le nom libre devient donc une SAISIE RAPIDE de la fiche.
+    $document = actingAs($user)
         ->postJson('/api/v1/documents', linkedDocumentPayload(['clientName' => 'Client Occasionnel']))
         ->assertCreated()
-        ->assertJsonPath('partnerId', null)
-        ->assertJsonPath('clientName', 'Client Occasionnel');
+        ->assertJsonPath('clientName', 'Client Occasionnel')
+        // L'interface doit pouvoir annoncer la fiche née de cette saisie.
+        ->assertJsonPath('autoCreatedPartnerName', 'Client Occasionnel')
+        ->json();
+
+    expect($document['partnerId'])->not->toBeNull();
+
+    app(TenantContext::class)->activateCompany($company->id);
+    /** @var Partner $partner */
+    $partner = Partner::query()->whereKey($document['partnerId'])->firstOrFail();
+
+    expect($partner->legal_name)->toBe('Client Occasionnel')
+        ->and($partner->type->value)->toBe('client')
+        // La fiche naît NUE : aucune mention légale n'est devinée. En inventer
+        // une ferait imprimer sur une facture un identifiant que personne n'a
+        // vérifié (§3).
+        ->and($partner->ice)->toBeNull()
+        ->and($partner->address)->toBeNull();
+});
+
+it('réutilise la fiche existante plutôt que d en ouvrir une seconde', function (string $typed): void {
+    [$user, $company] = workspaceAccount();
+
+    app(TenantContext::class)->activateCompany($company->id);
+    $partner = Partner::factory()->client()->create([
+        'legal_name' => 'Comptoir Atlas S.A.R.L.',
+        'ice' => null,
+    ]);
+
+    // La casse et les espaces de bord ne font pas deux clients. Ce qui n'est
+    // PAS rapproché en revanche — « Comptoir Atlas SARL », sans les points —
+    // ouvre bien une seconde fiche : un rapprochement approximatif
+    // attribuerait les créances d'un client à un autre, ce qui coûte plus cher
+    // qu'un doublon fusionné à la main.
+    actingAs($user)
+        ->postJson('/api/v1/documents', linkedDocumentPayload(['clientName' => $typed]))
+        ->assertCreated()
+        ->assertJsonPath('partnerId', $partner->id)
+        // Retrouvée, pas créée : il n'y a rien à annoncer.
+        ->assertJsonPath('autoCreatedPartnerName', null)
+        // C'est la FICHE qui fait foi sur l'identité, pas la frappe.
+        ->assertJsonPath('clientName', 'Comptoir Atlas S.A.R.L.');
+
+    app(TenantContext::class)->activateCompany($company->id);
+    expect(Partner::query()->where('legal_name', 'ilike', 'Comptoir Atlas%')->count())->toBe(1);
+})->with([
+    'à l’identique' => 'Comptoir Atlas S.A.R.L.',
+    'casse différente' => 'comptoir atlas s.a.r.l.',
+    'espaces de bord' => '  Comptoir Atlas S.A.R.L.  ',
+]);
+
+it('n interroge pas les fiches ARCHIVÉES pour rapprocher un nom', function (): void {
+    [$user, $company] = workspaceAccount();
+
+    app(TenantContext::class)->activateCompany($company->id);
+    $archived = Partner::factory()->client()->create([
+        'legal_name' => 'Ancien Client S.A.',
+        'ice' => null,
+    ]);
+    $archived->delete();
+
+    // Une fiche rangée l'a été délibérément : la ressusciter au détour d'une
+    // facture déciderait à la place de celui qui l'a rangée.
+    $partnerId = actingAs($user)
+        ->postJson('/api/v1/documents', linkedDocumentPayload(['clientName' => 'Ancien Client S.A.']))
+        ->assertCreated()
+        ->assertJsonPath('autoCreatedPartnerName', 'Ancien Client S.A.')
+        ->json('partnerId');
+
+    expect($partnerId)->not->toBe($archived->id);
+});
+
+it('rattache la facture au client de l autre société JAMAIS, même à nom égal', function (): void {
+    [, $companyA] = workspaceAccount();
+    [$userB, $companyB] = workspaceAccount();
+
+    app(TenantContext::class)->activateCompany($companyA->id);
+    $partnerOfA = Partner::factory()->client()->create([
+        'legal_name' => 'Homonyme S.A.R.L.',
+        'ice' => null,
+    ]);
+
+    // Le rapprochement passe par une requête scopée : le tiers d'une autre
+    // société est invisible, et B ouvre sa propre fiche (§5).
+    $partnerId = actingAs($userB)
+        ->postJson('/api/v1/documents', linkedDocumentPayload(['clientName' => 'Homonyme S.A.R.L.']))
+        ->assertCreated()
+        ->json('partnerId');
+
+    expect($partnerId)->not->toBe($partnerOfA->id);
+
+    app(TenantContext::class)->activateCompany($companyB->id);
+    /** @var Partner $created */
+    $created = Partner::query()->whereKey($partnerId)->firstOrFail();
+
+    expect($created->company_id)->toBe($companyB->id);
+});
+
+it('n ouvre aucune fiche quand un tiers est explicitement choisi', function (): void {
+    [$user, $company] = workspaceAccount();
+
+    app(TenantContext::class)->activateCompany($company->id);
+    $partner = Partner::factory()->client()->create(['legal_name' => 'Choisi S.A.', 'ice' => null]);
+    $before = Partner::query()->count();
+
+    // `partnerId` transmis fait foi : un `clientName` qui l'accompagne ne doit
+    // pas contredire l'identité légale du tiers choisi.
+    actingAs($user)
+        ->postJson('/api/v1/documents', linkedDocumentPayload([
+            'partnerId' => $partner->id,
+            'clientName' => 'Nom Contradictoire',
+        ]))
+        ->assertCreated()
+        ->assertJsonPath('partnerId', $partner->id)
+        ->assertJsonPath('clientName', 'Choisi S.A.')
+        ->assertJsonPath('autoCreatedPartnerName', null);
+
+    app(TenantContext::class)->activateCompany($company->id);
+    expect(Partner::query()->count())->toBe($before);
 });
 
 it('exige un nom quand aucun tiers n est fourni', function (): void {
@@ -127,16 +249,14 @@ it('calcule l échéance depuis le délai de règlement du tiers', function (): 
         'ice' => null,
     ]);
 
-    $id = actingAs($user)
+    // L'échéance par défaut se pose au moment où le numéro se pose : à la
+    // CRÉATION depuis le 2026-08-14, et non plus à l'émission.
+    actingAs($user)
         ->postJson('/api/v1/documents', linkedDocumentPayload([
             'partnerId' => $partner->id,
             'issuedAt' => now()->toDateString(),
         ]))
-        ->json('id');
-
-    actingAs($user)
-        ->postJson("/api/v1/documents/{$id}/issue")
-        ->assertOk()
+        ->assertCreated()
         ->assertJsonPath('dueAt', now()->addDays(45)->toDateString());
 });
 
@@ -172,17 +292,14 @@ it('regroupe le classement clients sur le tiers, pas sur le nom', function (): v
     ]);
 
     $issue = function (int $amount) use ($user, $partner): void {
-        $id = actingAs($user)
+        actingAs($user)
             ->postJson('/api/v1/documents', [
                 'type' => 'invoice',
                 'partnerId' => $partner->id,
                 'issuedAt' => now()->toDateString(),
                 'items' => [['label' => 'Prestation', 'quantity' => '1', 'unitPriceCents' => $amount]],
             ])
-            ->assertCreated()
-            ->json('id');
-
-        actingAs($user)->postJson("/api/v1/documents/{$id}/issue")->assertOk();
+            ->assertCreated();
     };
 
     $issue(100_000);

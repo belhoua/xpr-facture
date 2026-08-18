@@ -166,6 +166,10 @@ it('ignore un état transmis sur une facture', function (): void {
 
     // L'état d'une facture est la conséquence de son cycle : créer une facture
     // déjà « payée » contournerait tout suivi d'encaissement.
+    //
+    // L'état attendu est `sent` depuis le 2026-08-14 — la facture naît
+    // numérotée — et non plus `draft`. Ce que le test vérifie n'a PAS changé :
+    // le `status` transmis reste ignoré, quelle que soit la valeur par défaut.
     actingAs($user)
         ->postJson('/api/v1/documents', [
             'type' => 'invoice',
@@ -174,7 +178,7 @@ it('ignore un état transmis sur une facture', function (): void {
             'items' => [['label' => 'Prestation', 'quantity' => '1', 'unitPriceCents' => 1000]],
         ])
         ->assertCreated()
-        ->assertJsonPath('status', 'draft');
+        ->assertJsonPath('status', 'sent');
 });
 
 it('expose le reste à payer', function (): void {

@@ -1,13 +1,30 @@
 import { z } from "zod";
 
 /**
- * Contrat de `/api/v1/partners` — clients et fournisseurs dans un même
- * répertoire, discriminés par `type`.
+ * Contrat de `/api/v1/partners` — clients, fournisseurs et intermédiaires dans
+ * un même répertoire, discriminés par `type`.
  *
  * `both` n'est pas un cas limite : un imprimeur à qui l'on achète des
  * fournitures et à qui l'on facture des prestations est les deux à la fois.
+ *
+ * `intermediary` est d'une autre nature — un RÔLE (apporteur d'affaires,
+ * courtier) et non un sens de facturation. Il n'apparaît dans aucun déroulant
+ * de facturation, seulement sous son propre filtre (décision du 2026-08-17,
+ * miroir de `PartnerType` côté serveur).
  */
-export const partnerTypeSchema = z.enum(["client", "supplier", "both"]);
+export const partnerTypeSchema = z.enum([
+  "client",
+  "supplier",
+  "both",
+  "intermediary",
+]);
+
+/**
+ * Les types PROPOSABLES à la saisie et au filtre, dans l'ordre d'affichage.
+ * Dérivé de l'énumération plutôt que réécrit : deux listes finissent toujours
+ * par diverger, et c'est le jour où l'on ajoute un type qu'on s'en aperçoit.
+ */
+export const PARTNER_TYPES = partnerTypeSchema.options;
 
 export const legalFormSchema = z.enum([
   "auto_entrepreneur",

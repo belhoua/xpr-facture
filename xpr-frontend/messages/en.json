@@ -46,7 +46,9 @@
     "ice": "Invalid ICE (15 digits)",
     "percent": "Invalid percentage",
     "scheduleTotal": "The three instalments must add up to 100%",
-    "decidedBeforeDeposit": "The decision cannot precede the deposit"
+    "decidedBeforeDeposit": "The decision cannot precede the deposit",
+    "numberDigits": "The number must contain digits only",
+    "numberFormat": "Invalid number (letters, digits, - / _ . ; 30 characters max)"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -73,8 +75,7 @@
     "settings": "Settings",
     "logout": "Sign out",
     "quotes": "Quotes",
-    "creditNotes": "Credit notes",
-    "catalog": "Catalogue",
+    "catalog": "Categories",
     "services": "Services",
     "situations": "Statements",
     "situationsCreate": "Add statement",
@@ -83,7 +84,8 @@
     "conventions": "Conventions",
     "conventionsCreate": "New convention",
     "conventionsList": "Convention list",
-    "deposits": "File deposits"
+    "deposits": "File deposits",
+    "projects": "Project progress"
   },
   "status": {
     "draft": "Draft",
@@ -178,7 +180,7 @@
         "features": [
           "Unlimited invoices",
           "5 users",
-          "Quotes and credit notes",
+          "Unlimited quotes",
           "Cash register management",
           "Automatic payment reminders",
           "Customisable document templates",
@@ -267,18 +269,15 @@
   "documents": {
     "title": {
       "invoice": "Invoices",
-      "quote": "Quotes",
-      "credit_note": "Credit notes"
+      "quote": "Quotes"
     },
     "description": {
       "invoice": "Your customer invoices, from draft to payment",
-      "quote": "Your commercial proposals, through to conversion",
-      "credit_note": "Credit notes attached to your invoices"
+      "quote": "Your commercial proposals, through to conversion"
     },
     "create": {
       "invoice": "New invoice",
-      "quote": "New quote",
-      "credit_note": "New credit note"
+      "quote": "New quote"
     },
     "searchPlaceholder": "Number, customer…",
     "draftLabel": "Draft",
@@ -300,10 +299,6 @@
       "quote": {
         "title": "No quote yet",
         "description": "Send a quote; it converts into an invoice in one click."
-      },
-      "credit_note": {
-        "title": "No credit note yet",
-        "description": "A credit note is created from the invoice it corrects."
       }
     },
     "actions": {
@@ -316,15 +311,14 @@
       "issue": "Issue",
       "cancel": "Cancel",
       "convert": "Transfer to invoice",
-      "creditNote": "Transfer to credit note",
-      "changeStatus": "Change status",
-      "convention": "Transfer to convention contract"
+      "convention": "Transfer to convention contract",
+      "payments": "Payments"
     },
     "delete": {
       "title": "Delete this draft?",
       "description": "This draft has no number: deleting it leaves no gap in the numbering.",
       "issuedTitle": "Delete document {number}?",
-      "issuedDescription": "This document is issued and numbered. Deleting it leaves a permanent gap in the sequence: number {number} will not be reassigned. The usual way to correct an invoice is a credit note.",
+      "issuedDescription": "This document is issued and numbered. Deleting it leaves a permanent gap in the sequence: number {number} will not be reassigned.",
       "confirm": "Delete"
     },
     "cancelConfirm": {
@@ -332,27 +326,20 @@
       "description": "The document moves to « Cancelled ». By law it is never deleted.",
       "confirm": "Cancel document"
     },
-    "creditNoteConfirm": {
-      "title": "Create a credit note for this invoice?",
-      "description": "A draft credit note is created with the invoice lines. You can reduce them before issuing it.",
-      "confirm": "Create credit note"
-    },
     "form": {
       "createTitle": {
         "invoice": "New invoice",
-        "quote": "New quote",
-        "credit_note": "New credit note"
+        "quote": "New quote"
       },
       "editTitle": {
-        "invoice": "Edit invoice draft",
-        "quote": "Edit quote draft",
-        "credit_note": "Edit credit note draft"
+        "invoice": "Edit invoice",
+        "quote": "Edit quote"
       },
-      "createDescription": "The number is assigned on issue, not on save.",
-      "editDescription": "Only drafts can be edited (fiscal immutability).",
+      "createDescription": "The number is assigned on save: the document is numbered at once and marked “Sent”.",
+      "editDescription": "The number already assigned does not change: the correction applies to the content.",
       "partner": "Customer",
       "partnerPlaceholder": "Pick a customer…",
-      "walkInClient": "Walk-in customer (free text)",
+      "walkInClient": "New customer (type the name)",
       "clientName": "Customer name",
       "clientPlaceholder": "Customer or company name",
       "subject": "Subject",
@@ -365,9 +352,9 @@
       "terms": "Terms",
       "lines": "Document lines",
       "addLine": "Add line",
-      "noLines": "No lines yet. Add one before issuing the document.",
+      "noLines": "No line yet. Add one to save the document.",
       "line": {
-        "product": "Catalogue item",
+        "product": "Catalogue service",
         "freeLine": "Free line",
         "label": "Description",
         "labelPlaceholder": "Line description",
@@ -381,7 +368,21 @@
       },
       "cancel": "Cancel",
       "save": "Save",
-      "saving": "Saving…"
+      "saving": "Saving…",
+      "submit": "Save and number",
+      "submitting": "Numbering…",
+      "number": "Number",
+      "numberPlaceholder": "Automatic",
+      "numberHint": "Digits only. Leave empty to use automatic numbering.",
+      "clientNameHint": "A customer record will be created unless one already carries this name.",
+      "partnerCreated": {
+        "title": "Customer record created",
+        "description": "Customer {name} has been created. Open their record to complete the details (address, ICE, phone, etc.)."
+      },
+      "project": "Project",
+      "noProject": "No project",
+      "noProjectForClient": "This customer has no open project.",
+      "numberEditHint": "Changing the number of a document already sent: the printed number will no longer match."
     },
     "totals": {
       "subtotal": "Subtotal",
@@ -448,6 +449,9 @@
         "remaining": "Balance due",
         "overdueNotice": "Overdue invoice: payment is due.",
         "settled": "This invoice is settled at the sum of {amount} incl. VAT."
+      },
+      "edit": {
+        "hint": "Click anywhere in the document to edit it. Changes are not saved and only apply to this printout."
       }
     },
     "overdue": {
@@ -484,11 +488,20 @@
       "total": "Total amount",
       "advance": "Advance",
       "remaining": "Outstanding",
-      "status": "Status"
+      "status": "Status",
+      "documentType": "Type",
+      "documentTypes": {
+        "situation": "Situation",
+        "invoice": "Invoice"
+      },
+      "settlements": "Settlements",
+      "project": "Project"
     },
     "filters": {
       "from": "Start date",
-      "to": "End date"
+      "to": "End date",
+      "project": "Project",
+      "allProjects": "All projects"
     },
     "actions": {
       "create": "Add statement",
@@ -521,10 +534,12 @@
       "total": "Total amount (MAD)",
       "advance": "Advance (MAD)",
       "notes": "Notes",
-      "status": "Status"
+      "status": "Status",
+      "project": "Project",
+      "noProject": "No project"
     },
     "kpi": {
-      "count": "Total statements",
+      "count": "Total documents",
       "total": "Total amount",
       "paid": "Paid",
       "remaining": "Outstanding"
@@ -546,11 +561,11 @@
     },
     "client": {
       "title": "Client statements",
-      "description": "Statements attached to this client",
+      "description": "Situations and invoices linked to this client",
       "wrongType": "This document is not a statement.",
       "empty": {
-        "title": "No statements found",
-        "description": "This client has no recorded statement yet."
+        "title": "No document found",
+        "description": "This client has no situation or invoice recorded yet."
       }
     },
     "print": {
@@ -711,90 +726,39 @@
     }
   },
   "catalog": {
-    "title": "Catalogue",
-    "description": "Your products and services, ready to invoice",
-    "tabs": {
-      "products": "Items",
-      "categories": "Categories"
-    },
+    "title": "Service categories",
+    "description": "Organise your services by category",
     "archive": {
       "action": "Archive",
       "confirm": "Archive",
-      "productTitle": "Archive this item?",
-      "productDescription": "The item leaves the lists but stays readable on documents already issued.",
       "categoryTitle": "Archive this category?",
-      "categoryDescription": "Its items stay in the catalogue, simply without a category."
-    },
-    "products": {
-      "create": "New item",
-      "searchPlaceholder": "Name, reference…",
-      "allCategories": "All categories",
-      "columns": {
-        "name": "Item",
-        "type": "Kind",
-        "category": "Category",
-        "tax": "VAT",
-        "price": "Net price"
-      },
-      "types": {
-        "good": "Good",
-        "service": "Service"
-      },
-      "empty": {
-        "title": "Empty catalogue",
-        "description": "Add your products and services — they will fill your invoice lines for you."
-      },
-      "form": {
-        "createTitle": "New item",
-        "editTitle": "Edit item",
-        "description": "The price and rate set here are copied onto documents, then frozen.",
-        "type": "Kind",
-        "reference": "Reference",
-        "referencePlaceholder": "Internal code (optional)",
-        "name": "Name",
-        "namePlaceholder": "Item name",
-        "descriptionLabel": "Description",
-        "category": "Category",
-        "noCategory": "No category",
-        "taxRate": "VAT rate",
-        "noTaxRate": "No VAT",
-        "unitPrice": "Net selling price",
-        "costPrice": "Cost price",
-        "unit": "Unit",
-        "unitPlaceholder": "piece, hour, kg…",
-        "trackStock": "Track stock",
-        "isActive": "Active item",
-        "cancel": "Cancel",
-        "save": "Save",
-        "saving": "Saving…",
-        "defaultDiscount": "Default discount (%)",
-        "defaultDiscountHint": "Carried onto the document line, where it stays editable."
-      }
+      "categoryDescription": "The services it contains are kept, simply without a category."
     },
     "categories": {
       "create": "New category",
       "columns": {
         "name": "Category",
         "description": "Description",
-        "products": "Items"
+        "services": "Services"
       },
       "empty": {
-        "title": "No category yet",
-        "description": "Group your items to find what you invoice faster."
+        "title": "No category",
+        "description": "Create a first category to classify your services."
       },
       "form": {
         "createTitle": "New category",
         "editTitle": "Edit category",
         "description": "The name must be unique; case does not matter.",
         "name": "Name",
-        "namePlaceholder": "Printing, Consulting, Hardware…",
+        "namePlaceholder": "Technical inspection, Study, Assistance…",
         "descriptionLabel": "Description",
         "color": "Colour",
         "isActive": "Active category",
         "cancel": "Cancel",
         "save": "Save",
         "saving": "Saving…"
-      }
+      },
+      "searchPlaceholder": "Search a category…"
     }
   },
   "services": {
@@ -814,7 +778,7 @@
     },
     "empty": {
       "title": "No services yet",
-      "description": "Set up your offerings once: they will then be recalled in your quotes, invoices and credit notes."
+      "description": "Set up your offerings once: they will then be recalled in your quotes and invoices."
     },
     "archive": {
       "action": "Archive",
@@ -858,7 +822,8 @@
     "types": {
       "client": "Customer",
       "supplier": "Supplier",
-      "both": "Customer and supplier"
+      "both": "Customer and supplier",
+      "intermediary": "Intermediary"
     },
     "columns": {
       "name": "Name",
@@ -909,7 +874,7 @@
   },
   "cash": {
     "title": "Cash registers",
-    "description": "Tracking of money in and money out",
+    "description": "Incoming payments tracked by client, invoice settlements included",
     "newEntry": "New entry",
     "balance": "Current balance",
     "inflow": "Money in",
@@ -917,6 +882,7 @@
     "net": "Net flow",
     "columns": {
       "date": "Date",
+      "client": "Client",
       "label": "Description",
       "method": "Method",
       "register": "Register",
@@ -924,15 +890,17 @@
       "actions": "Actions"
     },
     "empty": {
-      "title": "No cash movements",
-      "description": "Payments recorded against your invoices will feed this view automatically."
+      "title": "No incoming payment",
+      "description": "Incoming payments and invoice settlements recorded over the period will appear here."
     },
     "methods": {
       "cash": "Cash",
       "cheque": "Cheque",
       "transfer": "Transfer",
       "card": "Card",
-      "effect": "Bill of exchange"
+      "effect": "Bill of exchange",
+      "lcn": "LCN",
+      "deposit": "Bank deposit"
     },
     "form": {
       "createTitle": "New movement",
@@ -949,7 +917,9 @@
       "amount": "Amount",
       "currency": "Currency",
       "submit": "Save movement",
-      "submitting": "Saving…"
+      "submitting": "Saving…",
+      "client": "Client",
+      "noClient": "No client"
     },
     "direction": {
       "inflow": "Inflow",
@@ -964,7 +934,9 @@
       "title": "Delete this movement?",
       "description": "This action is permanent.",
       "confirm": "Delete"
-    }
+    },
+    "inflowTotal": "Total incoming",
+    "readOnly": "Invoice settlement — correct it from the invoice"
   },
   "users": {
     "title": "Users",
@@ -1103,6 +1075,128 @@
       "title": "Ready to issue your first invoice?",
       "subtitle": "Create your account in minutes and start invoicing today, fully compliant.",
       "button": "Get started now"
+    }
+  },
+  "payments": {
+    "title": "Payments",
+    "untitledInvoice": "Unnumbered invoice",
+    "empty": "No payment recorded for this invoice.",
+    "summary": {
+      "total": "Total amount",
+      "paid": "Total received",
+      "remaining": "Outstanding"
+    },
+    "columns": {
+      "date": "Date",
+      "amount": "Amount",
+      "method": "Method",
+      "reference": "Ref.",
+      "notes": "Notes",
+      "actions": "Actions",
+      "scan": "View scan"
+    },
+    "methods": {
+      "cash": "Cash",
+      "cheque": "Cheque",
+      "transfer": "Transfer",
+      "card": "Card",
+      "lcn": "LCN",
+      "deposit": "Bank deposit"
+    },
+    "checkStatuses": {
+      "pending": "Pending",
+      "cashed": "Cashed",
+      "rejected": "Rejected"
+    },
+    "form": {
+      "title": "Add a payment",
+      "amount": "Amount",
+      "date": "Date",
+      "method": "Payment method",
+      "reference": "Reference",
+      "notes": "Notes",
+      "checkNumber": "Cheque / LCN no.",
+      "checkStatus": "Cheque status",
+      "bankDepositDate": "Bank deposit date",
+      "receivedDate": "Received date",
+      "scan": "Cheque scan",
+      "scanHint": "PDF or image, 8 MB maximum.",
+      "submit": "Save payment",
+      "saving": "Saving…"
+    },
+    "delete": {
+      "action": "Delete payment",
+      "title": "Delete this payment?",
+      "description": "The amount will be removed from the total received and the invoice status recalculated. The payment record is kept in the database.",
+      "confirm": "Delete"
+    },
+    "required": "This field is required",
+    "amount": "Invalid amount",
+    "tooLong": "This text is too long",
+    "receivedAfterDeposit": "The received date must precede the bank deposit"
+  },
+  "projects": {
+    "title": "Project progress",
+    "description": "Track your assignments, their progress and delivered documents",
+    "searchPlaceholder": "Search a project…",
+    "status": {
+      "in_progress": "In progress",
+      "completed": "Completed",
+      "monitoring": "Monitoring",
+      "canceled": "Canceled"
+    },
+    "filters": {
+      "allClients": "All clients",
+      "allStatuses": "All statuses"
+    },
+    "table": {
+      "title": "Project",
+      "client": "Client",
+      "status": "Status",
+      "progress": "Progress",
+      "deliverables": "Deliverables",
+      "archivedClient": "Archived client",
+      "service": "Service"
+    },
+    "empty": {
+      "title": "No project",
+      "description": "Create a first project to track its progress and the documents delivered to the client."
+    },
+    "actions": {
+      "create": "New project",
+      "edit": "Edit project",
+      "saveProgress": "Save progress",
+      "addDeliverable": "Add a deliverable",
+      "removeDeliverable": "Remove this deliverable"
+    },
+    "detail": {
+      "progressTitle": "Progress",
+      "progressLabel": "Progress of {title}",
+      "canceledHint": "This project is canceled: its progress can no longer be changed.",
+      "deliverablesTitle": "Deliverables sent to the client",
+      "noDeliverables": "No deliverable sent yet."
+    },
+    "form": {
+      "createTitle": "New project",
+      "editTitle": "Edit project",
+      "createDescription": "A project needs a title and a client; progress is updated afterwards.",
+      "editDescription": "Correct the project details.",
+      "client": "Client",
+      "clientPlaceholder": "Select a client",
+      "title": "Project title",
+      "titlePlaceholder": "Al Manar Residence — block A",
+      "status": "Status",
+      "progress": "Progress (%)",
+      "description": "Description",
+      "deliverableTitle": "Deliverable title",
+      "deliverablePlaceholder": "Technical note, progress report…",
+      "deliveryDate": "Delivery date",
+      "cancel": "Cancel",
+      "submit": "Save",
+      "saving": "Saving…",
+      "service": "Service (optional)",
+      "noService": "None",
+      "noServiceYet": "No service recorded yet."
     }
   }
 }

@@ -26,12 +26,32 @@ final class DocumentSummaryController
     public function __invoke(Request $request): JsonResponse
     {
         return response()->json($this->documents->summary([
-            'type' => $request->string('type')->toString() ?: null,
+            // Valeur BRUTE, comme la liste : les deux endpoints doivent
+            // comprendre exactement les mêmes filtres, sans quoi les
+            // indicateurs cesseraient de décrire les lignes affichées.
+            'type' => $request->input('type'),
             'status' => $request->string('status')->toString() ?: null,
             'search' => $request->string('search')->toString() ?: null,
             'partnerId' => $request->string('partnerId')->toString() ?: null,
+            'projectId' => self::projectId($request),
             'from' => $request->string('from')->toString() ?: null,
             'to' => $request->string('to')->toString() ?: null,
         ]));
+    }
+
+    /**
+     * Projet demandé, sous l'une ou l'autre graphie.
+     *
+     * L'API parle camelCase de bout en bout, et `projectId` reste la forme de
+     * référence. `project_id` est admis parce qu'un identifiant de colonne
+     * traverse volontiers un script d'intégration ou une URL écrite à la main,
+     * et qu'un filtre ignoré en silence rendrait les totaux de TOUT le client
+     * là où l'appelant demandait un seul chantier — une réponse plausible et
+     * fausse, le pire des deux mondes.
+     */
+    private static function projectId(Request $request): ?string
+    {
+        return $request->string('projectId')->toString()
+            ?: ($request->string('project_id')->toString() ?: null);
     }
 }

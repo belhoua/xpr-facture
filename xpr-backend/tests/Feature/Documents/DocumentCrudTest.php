@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Documents\Models\Document;
+use App\Modules\Tenancy\Services\TenantContext;
 
 use function Pest\Laravel\actingAs;
 
@@ -11,8 +12,14 @@ use function Pest\Laravel\actingAs;
  * fiscale (§3) : seul un brouillon se modifie ou se supprime ; un document émis
  * ne peut qu'être annulé.
  *
- * `workspaceAccount()` est défini dans tests/Pest.php et sème 7 factures (dont
- * 1 brouillon) numérotées 0001..0006 sur l'exercice courant, plus 1 devis.
+ * `workspaceAccount()` est défini dans tests/Pest.php et sème 7 factures
+ * numérotées 0001..0007 sur l'exercice courant, plus 1 devis DEV-…-0001.
+ *
+ * Depuis le 2026-08-14, la démonstration ne contient plus AUCUN brouillon : la
+ * facture et le devis naissent numérotés, et des données de démonstration
+ * doivent montrer ce que le produit sait produire. Les tests qui ont besoin
+ * d'un brouillon — ils restent légitimes, les bases antérieures à la bascule en
+ * contiennent — le fabriquent eux-mêmes avec `Document::factory()->draft()`.
  */
 
 /**
@@ -32,32 +39,54 @@ function documentPayload(array $overrides = []): array
     ], $overrides);
 }
 
-it('crée un document en brouillon, sans numéro', function (): void {
+it('crée une facture numérotée et envoyée', function (): void {
     [$user] = workspaceAccount();
+
+    // Décision de l'exploitant du 2026-08-14 : la facture et le devis ne
+    // passent plus par une étape d'émission. Le numéro est consommé à
+    // l'enregistrement, l'état est `sent` d'emblée. La démo va jusqu'à 0007 →
+    // celle-ci prend 0008. Millésime tiré de l'exercice, pas d'année en dur.
+    $year = now()->format('Y');
 
     actingAs($user)
         ->postJson('/api/v1/documents', documentPayload())
         ->assertCreated()
-        ->assertJsonPath('status', 'draft')
-        ->assertJsonPath('number', null)
+        ->assertJsonPath('status', 'sent')
+        ->assertJsonPath('number', "FAC-{$year}-0008")
+        ->assertJsonPath('issuedAt', now()->toDateString())
         // Sans taux de TVA, la ligne est à 0 % : HT = TTC.
         ->assertJsonPath('subtotalCents', 250_000)
         ->assertJsonPath('totalCents', 250_000);
 });
 
-it('ignore un statut ou un numéro envoyés par le client', function (): void {
+it('crée un devis numéroté dans sa propre séquence', function (): void {
     [$user] = workspaceAccount();
+    $year = now()->format('Y');
 
-    // Créer directement en « payé », ou choisir son numéro, contournerait la
-    // séquence fiscale. Les champs ne sont tout simplement pas acceptés.
+    // La démo sème un devis (DEV-…-0001) : celui-ci prend 0002. Le devis suit
+    // la même règle que la facture depuis le 2026-08-14, dans SA séquence.
     actingAs($user)
-        ->postJson('/api/v1/documents', documentPayload([
-            'status' => 'paid',
-            'number' => 'FAC-2026-9999',
-        ]))
+        ->postJson('/api/v1/documents', documentPayload(['type' => 'quote']))
         ->assertCreated()
-        ->assertJsonPath('status', 'draft')
-        ->assertJsonPath('number', null);
+        ->assertJsonPath('status', 'sent')
+        ->assertJsonPath('number', "DEV-{$year}-0002");
+});
+
+it('ignore un statut envoyé par le client', function (): void {
+    [$user] = workspaceAccount();
+    $year = now()->format('Y');
+
+    // Se déclarer « payé » à la création contournerait le suivi
+    // d'encaissement : le champ est ignoré, l'état reste déduit.
+    //
+    // Le `number`, lui, n'est plus ignoré depuis le 2026-08-14 — mais seulement
+    // s'il est une suite de chiffres. Le format des séquences reste hors de
+    // portée du client, comme le montre le jeu de cas rejetés plus bas.
+    actingAs($user)
+        ->postJson('/api/v1/documents', documentPayload(['status' => 'paid']))
+        ->assertCreated()
+        ->assertJsonPath('status', 'sent')
+        ->assertJsonPath('number', "FAC-{$year}-0008");
 });
 
 it('recalcule les totaux et ignore ceux transmis par le client', function (): void {
@@ -72,43 +101,149 @@ it('recalcule les totaux et ignore ceux transmis par le client', function (): vo
         ->assertJsonPath('totalCents', 250_000);
 });
 
-it('attribue le numéro suivant à l émission, sans trou', function (): void {
+it('attribue les numéros sans trou, dans l ordre de création', function (): void {
     [$user] = workspaceAccount();
-
-    // La démo va jusqu'à 0006 → la suivante prend 0007 (§3). Millésime tiré de
-    // l'exercice courant : pas d'année en dur, qui ferait échouer ce test au
-    // 1er janvier.
     $year = now()->format('Y');
-    $id = actingAs($user)->postJson('/api/v1/documents', documentPayload())->json('id');
+
+    // La séquence ne saute pas : deux créations successives prennent deux
+    // numéros consécutifs (§3). C'est la garantie que la bascule du 2026-08-14
+    // ne devait PAS coûter — elle déplace le moment de la consommation, elle
+    // n'autorise pas les trous.
+    $first = actingAs($user)->postJson('/api/v1/documents', documentPayload())->json('number');
+    $second = actingAs($user)->postJson('/api/v1/documents', documentPayload())->json('number');
+
+    expect($first)->toBe("FAC-{$year}-0008")
+        ->and($second)->toBe("FAC-{$year}-0009");
+});
+
+// ── Numéro saisi à la main (2026-08-14) ───────────────────────────────────
+//
+// Ouverture demandée par l'exploitant. Les tests qui suivent bornent ce qu'elle
+// permet et ce qu'elle ne doit PAS emporter : l'unicité par société, et la
+// numérotation automatique de ceux qui ne saisissent rien.
+
+it('accepte un numéro saisi à la main', function (): void {
+    [$user] = workspaceAccount();
 
     actingAs($user)
-        ->postJson("/api/v1/documents/{$id}/issue")
-        ->assertOk()
-        ->assertJsonPath('status', 'sent')
-        ->assertJsonPath('number', "FAC-{$year}-0007");
+        ->postJson('/api/v1/documents', documentPayload(['number' => '4242']))
+        ->assertCreated()
+        ->assertJsonPath('number', '4242')
+        ->assertJsonPath('status', 'sent');
 });
 
-it('refuse d émettre un document sans ligne', function (): void {
+it('conserve les zéros initiaux du numéro saisi', function (): void {
     [$user] = workspaceAccount();
 
-    // Un document vide consommerait un numéro de la séquence pour n'attester
-    // de rien : le trou serait définitif.
-    $id = actingAs($user)
-        ->postJson('/api/v1/documents', documentPayload(['items' => []]))
-        ->json('id');
-
-    actingAs($user)->postJson("/api/v1/documents/{$id}/issue")->assertStatus(409);
+    // « 007 » est un numéro que l'utilisateur a écrit, pas un entier à
+    // normaliser : le caster le transformerait en « 7 » sous ses doigts.
+    actingAs($user)
+        ->postJson('/api/v1/documents', documentPayload(['number' => '007']))
+        ->assertCreated()
+        ->assertJsonPath('number', '007');
 });
 
-it('refuse de réémettre un document déjà émis', function (): void {
+it('n avance pas la séquence quand le numéro est saisi', function (): void {
+    [$user] = workspaceAccount();
+    $year = now()->format('Y');
+
+    actingAs($user)
+        ->postJson('/api/v1/documents', documentPayload(['number' => '900']))
+        ->assertCreated();
+
+    // Le compteur automatique reste où il était : la pièce suivante prend 0008,
+    // comme si la saisie manuelle n'avait pas eu lieu. C'est le coût assumé de
+    // l'ouverture — les deux numérotations coexistent sans se connaître.
+    actingAs($user)
+        ->postJson('/api/v1/documents', documentPayload())
+        ->assertCreated()
+        ->assertJsonPath('number', "FAC-{$year}-0008");
+});
+
+it('refuse un numéro déjà utilisé dans la société', function (): void {
+    [$user] = workspaceAccount();
+
+    actingAs($user)->postJson('/api/v1/documents', documentPayload(['number' => '55']))->assertCreated();
+
+    actingAs($user)
+        ->postJson('/api/v1/documents', documentPayload(['number' => '55']))
+        ->assertStatus(422)
+        ->assertJsonPath('errors.number.0', fn (string $m): bool => $m !== '');
+});
+
+it('laisse deux sociétés utiliser le même numéro', function (): void {
+    [$userA] = workspaceAccount();
+    [$userB] = workspaceAccount();
+
+    // L'unicité est PAR SOCIÉTÉ : deux entreprises distinctes émettent chacune
+    // leur pièce n° 77 sans se gêner (§5).
+    actingAs($userA)->postJson('/api/v1/documents', documentPayload(['number' => '77']))->assertCreated();
+    actingAs($userB)->postJson('/api/v1/documents', documentPayload(['number' => '77']))->assertCreated();
+});
+
+it('refuse un numéro qui n est pas une suite de chiffres', function (string $number): void {
+    [$user] = workspaceAccount();
+
+    actingAs($user)
+        ->postJson('/api/v1/documents', documentPayload(['number' => $number]))
+        ->assertStatus(422)
+        ->assertJsonPath('errors.number.0', fn (string $m): bool => $m !== '');
+})->with(['FAC-2026-0042', '-1', '12.5', '1e3', 'AB12', '4 2']);
+
+it('reprend la séquence quand le champ numéro est vide', function (): void {
+    [$user] = workspaceAccount();
+    $year = now()->format('Y');
+
+    // Chaîne vide et non absence de clé : c'est ce qu'un formulaire HTML envoie
+    // quand l'utilisateur ne remplit pas le champ.
+    actingAs($user)
+        ->postJson('/api/v1/documents', documentPayload(['number' => '']))
+        ->assertCreated()
+        ->assertJsonPath('number', "FAC-{$year}-0008");
+});
+
+it('renumérote un document par un PATCH', function (): void {
+    [$user] = workspaceAccount();
+    $created = actingAs($user)
+        ->postJson('/api/v1/documents', documentPayload(['number' => '311']))
+        ->assertCreated()
+        ->json();
+
+    // Ce cas affirmait l'inverse jusqu'au 2026-08-18 : la saisie du numéro
+    // valait à la CRÉATION seule. L'exploitant a demandé la levée pour la
+    // facture et le devis ; ce qu'elle coûte est écrit dans
+    // `DocumentType::allowsNumberEdit()`, et le périmètre exact est éprouvé
+    // par `DocumentRenumberingTest`.
+    actingAs($user)
+        ->patchJson("/api/v1/documents/{$created['id']}", ['number' => '999'])
+        ->assertOk()
+        ->assertJsonPath('number', '999');
+});
+
+it('refuse de créer une facture sans ligne', function (): void {
+    [$user] = workspaceAccount();
+
+    // Un document vide consommerait un numéro de la séquence pour n'attester de
+    // rien : le trou serait définitif. La garde était portée par l'émission ;
+    // elle a suivi le numéro jusqu'à la création (2026-08-14).
+    actingAs($user)
+        ->postJson('/api/v1/documents', documentPayload(['items' => []]))
+        ->assertStatus(422)
+        ->assertJsonPath('errors.items.0', fn (string $m): bool => $m !== '');
+});
+
+it('refuse d émettre une facture déjà numérotée', function (): void {
     [$user] = workspaceAccount();
     $id = actingAs($user)->postJson('/api/v1/documents', documentPayload())->json('id');
 
-    actingAs($user)->postJson("/api/v1/documents/{$id}/issue")->assertOk();
+    // L'endpoint d'émission survit pour les types qui ont encore une étape
+    // d'émission (achats, expédition) et pour les brouillons antérieurs à la
+    // bascule. Sur une facture née numérotée, il refuse : la renuméroter
+    // brûlerait un second numéro pour la même pièce.
     actingAs($user)->postJson("/api/v1/documents/{$id}/issue")->assertStatus(409);
 });
 
-it('modifie un brouillon', function (): void {
+it('modifie une facture qu on vient de créer', function (): void {
     [$user] = workspaceAccount();
     $id = actingAs($user)->postJson('/api/v1/documents', documentPayload())->json('id');
 
@@ -242,73 +377,6 @@ it('refuse toujours de modifier un devis ANNULÉ', function (): void {
     expect($quote->refresh()->notes)->not->toBe('Tentative Interdite');
 });
 
-// Le gel de l'AVOIR a été levé le 2026-08-07, à la demande de l'exploitant.
-// C'est la levée la plus lourde — l'avoir est l'instrument par lequel le §3
-// fait corriger une facture, et plus aucune pièce commerciale n'est désormais
-// figée après émission. Les deux tests qui suivent bornent la levée : ce
-// qu'elle permet, et ce qu'elle NE touche PAS — la séquence `AV-`, qui reste
-// continue parce que la suppression obéit à `deletableOnceIssued()`.
-it('modifie un avoir émis (gel levé sur décision de l’exploitant)', function (): void {
-    [$user] = workspaceAccount();
-    $invoice = Document::query()
-        ->where('type', 'invoice')
-        ->where('status', 'sent')
-        ->firstOrFail();
-
-    $creditNoteId = actingAs($user)
-        ->postJson("/api/v1/documents/{$invoice->id}/credit-note")
-        ->assertCreated()
-        ->json('id');
-
-    // L'avoir naît BROUILLON : il faut l'émettre pour éprouver le gel.
-    actingAs($user)
-        ->postJson("/api/v1/documents/{$creditNoteId}/issue")
-        ->assertOk();
-
-    $number = Document::query()->findOrFail($creditNoteId)->number;
-
-    actingAs($user)
-        ->patchJson("/api/v1/documents/{$creditNoteId}", [
-            'notes' => 'Avoir ramené au montant réellement dû.',
-            'items' => [[
-                'label' => 'Remise commerciale corrigée',
-                'quantity' => 1,
-                'unitPriceCents' => 200_000,
-                'discountPercent' => 0,
-            ]],
-        ])
-        ->assertOk()
-        ->assertJsonPath('notes', 'Avoir ramené au montant réellement dû.')
-        ->assertJsonPath('subtotalCents', 200_000);
-
-    // Le numéro `AV-` déjà attribué ne bouge pas : la modification corrige le
-    // contenu, elle ne reconsomme pas la séquence.
-    expect(Document::query()->findOrFail($creditNoteId)->number)->toBe($number);
-});
-
-// Levée du 2026-08-07, demandée après que le coût a été exposé : la séquence
-// `AV-` peut désormais présenter des trous, sur une pièce qui EST fiscale.
-it('supprime un avoir émis (levée du 2026-08-07)', function (): void {
-    [$user] = workspaceAccount();
-    $invoice = Document::query()
-        ->where('type', 'invoice')
-        ->where('status', 'sent')
-        ->firstOrFail();
-
-    $creditNoteId = actingAs($user)
-        ->postJson("/api/v1/documents/{$invoice->id}/credit-note")
-        ->json('id');
-
-    actingAs($user)->postJson("/api/v1/documents/{$creditNoteId}/issue")->assertOk();
-
-    actingAs($user)->deleteJson("/api/v1/documents/{$creditNoteId}")->assertNoContent();
-
-    // Soft delete : la ligne reste en base avec son `deleted_at`, hors de
-    // portée de l'application. C'est la seule atténuation du trou de séquence.
-    expect(Document::query()->find($creditNoteId))->toBeNull();
-    expect(Document::query()->withTrashed()->find($creditNoteId))->not->toBeNull();
-});
-
 it('refuse de modifier une facture annulée (état terminal)', function (): void {
     [$user] = workspaceAccount();
     $cancelled = Document::query()
@@ -322,12 +390,19 @@ it('refuse de modifier une facture annulée (état terminal)', function (): void
 });
 
 it('supprime un brouillon', function (): void {
-    [$user] = workspaceAccount();
-    $id = actingAs($user)->postJson('/api/v1/documents', documentPayload())->json('id');
+    [$user, $company] = workspaceAccount();
 
-    actingAs($user)->deleteJson("/api/v1/documents/{$id}")->assertNoContent();
+    // Fabriqué directement : l'API ne crée plus de brouillon de facture depuis
+    // le 2026-08-14. La règle testée, elle, reste vraie — un document sans
+    // numéro se jette sans rien trouer, et les bases antérieures à la bascule
+    // en contiennent encore.
+    app(TenantContext::class)->activateCompany($company->id);
+    $draft = Document::factory()->draft()->create(['company_id' => $company->id]);
 
-    expect(Document::query()->find($id))->toBeNull();
+    actingAs($user)->deleteJson("/api/v1/documents/{$draft->id}")->assertNoContent();
+
+    app(TenantContext::class)->activateCompany($company->id);
+    expect(Document::query()->find($draft->id))->toBeNull();
 });
 
 it('supprime une facture émise et troue la séquence', function (): void {
@@ -354,7 +429,6 @@ it('supprime une facture émise et troue la séquence', function (): void {
     // Le numéro n'est PAS réattribué : la séquence ne recule jamais. Le
     // document suivant en prendra un nouveau, laissant le trou visible.
     $next = actingAs($user)->postJson('/api/v1/documents', documentPayload())->json('id');
-    actingAs($user)->postJson("/api/v1/documents/{$next}/issue")->assertOk();
 
     // `where(...)->firstOrFail()` et non `findOrFail($id)` : la seconde forme
     // accepte aussi un tableau d'identifiants, son type de retour couvre donc
@@ -410,8 +484,10 @@ it('annule un document émis', function (): void {
 });
 
 it('refuse d annuler un brouillon — il se supprime', function (): void {
-    [$user] = workspaceAccount();
-    $draft = Document::query()->where('status', 'draft')->firstOrFail();
+    [$user, $company] = workspaceAccount();
+
+    app(TenantContext::class)->activateCompany($company->id);
+    $draft = Document::factory()->draft()->create(['company_id' => $company->id]);
 
     actingAs($user)->postJson("/api/v1/documents/{$draft->id}/cancel")->assertStatus(409);
 });
@@ -427,8 +503,10 @@ it('refuse une transition d état impossible pour le type', function (): void {
 });
 
 it('refuse de faire passer un brouillon directement à payé', function (): void {
-    [$user] = workspaceAccount();
-    $draft = Document::query()->where('status', 'draft')->firstOrFail();
+    [$user, $company] = workspaceAccount();
+
+    app(TenantContext::class)->activateCompany($company->id);
+    $draft = Document::factory()->draft()->create(['company_id' => $company->id]);
 
     // Ce serait une créance réglée qui n'a jamais été facturée.
     actingAs($user)
@@ -484,7 +562,6 @@ it('isole les écritures de documents entre deux sociétés', function (): void 
 
     $foreignDraft = Document::withoutGlobalScopes()
         ->where('company_id', $companyB->id)
-        ->where('status', 'draft')
         ->firstOrFail();
 
     // La société A ne doit même pas voir le document de B : 404, pas 403 (§5).

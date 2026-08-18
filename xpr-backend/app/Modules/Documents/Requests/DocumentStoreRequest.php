@@ -20,7 +20,10 @@ use Illuminate\Validation\Rules\RequiredIf;
  *    l'émission est une action explicite qui consomme un numéro (§3). La
  *    situation, qui n'a pas d'étape d'émission, porte un état d'avancement
  *    saisi par l'utilisateur ;
- *  - **pas de `number`** — il est attribué par `sequences`, jamais choisi ;
+ *  - **`number` est accepté depuis le 2026-08-14**, en CHIFFRES seulement et à
+ *    la création uniquement. Il était jusque-là refusé par principe (§3 : le
+ *    numéro vient de `sequences`, il ne se choisit pas). Ce que la levée
+ *    coûte est documenté dans `DocumentWriteService::resolveNumber()` ;
  *  - **pas de totaux** — ils sont recalculés depuis les lignes. Les accepter
  *    permettrait de facturer un montant sans rapport avec le détail affiché.
  *
@@ -56,6 +59,50 @@ class DocumentStoreRequest extends FormRequest
             // Requis seulement en l'absence de tiers : quand un tiers est
             // choisi, le service recopie son identité légale sur le document.
             'clientName' => ['required_without:partnerId', 'nullable', 'string', 'min:2', 'max:255'],
+
+            // PROJET facturé, facultatif : la plupart des pièces n'en relèvent
+            // d'aucun. Scopé à la société comme le tiers.
+            //
+            // Ce que cette règle NE vérifie PAS : que le projet appartienne au
+            // même client que le document. La condition porte sur
+            // `projects.partner_id` face à un tiers qui, en saisie au nom
+            // libre, n'existe pas encore au moment de la validation — c'est le
+            // service qui le résout. La cohérence est donc tenue par
+            // `DocumentWriteService`, seul endroit où les deux sont connus.
+            'projectId' => [
+                'nullable',
+                'uuid',
+                Rule::exists('projects', 'id')
+                    ->where('company_id', $companyId)
+                    ->whereNull('deleted_at'),
+            ],
+
+            // NUMÉRO SAISI À LA MAIN. Optionnel : vide, la séquence reprend la
+            // main et attribue le suivant.
+            //
+            // `regex` et non `numeric` : ce dernier accepte `-1`, `12.5` et
+            // `1e3`, qui produiraient des numéros de pièce absurdes. Le champ
+            // est traité comme une CHAÎNE de chiffres et stocké tel quel —
+            // « 007 » reste « 007 », le caster en entier le transformerait en
+            // « 7 » sous les doigts de l'utilisateur.
+            //
+            // L'unicité est vérifiée par société ET en ignorant les documents
+            // supprimés, exactement comme l'index partiel
+            // `documents_company_number_unique` : une règle plus stricte que la
+            // base rejetterait des numéros que la base accepte, une règle plus
+            // lâche laisserait remonter une erreur SQL brute en 500.
+            //
+            // Cette validation ne remplace PAS l'index : entre le contrôle et
+            // l'INSERT, une autre requête peut prendre le numéro. C'est le
+            // service qui rattrape ce cas, en 409.
+            'number' => [
+                'nullable',
+                'string',
+                'regex:/^\d{1,20}$/',
+                Rule::unique('documents', 'number')
+                    ->where('company_id', $companyId)
+                    ->whereNull('deleted_at'),
+            ],
 
             'issuedAt' => ['nullable', 'date'],
             'dueAt' => ['nullable', 'date', 'after_or_equal:issuedAt'],
@@ -124,13 +171,26 @@ class DocumentStoreRequest extends FormRequest
                 )),
             ],
 
-            // Un document peut être créé vide et complété ensuite ; c'est
-            // l'ÉMISSION qui exige au moins une ligne. Une situation, elle,
-            // n'en accepte aucune : son montant est global.
+            // AU MOINS UNE LIGNE sur les types qui se numérotent à la création
+            // (facture, devis depuis le 2026-08-14).
+            //
+            // C'était l'ÉMISSION qui portait cette exigence, du temps où elle
+            // portait aussi le numéro : un document vide ne doit pas consommer
+            // une place dans la séquence pour ne rien attester. La règle n'a pas
+            // changé, c'est le moment où elle s'applique qui a suivi le numéro.
+            // Elle est doublée côté service (`assertHasContent()`), qui répond
+            // 409 ; la voir ici évite un aller-retour et rend l'erreur 422
+            // adressable au champ.
+            //
+            // Une situation, elle, n'accepte aucune ligne : son montant est
+            // global. Les types d'achat et d'expédition gardent l'ancien
+            // comportement — créés vides, complétés, puis émis.
             'items' => [
                 Rule::prohibitedIf(fn (): bool => $this->isSituation()),
+                Rule::requiredIf(fn (): bool => $this->numbersOnCreate()),
                 'nullable',
                 'array',
+                'min:'.($this->numbersOnCreate() ? 1 : 0),
                 'max:200',
             ],
             'items.*.productId' => [
@@ -213,6 +273,24 @@ class DocumentStoreRequest extends FormRequest
     protected function isSituation(): bool
     {
         return $this->input('type') === DocumentType::Situation->value;
+    }
+
+    /**
+     * Le type visé se numérote-t-il dès la création, ET porte-t-il des lignes ?
+     *
+     * La situation numérote elle aussi d'office, mais son contenu est un
+     * montant global : elle est écartée ici, ses propres règles
+     * (`requiredOnSituation()` sur `totalCents`) tiennent le même rôle.
+     *
+     * Le type est lu dans le PAYLOAD, comme `isSituation()` : à la création,
+     * c'est la seule source disponible. Un type absent ou inconnu renvoie
+     * `false` — c'est la règle `type` qui rejettera la requête, pas celle-ci.
+     */
+    protected function numbersOnCreate(): bool
+    {
+        $type = DocumentType::tryFrom((string) $this->input('type'));
+
+        return $type !== null && $type->numbersOnCreate() && ! $type->hasGlobalAmount();
     }
 
     /**

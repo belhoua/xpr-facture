@@ -1,6 +1,7 @@
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppTopbar } from "@/components/layout/app-topbar";
 import { CommandPalette } from "@/components/layout/command-palette";
+import { Toaster } from "@/components/ui/sonner";
 
 /**
  * Coquille de l'espace client (P0-16). Toutes les routes de `(app)` héritent
@@ -22,6 +23,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
       <CommandPalette />
+      {/* Monté ICI, au niveau de la coquille : une seule file de
+          notifications pour tout l'espace applicatif. */}
+      <Toaster />
     </div>
   );
 }

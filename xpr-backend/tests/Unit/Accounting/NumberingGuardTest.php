@@ -22,7 +22,7 @@ it('refuse d attribuer un numéro hors transaction', function (): void {
 })->throws(NumberingOutsideTransaction::class);
 
 it('nomme le type de document dans le message', function (): void {
-    $exception = new NumberingOutsideTransaction(DocumentType::CreditNote);
+    $exception = new NumberingOutsideTransaction(DocumentType::Quote);
 
-    expect($exception->getMessage())->toContain('credit_note');
+    expect($exception->getMessage())->toContain('quote');
 });

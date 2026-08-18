@@ -32,6 +32,7 @@ import {
   situationKeys,
   type SituationFilters,
 } from "@/features/situations/api/situations";
+import { useClientProjects } from "@/features/projects/hooks/use-client-projects";
 import { SituationStatusBadge } from "@/features/situations/components/situation-status-badge";
 import { SITUATION_STATUSES } from "@/features/situations/schemas/situation";
 import { toApiProblem } from "@/lib/api/client";
@@ -42,13 +43,33 @@ import { Link } from "@/lib/i18n/navigation";
 const STATUS_FILTERS = [...SITUATION_STATUSES, "cancelled"] as const;
 
 /**
- * Situations d'UN client : quatre indicateurs, puis le détail.
+ * Ce qui entre dans le solde d'un client : ses situations d'avancement ET ses
+ * factures. Le devis en est exclu — il propose, il ne crée aucune créance, et
+ * l'additionner gonflerait le « reste à payer » d'un montant que personne ne
+ * doit.
+ */
+const CLIENT_DOCUMENT_TYPES = ["situation", "invoice"] as const;
+
+/** Sentinelle « tous les projets » : Radix interdit la chaîne vide en valeur. */
+const ALL_PROJECTS = "all";
+
+/**
+ * Encours d'UN client : quatre indicateurs, puis le détail.
+ *
+ * L'écran couvre ses SITUATIONS ET SES FACTURES. S'en tenir aux situations
+ * donnerait un « reste à payer » qui n'est pas celui du client : ce qu'il doit
+ * ne dépend pas du type de pièce par lequel on le lui a demandé.
  *
  * Les indicateurs viennent d'un endpoint d'agrégats (`/documents/summary`) et
  * NON d'une somme des lignes affichées : la table est paginée, additionner la
- * page donnerait un total faux dès la 26ᵉ situation — et faux sans le dire.
- * Les deux requêtes partagent les mêmes filtres, pour que les chiffres du haut
+ * page donnerait un total faux dès la 26ᵉ pièce — et faux sans le dire. Les
+ * deux requêtes partagent les mêmes filtres, pour que les chiffres du haut
  * décrivent exactement les lignes du bas.
+ *
+ * Le « PAYÉ » qu'ils affichent est celui des RÈGLEMENTS ENREGISTRÉS, que le
+ * serveur lit dans `payments` ; la colonne « Règlements » en montre le détail
+ * pièce par pièce, de sorte que l'indicateur soit vérifiable sur le même
+ * écran plutôt que d'être un chiffre à croire.
  *
  * L'impression passe par `window.print()` sur la page elle-même plutôt que par
  * un PDF serveur : c'est un état des lieux consultable, pas une pièce à
@@ -57,12 +78,27 @@ const STATUS_FILTERS = [...SITUATION_STATUSES, "cancelled"] as const;
 export function ClientSituationsView({ clientId }: { clientId: string }) {
   const t = useTranslations("situations");
   const tCommon = useTranslations("common");
+  const tPayments = useTranslations("payments");
   const locale = useLocale();
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
+  const [projectId, setProjectId] = useState(ALL_PROJECTS);
 
-  const filters: SituationFilters = { search, status, partnerId: clientId };
+  /** Chantiers de CE client — le déroulant n'en propose aucun autre. */
+  const { projects } = useClientProjects(clientId);
+
+  // Le filtre projet entre dans les MÊMES filtres que la liste : les deux
+  // requêtes les partagent, et c'est ce qui fait que les quatre cartes
+  // décrivent exactement les lignes affichées en dessous — y compris une fois
+  // le chantier choisi.
+  const filters: SituationFilters = {
+    search,
+    status,
+    partnerId: clientId,
+    projectId: projectId === ALL_PROJECTS ? "" : projectId,
+    types: CLIENT_DOCUMENT_TYPES,
+  };
 
   const { data: partner } = useQuery({
     queryKey: partnerKeys.detail(clientId),
@@ -91,9 +127,35 @@ export function ClientSituationsView({ clientId }: { clientId: string }) {
       cell: (row) => (row.issuedAt ? formatDate(row.issuedAt, locale) : "—"),
     },
     {
+      id: "type",
+      header: t("table.documentType"),
+      // Ternaire et non une clé construite : l'écran ne demande que ces deux
+      // types (CLIENT_DOCUMENT_TYPES), et `t(\`…${row.type}\`)` sortirait du
+      // typage des messages pour couvrir sept types qui n'y arriveront jamais.
+      cell: (row) => (
+        <span className="text-muted-foreground text-xs">
+          {row.type === "invoice"
+            ? t("table.documentTypes.invoice")
+            : t("table.documentTypes.situation")}
+        </span>
+      ),
+    },
+    {
+      id: "project",
+      header: t("table.project"),
+      hideBelow: "lg",
+      // `projectTitle` retombe à null quand le chantier a été archivé depuis :
+      // la pièce garde son rattachement, mais il n'y a plus de titre à
+      // afficher. Le tiret le dit sans en inventer un.
+      cell: (row) =>
+        row.projectTitle ?? <span className="text-muted-foreground">—</span>,
+    },
+    {
       id: "subject",
       header: t("table.subject"),
-      cell: (row) => row.subject ?? "—",
+      // Une facture n'a pas d'objet : son sens est dans ses lignes, que cet
+      // écran n'affiche pas. Le nom du client figé la désigne alors.
+      cell: (row) => row.subject ?? row.clientName,
     },
     {
       id: "total",
@@ -110,6 +172,40 @@ export function ClientSituationsView({ clientId }: { clientId: string }) {
       cell: (row) => (
         <span className="amount">{formatMoney(row.paidCents, locale, row.currency)}</span>
       ),
+    },
+    {
+      id: "payments",
+      header: t("table.settlements"),
+      // Le détail est affiché À PLAT et non derrière un dépliant : cet écran
+      // est fait pour être imprimé (window.print()), et ce qui se replie ne
+      // s'imprime pas. Un tiret quand la pièce n'a aucun règlement enregistré,
+      // ce qui est le régime normal d'une situation — son avance est saisie en
+      // en-tête, elle n'a pas d'historique derrière elle.
+      cell: (row) =>
+        (row.payments ?? []).length === 0 ? (
+          <span className="text-muted-foreground">—</span>
+        ) : (
+          <ul className="space-y-0.5 text-xs">
+            {(row.payments ?? []).map((payment) => (
+              <li key={payment.id} className="flex flex-wrap items-baseline gap-x-1.5">
+                <span className="text-muted-foreground">
+                  {formatDate(payment.paidOn, locale)}
+                </span>
+                <span className="text-muted-foreground">
+                  {tPayments(`methods.${payment.method}`)}
+                </span>
+                <span className="amount font-medium">
+                  {formatMoney(payment.amountCents, locale, payment.currency)}
+                </span>
+                {payment.checkNumber && (
+                  <span className="text-muted-foreground">
+                    n° {payment.checkNumber}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        ),
     },
     {
       id: "remaining",
@@ -192,6 +288,22 @@ export function ClientSituationsView({ clientId }: { clientId: string }) {
             className="ps-8"
           />
         </div>
+
+        {/* Le client est déjà connu : le déroulant ne montre que SES
+            chantiers, et le titre seul suffit à les distinguer. */}
+        <Select value={projectId} onValueChange={setProjectId}>
+          <SelectTrigger className="w-56" aria-label={t("filters.project")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_PROJECTS}>{t("filters.allProjects")}</SelectItem>
+            {projects.map((project) => (
+              <SelectItem key={project.id} value={project.id}>
+                {project.title}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <Select value={status} onValueChange={setStatus}>
           <SelectTrigger className="w-40" aria-label={t("table.status")}>

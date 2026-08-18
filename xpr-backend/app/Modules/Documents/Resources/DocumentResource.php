@@ -7,6 +7,7 @@ namespace App\Modules\Documents\Resources;
 use App\Modules\Documents\Models\Document;
 use App\Modules\Documents\Models\DocumentItem;
 use App\Modules\Documents\Services\DocumentCalculator;
+use App\Modules\Payments\Resources\PaymentResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
@@ -30,6 +31,9 @@ final class DocumentResource extends JsonResource
         $items = $this->whenLoaded('items');
         $itemsLoaded = $items instanceof Collection;
 
+        $payments = $this->whenLoaded('payments');
+        $paymentsLoaded = $payments instanceof Collection;
+
         return [
             'id' => $this->id,
             'type' => $this->type->value,
@@ -37,6 +41,17 @@ final class DocumentResource extends JsonResource
             'status' => $this->status->value,
 
             'partnerId' => $this->partner_id,
+            // Non nul UNIQUEMENT sur la réponse d'une écriture qui vient
+            // d'ouvrir une fiche client depuis un nom saisi librement. Émis
+            // toujours, à `null` le reste du temps : une clé qui apparaît et
+            // disparaît obligerait le client à tester sa présence avant sa
+            // valeur. Un tiers RETROUVÉ le laisse à null — rien à annoncer.
+            'autoCreatedPartnerName' => $this->resource->autoCreatedPartnerName,
+            'projectId' => $this->project_id,
+            // Le titre n'est rendu QUE si la relation a été chargée : l'exposer
+            // sans condition ferait une requête par ligne sur les écrans qui ne
+            // l'affichent pas.
+            'projectTitle' => $this->whenLoaded('project', fn (): ?string => $this->project?->title),
             'parentDocumentId' => $this->parent_document_id,
             'parentNumber' => $this->whenLoaded('parent', fn (): ?string => $this->parent?->number),
 
@@ -60,8 +75,11 @@ final class DocumentResource extends JsonResource
             'discountCents' => $this->discount_cents,
             'taxCents' => $this->tax_cents,
             'totalCents' => $this->total_cents,
-            // Montant encaissé et solde. Calculé et non stocké : le dériver ici
-            // évite une seconde source de vérité que rien ne garantirait
+            // Cumul encaissé, tel que porté par le document : recalculé depuis
+            // `payments` à chaque écriture de règlement sur une facture
+            // (PaymentWriteService::refreshSettlement), saisi en en-tête sur
+            // une situation. `remainingCents` en dérive plutôt que d'être
+            // stocké — une seconde source de vérité que rien ne garantirait
             // synchronisée (cf. Document::remainingCents()).
             'paidCents' => $this->paid_cents,
             'remainingCents' => $this->remainingCents(),
@@ -69,6 +87,13 @@ final class DocumentResource extends JsonResource
 
             'notes' => $this->notes,
             'terms' => $this->terms,
+
+            // Historique d'encaissement, quand il a été chargé. `whenLoaded`
+            // et non un chargement à la demande : une resource qui déclenche
+            // ses propres requêtes rend le N+1 invisible depuis le contrôleur.
+            'payments' => $paymentsLoaded
+                ? PaymentResource::collection($payments)->resolve()
+                : $this->whenLoaded('payments'),
 
             'items' => $itemsLoaded
                 ? DocumentItemResource::collection($items)->resolve()

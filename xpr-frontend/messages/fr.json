@@ -46,7 +46,9 @@
     "ice": "ICE invalide (15 chiffres)",
     "percent": "Pourcentage invalide",
     "scheduleTotal": "Les trois parts doivent totaliser 100 %",
-    "decidedBeforeDeposit": "La décision ne peut pas précéder le dépôt"
+    "decidedBeforeDeposit": "La décision ne peut pas précéder le dépôt",
+    "numberDigits": "Le numéro ne doit contenir que des chiffres",
+    "numberFormat": "Numéro invalide (lettres, chiffres, - / _ . ; 30 caractères au plus)"
   },
   "nav": {
     "dashboard": "Tableau de bord",
@@ -73,8 +75,7 @@
     "settings": "Paramètres",
     "logout": "Se déconnecter",
     "quotes": "Devis",
-    "creditNotes": "Avoirs",
-    "catalog": "Catalogue",
+    "catalog": "Catégories",
     "services": "Services",
     "situations": "Situations",
     "situationsCreate": "Ajouter une situation",
@@ -83,7 +84,8 @@
     "conventions": "Conventions",
     "conventionsCreate": "Nouvelle convention",
     "conventionsList": "Liste des conventions",
-    "deposits": "Dépôts de dossier"
+    "deposits": "Dépôts de dossier",
+    "projects": "Avancement de projet"
   },
   "status": {
     "draft": "Brouillon",
@@ -178,7 +180,7 @@
         "features": [
           "Factures illimitées",
           "5 utilisateurs",
-          "Devis et avoirs",
+          "Devis illimités",
           "Gestion des caisses",
           "Relances automatiques d'impayés",
           "Modèles de documents personnalisables",
@@ -267,18 +269,15 @@
   "documents": {
     "title": {
       "invoice": "Factures",
-      "quote": "Devis",
-      "credit_note": "Avoirs"
+      "quote": "Devis"
     },
     "description": {
       "invoice": "Vos factures clients, de la saisie au règlement",
-      "quote": "Vos propositions commerciales, jusqu'à leur transformation",
-      "credit_note": "Les avoirs rattachés à vos factures"
+      "quote": "Vos propositions commerciales, jusqu'à leur transformation"
     },
     "create": {
       "invoice": "Nouvelle facture",
-      "quote": "Nouveau devis",
-      "credit_note": "Nouvel avoir"
+      "quote": "Nouveau devis"
     },
     "searchPlaceholder": "Numéro, client…",
     "draftLabel": "Brouillon",
@@ -300,10 +299,6 @@
       "quote": {
         "title": "Aucun devis",
         "description": "Proposez un devis ; il se transformera en facture en un clic."
-      },
-      "credit_note": {
-        "title": "Aucun avoir",
-        "description": "Un avoir se crée depuis la facture qu'il corrige."
       }
     },
     "actions": {
@@ -316,15 +311,14 @@
       "issue": "Émettre",
       "cancel": "Annuler",
       "convert": "Transférer en facture",
-      "creditNote": "Transférer en avoir",
-      "changeStatus": "Changer de statut",
-      "convention": "Transférer en Contrat de Convention"
+      "convention": "Transférer en Contrat de Convention",
+      "payments": "Règlements"
     },
     "delete": {
       "title": "Supprimer ce brouillon ?",
       "description": "Ce brouillon n'a pas de numéro : sa suppression ne laisse aucun trou dans la numérotation.",
       "issuedTitle": "Supprimer le document {number} ?",
-      "issuedDescription": "Ce document est émis et numéroté. Sa suppression laisse un trou définitif dans la séquence : le numéro {number} ne sera pas réattribué. La correction habituelle d'une facture est un avoir.",
+      "issuedDescription": "Ce document est émis et numéroté. Sa suppression laisse un trou définitif dans la séquence : le numéro {number} ne sera pas réattribué.",
       "confirm": "Supprimer"
     },
     "cancelConfirm": {
@@ -332,27 +326,20 @@
       "description": "Le document passe au statut « Annulé ». Conformément à la loi, il n'est jamais supprimé.",
       "confirm": "Annuler le document"
     },
-    "creditNoteConfirm": {
-      "title": "Créer un avoir sur cette facture ?",
-      "description": "Un avoir brouillon reprenant les lignes de la facture est créé. Vous pourrez les réduire avant de l'émettre.",
-      "confirm": "Créer l'avoir"
-    },
     "form": {
       "createTitle": {
         "invoice": "Nouvelle facture",
-        "quote": "Nouveau devis",
-        "credit_note": "Nouvel avoir"
+        "quote": "Nouveau devis"
       },
       "editTitle": {
-        "invoice": "Modifier le brouillon de facture",
-        "quote": "Modifier le brouillon de devis",
-        "credit_note": "Modifier le brouillon d'avoir"
+        "invoice": "Modifier la facture",
+        "quote": "Modifier le devis"
       },
-      "createDescription": "Le numéro est attribué à l'émission, pas à l'enregistrement.",
-      "editDescription": "Seuls les brouillons sont modifiables (immuabilité fiscale).",
+      "createDescription": "Le numéro est attribué à l'enregistrement : le document est aussitôt numéroté et marqué « Envoyée ».",
+      "editDescription": "Le numéro déjà attribué ne change pas : la correction porte sur le contenu.",
       "partner": "Client",
       "partnerPlaceholder": "Choisir un client…",
-      "walkInClient": "Client de passage (nom libre)",
+      "walkInClient": "Nouveau client (saisir le nom)",
       "clientName": "Nom du client",
       "clientPlaceholder": "Nom du client ou de la société",
       "subject": "Objet",
@@ -365,9 +352,9 @@
       "terms": "Conditions",
       "lines": "Lignes du document",
       "addLine": "Ajouter une ligne",
-      "noLines": "Aucune ligne. Ajoutez-en une pour pouvoir émettre le document.",
+      "noLines": "Aucune ligne. Ajoutez-en une pour pouvoir enregistrer le document.",
       "line": {
-        "product": "Article du catalogue",
+        "product": "Service du catalogue",
         "freeLine": "Ligne libre",
         "label": "Désignation",
         "labelPlaceholder": "Désignation de la ligne",
@@ -381,7 +368,21 @@
       },
       "cancel": "Annuler",
       "save": "Enregistrer",
-      "saving": "Enregistrement…"
+      "saving": "Enregistrement…",
+      "submit": "Enregistrer et numéroter",
+      "submitting": "Numérotation…",
+      "number": "Numéro",
+      "numberPlaceholder": "Automatique",
+      "numberHint": "Chiffres uniquement. Laissez vide pour utiliser la numérotation automatique.",
+      "clientNameHint": "Une fiche client sera créée si aucune ne porte déjà ce nom.",
+      "partnerCreated": {
+        "title": "Fiche client créée",
+        "description": "Le client {name} a été créé. Pensez à vous rendre sur sa fiche pour compléter ses informations (adresse, ICE, téléphone, etc.)."
+      },
+      "project": "Projet",
+      "noProject": "Aucun projet",
+      "noProjectForClient": "Ce client n'a aucun projet ouvert.",
+      "numberEditHint": "Modifier le numéro d'une pièce déjà remise au client : le numéro imprimé ne correspondra plus."
     },
     "totals": {
       "subtotal": "Total HT",
@@ -448,6 +449,9 @@
         "remaining": "Reste à payer",
         "overdueNotice": "Facture échue : le règlement est exigible.",
         "settled": "Arrêtée la présente facture à la somme de {amount} TTC."
+      },
+      "edit": {
+        "hint": "Cliquez dans le document pour le modifier. Les retouches ne sont pas enregistrées et ne servent qu'à cette impression."
       }
     },
     "overdue": {
@@ -484,11 +488,20 @@
       "total": "Montant total",
       "advance": "Avance",
       "remaining": "Reste à payer",
-      "status": "Statut"
+      "status": "Statut",
+      "documentType": "Type",
+      "documentTypes": {
+        "situation": "Situation",
+        "invoice": "Facture"
+      },
+      "settlements": "Règlements",
+      "project": "Projet"
     },
     "filters": {
       "from": "Date de début",
-      "to": "Date de fin"
+      "to": "Date de fin",
+      "project": "Projet",
+      "allProjects": "Tous les projets"
     },
     "actions": {
       "create": "Ajouter une situation",
@@ -521,10 +534,12 @@
       "total": "Montant total (MAD)",
       "advance": "Avance (MAD)",
       "notes": "Notes",
-      "status": "Statut"
+      "status": "Statut",
+      "project": "Projet",
+      "noProject": "Aucun projet"
     },
     "kpi": {
-      "count": "Total situations",
+      "count": "Total pièces",
       "total": "Montant total",
       "paid": "Payé",
       "remaining": "Reste à payer"
@@ -546,11 +561,11 @@
     },
     "client": {
       "title": "Situations du client",
-      "description": "Situations rattachées à ce client",
+      "description": "Situations et factures rattachées à ce client",
       "wrongType": "Ce document n'est pas une situation.",
       "empty": {
-        "title": "Aucune situation trouvée",
-        "description": "Ce client n'a pas encore de situation enregistrée."
+        "title": "Aucune pièce trouvée",
+        "description": "Ce client n'a encore ni situation ni facture enregistrée."
       }
     },
     "print": {
@@ -711,90 +726,39 @@
     }
   },
   "catalog": {
-    "title": "Catalogue",
-    "description": "Vos produits et prestations, prêts à facturer",
-    "tabs": {
-      "products": "Articles",
-      "categories": "Catégories"
-    },
+    "title": "Catégories de services",
+    "description": "Organisez vos services par catégorie",
     "archive": {
       "action": "Archiver",
       "confirm": "Archiver",
-      "productTitle": "Archiver cet article ?",
-      "productDescription": "L'article disparaît des listes mais reste lisible sur les documents déjà émis.",
       "categoryTitle": "Archiver cette catégorie ?",
-      "categoryDescription": "Les articles qu'elle contient restent au catalogue, simplement sans catégorie."
-    },
-    "products": {
-      "create": "Nouvel article",
-      "searchPlaceholder": "Nom, référence…",
-      "allCategories": "Toutes les catégories",
-      "columns": {
-        "name": "Article",
-        "type": "Nature",
-        "category": "Catégorie",
-        "tax": "TVA",
-        "price": "Prix HT"
-      },
-      "types": {
-        "good": "Bien",
-        "service": "Service"
-      },
-      "empty": {
-        "title": "Catalogue vide",
-        "description": "Ajoutez vos produits et prestations : ils se rappelleront tout seuls dans vos factures."
-      },
-      "form": {
-        "createTitle": "Nouvel article",
-        "editTitle": "Modifier l'article",
-        "description": "Le prix et le taux saisis ici seront recopiés dans les documents, puis figés.",
-        "type": "Nature",
-        "reference": "Référence",
-        "referencePlaceholder": "Code interne (facultatif)",
-        "name": "Désignation",
-        "namePlaceholder": "Nom de l'article",
-        "descriptionLabel": "Description",
-        "category": "Catégorie",
-        "noCategory": "Sans catégorie",
-        "taxRate": "Taux de TVA",
-        "noTaxRate": "Sans TVA",
-        "unitPrice": "Prix de vente HT",
-        "costPrice": "Prix de revient",
-        "unit": "Unité",
-        "unitPlaceholder": "pièce, heure, kg…",
-        "trackStock": "Suivre le stock",
-        "isActive": "Article actif",
-        "cancel": "Annuler",
-        "save": "Enregistrer",
-        "saving": "Enregistrement…",
-        "defaultDiscount": "Remise par défaut (%)",
-        "defaultDiscountHint": "Reportée sur la ligne du document, où elle reste modifiable."
-      }
+      "categoryDescription": "Les services qu'elle contient sont conservés, simplement sans catégorie."
     },
     "categories": {
       "create": "Nouvelle catégorie",
       "columns": {
         "name": "Catégorie",
         "description": "Description",
-        "products": "Articles"
+        "services": "Services"
       },
       "empty": {
         "title": "Aucune catégorie",
-        "description": "Classez vos articles pour retrouver plus vite ce que vous facturez."
+        "description": "Créez une première catégorie pour classer vos services."
       },
       "form": {
         "createTitle": "Nouvelle catégorie",
         "editTitle": "Modifier la catégorie",
         "description": "Le nom doit être unique ; la casse n'y change rien.",
         "name": "Nom",
-        "namePlaceholder": "Impression, Conseil, Matériel…",
+        "namePlaceholder": "Contrôle technique, Étude, Assistance…",
         "descriptionLabel": "Description",
         "color": "Couleur",
         "isActive": "Catégorie active",
         "cancel": "Annuler",
         "save": "Enregistrer",
         "saving": "Enregistrement…"
-      }
+      },
+      "searchPlaceholder": "Rechercher une catégorie…"
     }
   },
   "services": {
@@ -814,7 +778,7 @@
     },
     "empty": {
       "title": "Aucun service",
-      "description": "Créez vos prestations une fois : elles se rappelleront ensuite dans vos devis, factures et avoirs."
+      "description": "Créez vos prestations une fois : elles se rappelleront ensuite dans vos devis et vos factures."
     },
     "archive": {
       "action": "Archiver",
@@ -858,7 +822,8 @@
     "types": {
       "client": "Client",
       "supplier": "Fournisseur",
-      "both": "Client et fournisseur"
+      "both": "Client et fournisseur",
+      "intermediary": "Intermédiaire"
     },
     "columns": {
       "name": "Nom",
@@ -909,7 +874,7 @@
   },
   "cash": {
     "title": "Caisses",
-    "description": "Suivi des encaissements et des décaissements",
+    "description": "Suivi des encaissements par client, règlements de factures compris",
     "newEntry": "Nouveau mouvement",
     "balance": "Solde actuel",
     "inflow": "Encaissements",
@@ -917,6 +882,7 @@
     "net": "Flux net",
     "columns": {
       "date": "Date",
+      "client": "Client",
       "label": "Libellé",
       "method": "Mode",
       "register": "Caisse",
@@ -924,15 +890,17 @@
       "actions": "Actions"
     },
     "empty": {
-      "title": "Aucun mouvement de caisse",
-      "description": "Les règlements enregistrés sur vos factures alimenteront automatiquement cette vue."
+      "title": "Aucun encaissement",
+      "description": "Les encaissements et les règlements de factures enregistrés sur la période apparaîtront ici."
     },
     "methods": {
       "cash": "Espèces",
       "cheque": "Chèque",
       "transfer": "Virement",
       "card": "Carte",
-      "effect": "Effet"
+      "effect": "Effet",
+      "lcn": "LCN",
+      "deposit": "Versement"
     },
     "form": {
       "createTitle": "Nouveau mouvement",
@@ -949,7 +917,9 @@
       "amount": "Montant",
       "currency": "Devise",
       "submit": "Enregistrer le mouvement",
-      "submitting": "Enregistrement…"
+      "submitting": "Enregistrement…",
+      "client": "Client",
+      "noClient": "Aucun client"
     },
     "direction": {
       "inflow": "Encaissement",
@@ -964,7 +934,9 @@
       "title": "Supprimer ce mouvement ?",
       "description": "Cette action est définitive.",
       "confirm": "Supprimer"
-    }
+    },
+    "inflowTotal": "Encaissement total",
+    "readOnly": "Règlement de facture : à corriger depuis la facture"
   },
   "users": {
     "title": "Utilisateurs",
@@ -1103,6 +1075,128 @@
       "title": "Prêt à émettre votre première facture ?",
       "subtitle": "Créez votre compte en quelques minutes et facturez dès aujourd'hui, en toute conformité.",
       "button": "Commencer maintenant"
+    }
+  },
+  "payments": {
+    "title": "Règlements",
+    "untitledInvoice": "Facture sans numéro",
+    "empty": "Aucun règlement enregistré pour cette facture.",
+    "summary": {
+      "total": "Montant total",
+      "paid": "Total encaissé",
+      "remaining": "Reste à payer"
+    },
+    "columns": {
+      "date": "Date",
+      "amount": "Montant",
+      "method": "Mode",
+      "reference": "Réf.",
+      "notes": "Notes",
+      "actions": "Actions",
+      "scan": "Voir le scan"
+    },
+    "methods": {
+      "cash": "Espèces",
+      "cheque": "Chèque",
+      "transfer": "Virement",
+      "card": "Carte",
+      "lcn": "LCN",
+      "deposit": "Versement"
+    },
+    "checkStatuses": {
+      "pending": "En attente",
+      "cashed": "Encaissé",
+      "rejected": "Rejeté"
+    },
+    "form": {
+      "title": "Ajouter un paiement",
+      "amount": "Montant",
+      "date": "Date",
+      "method": "Mode de paiement",
+      "reference": "Référence",
+      "notes": "Notes",
+      "checkNumber": "N° Chèque / LCN",
+      "checkStatus": "Statut du chèque",
+      "bankDepositDate": "Date de remise à la banque",
+      "receivedDate": "Date de réception",
+      "scan": "Scan du chèque",
+      "scanHint": "PDF ou image, 8 Mo maximum.",
+      "submit": "Enregistrer le paiement",
+      "saving": "Enregistrement…"
+    },
+    "delete": {
+      "action": "Supprimer le règlement",
+      "title": "Supprimer ce règlement ?",
+      "description": "Le montant sera retiré du total encaissé et le statut de la facture recalculé. La trace du règlement est conservée en base.",
+      "confirm": "Supprimer"
+    },
+    "required": "Ce champ est obligatoire",
+    "amount": "Montant invalide",
+    "tooLong": "Ce texte est trop long",
+    "receivedAfterDeposit": "La réception doit précéder la remise en banque"
+  },
+  "projects": {
+    "title": "Avancement de projet",
+    "description": "Suivez vos missions, leur avancement et les livrables remis",
+    "searchPlaceholder": "Rechercher un projet…",
+    "status": {
+      "in_progress": "En cours",
+      "completed": "Achevé",
+      "monitoring": "En suivi",
+      "canceled": "Annulé"
+    },
+    "filters": {
+      "allClients": "Tous les clients",
+      "allStatuses": "Tous les statuts"
+    },
+    "table": {
+      "title": "Projet",
+      "client": "Client",
+      "status": "Statut",
+      "progress": "Avancement",
+      "deliverables": "Livrables",
+      "archivedClient": "Client archivé",
+      "service": "Service"
+    },
+    "empty": {
+      "title": "Aucun projet",
+      "description": "Créez un premier projet pour suivre son avancement et les documents remis au client."
+    },
+    "actions": {
+      "create": "Nouveau projet",
+      "edit": "Modifier le projet",
+      "saveProgress": "Enregistrer l'avancement",
+      "addDeliverable": "Ajouter un livrable",
+      "removeDeliverable": "Retirer ce livrable"
+    },
+    "detail": {
+      "progressTitle": "Avancement",
+      "progressLabel": "Avancement de {title}",
+      "canceledHint": "Ce projet est annulé : son avancement ne peut plus être modifié.",
+      "deliverablesTitle": "Livrables transmis au client",
+      "noDeliverables": "Aucun livrable transmis pour l'instant."
+    },
+    "form": {
+      "createTitle": "Nouveau projet",
+      "editTitle": "Modifier le projet",
+      "createDescription": "Un projet se crée d'un titre et d'un client ; l'avancement se met à jour ensuite.",
+      "editDescription": "Corrigez les informations du projet.",
+      "client": "Client",
+      "clientPlaceholder": "Choisir un client",
+      "title": "Titre du projet",
+      "titlePlaceholder": "Résidence Al Manar — lot A",
+      "status": "Statut",
+      "progress": "Avancement (%)",
+      "description": "Description",
+      "deliverableTitle": "Titre du livrable",
+      "deliverablePlaceholder": "Notice technique, rapport d'avancement…",
+      "deliveryDate": "Date de remise",
+      "cancel": "Annuler",
+      "submit": "Enregistrer",
+      "saving": "Enregistrement…",
+      "service": "Service (facultatif)",
+      "noService": "Aucun",
+      "noServiceYet": "Aucun service enregistré pour l'instant."
     }
   }
 }
