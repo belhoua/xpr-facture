@@ -30,6 +30,23 @@ Une table `services` séparée aurait imposé :
 Le seul attribut qui distingue réellement un bien d'un service — le suivi de
 stock — tient dans un booléen déjà présent et déjà contraint en base.
 
+> ### Cette décision a été enfreinte, puis rétablie
+>
+> Le **2026-08-18**, la migration `create_services_table` a ouvert une table
+> `services` malgré ce qui précède — non pour facturer, mais pour **classer les
+> projets**. Le résultat a été exactement le coût prévu par le tableau
+> ci-dessus, dans sa version la plus visible : deux référentiels homonymes qui
+> ne se rejoignaient pas. Une prestation créée dans `/services` n'apparaissait
+> jamais dans le champ « service » d'un projet, qui interrogeait l'autre table.
+>
+> Le **2026-08-26**, `projects.service_id` a été repointé vers `products` et
+> les données de `services` reprises dans le catalogue. Le module `Services` et
+> sa table subsistent, **dormants** : plus aucun écran ne les consomme. Voir
+> `docs/modules/projects.md` §1 bis.
+>
+> **Ne pas rouvrir cette porte.** Un besoin de classement se satisfait avec une
+> `category` ou un type d'article, pas avec une seconde table homonyme.
+
 **Ce qui distingue les deux écrans est donc de l'UI, pas du modèle** :
 `/catalog` montre tout et laisse filtrer ; `/services` fige `type=service` et
 retire de son formulaire ce qui ne concerne qu'un bien (nature, suivi de stock,

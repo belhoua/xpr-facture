@@ -31,10 +31,12 @@ import {
   projectKeys,
   updateProjectProgress,
 } from "@/features/projects/api/projects";
+import { IncompleteProjectNotice } from "@/features/projects/components/incomplete-project-notice";
 import { ProgressBar } from "@/features/projects/components/progress-bar";
 import { ProjectStatusBadge } from "@/features/projects/components/project-status-badge";
 import {
   isProgressEditable,
+  missingParts,
   PROJECT_STATUSES,
   type Project,
   type ProjectStatus,
@@ -177,8 +179,19 @@ export function ProjectDetailSheet({
                 <SheetTitle className="font-heading">{data.title}</SheetTitle>
                 <ProjectStatusBadge status={data.status} />
               </div>
+              {/* Client ET service sur la même ligne : ce sont les deux
+                  réponses à « de quoi parle cette fiche ». Le service manque
+                  souvent — le classement est facultatif — et on l'omet alors
+                  plutôt que d'afficher un tiret, qui ferait croire à une donnée
+                  perdue là où il n'y a qu'un champ non rempli.
+
+                  `serviceName` est nul dans DEUX cas indiscernables ici, et
+                  c'est voulu : le projet non classé, et la prestation archivée
+                  depuis (le catalogue est en soft delete). L'un comme l'autre
+                  se corrigent au même endroit — le formulaire. */}
               <SheetDescription>
                 {data.clientName ?? t("table.archivedClient")}
+                {data.serviceName ? ` · ${data.serviceName}` : null}
               </SheetDescription>
             </SheetHeader>
 
@@ -188,6 +201,22 @@ export function ProjectDetailSheet({
                   {actionError}
                 </p>
               )}
+
+              {/* Le bandeau passe AVANT les actions et la description : c'est
+                  la première chose à savoir sur une fiche ouverte à la hâte, et
+                  son bouton mène droit au formulaire qui la complète.
+
+                  `missingParts(data)` est recalculé à CHAQUE RENDU, sans état
+                  local : le tiroir suit donc la requête de détail, que
+                  l'enregistrement du formulaire invalide (`projectKeys.all`
+                  couvre aussi la clé de détail). Un état figé à l'ouverture
+                  aurait gardé le bandeau après la correction. */}
+              {missingParts(data).length > 0 ? (
+                <IncompleteProjectNotice
+                  missing={missingParts(data)}
+                  onComplete={() => onEdit(data)}
+                />
+              ) : null}
 
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" onClick={() => onEdit(data)}>

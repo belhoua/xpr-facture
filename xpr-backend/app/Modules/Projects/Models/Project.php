@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Projects\Models;
 
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Partners\Models\Partner;
 use App\Modules\Projects\Enums\ProjectStatus;
-use App\Modules\Services\Models\Service;
 use App\Modules\Shared\Concerns\BelongsToCompany;
 use Database\Factories\ProjectFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -62,18 +62,26 @@ final class Project extends Model
     }
 
     /**
-     * Service dont relève le projet — la nature de la mission.
+     * Prestation du CATALOGUE dont relève le projet.
      *
-     * NULLABLE, et ce sera le cas de tout projet créé avant l'ouverture du
-     * référentiel : le classement est facultatif. La relation peut aussi être
-     * chargée ET nulle, `Service` portant un soft delete — un service retiré du
-     * référentiel ne fait pas disparaître les projets qu'il classait.
+     * La colonne s'appelle toujours `service_id` mais pointe `products` depuis
+     * le 2026-08-26 : les prestations saisies dans `/services` sont des
+     * articles de type « service », et c'est la seule liste que l'utilisateur
+     * alimente. La table `services` visée auparavant restait vide de son côté,
+     * ce qui donnait un déroulant désespérément vide (cf. la migration
+     * `point_project_service_to_catalog`).
      *
-     * @return BelongsTo<Service, $this>
+     * NULLABLE : le classement est facultatif — un projet peut légitimement ne
+     * relever d'aucune prestation, et tous ceux créés avant l'ouverture du
+     * champ sont dans ce cas. La relation peut aussi être chargée ET nulle,
+     * `Product` portant un soft delete : une prestation archivée ne fait pas
+     * disparaître les projets qu'elle classait.
+     *
+     * @return BelongsTo<Product, $this>
      */
     public function service(): BelongsTo
     {
-        return $this->belongsTo(Service::class);
+        return $this->belongsTo(Product::class, 'service_id');
     }
 
     /**

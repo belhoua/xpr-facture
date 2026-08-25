@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Projects\Resources;
 
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Partners\Models\Partner;
 use App\Modules\Projects\Models\Project;
-use App\Modules\Services\Models\Service;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
@@ -49,12 +49,13 @@ final class ProjectResource extends JsonResource
 
             'serviceId' => $this->service_id,
             // Même raison que `clientName` : le nom est rendu à plat pour la
-            // colonne SERVICE de la liste. `null` couvre DEUX cas que l'écran
-            // affiche de la même façon — le projet non classé, et le service
-            // archivé depuis, `Service` portant un soft delete.
+            // colonne SERVICE de la liste. Il vient du CATALOGUE — la colonne
+            // pointe `products` depuis le 2026-08-26. `null` couvre DEUX cas
+            // que l'écran affiche de la même façon : le projet non classé, et
+            // la prestation archivée depuis, `Product` portant un soft delete.
             'serviceName' => $this->whenLoaded(
                 'service',
-                fn (): ?string => $this->service instanceof Service
+                fn (): ?string => $this->service instanceof Product
                     ? $this->service->name
                     : null,
             ),

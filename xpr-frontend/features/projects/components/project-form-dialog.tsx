@@ -3,10 +3,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Controller, useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { applyProblemToForm } from "@/features/auth/hooks/use-auth";
+import { REFERENCE_STALE_TIME } from "@/lib/api/stale-times";
 import { fetchPartners, partnerKeys } from "@/features/partners/api/partners";
 import {
   createProject,
@@ -39,6 +41,7 @@ import {
   type ProjectFormValues,
 } from "@/features/projects/schemas/project";
 import {
+  createProjectService,
   fetchProjectServices,
   projectServiceKeys,
 } from "@/features/projects/api/services";
@@ -54,7 +57,6 @@ const SERVER_FIELDS = [
 ] as const;
 
 /** Valeur d'item pour « Aucun » : Radix interdit la chaîne vide. */
-const NO_SERVICE = "__none__";
 
 function emptyValues(): ProjectFormValues {
   return {
@@ -122,13 +124,55 @@ export function ProjectFormDialog({
   });
 
   /**
-   * Référentiel des services. Chargé à l'ouverture seulement : c'est une liste
-   * courte et stable, inutile de la redemander à chaque frappe du formulaire.
+   * Prestations du catalogue. Chargées à l'ouverture seulement : c'est une
+   * liste courte et stable, inutile de la redemander à chaque frappe du
+   * formulaire. La clé vivant sous `catalogKeys`, une prestation créée depuis
+   * `/services` invalide celle-ci au passage et le déroulant est déjà à jour.
    */
   const { data: services } = useQuery({
     queryKey: projectServiceKeys.list(),
     queryFn: fetchProjectServices,
     enabled: open,
+    // Même fraîcheur que les autres référentiels (TVA, catégories) : la liste
+    // est courte et quasi figée, et ce dialogue s'ouvre et se referme dix fois
+    // par heure. Sans ce délai, chaque ouverture repayait une requête pour
+    // ramener la même réponse.
+    staleTime: REFERENCE_STALE_TIME,
+  });
+
+  /** Options du sélecteur de service, dans l'ordre alphabétique du serveur. */
+  const serviceOptions = useMemo(
+    () => (services ?? []).map((service) => ({
+      value: service.id,
+      label: service.name,
+    })),
+    [services],
+  );
+
+  /**
+   * Création d'une prestation depuis le champ.
+   *
+   * Elle est SÉLECTIONNÉE d'office : on n'ouvre pas ce champ pour laisser le
+   * projet non classé, et redemander un clic après avoir tapé le nom serait un
+   * geste de plus pour rien.
+   *
+   * Le catalogue est invalidé plutôt que patché à la main — et invalidé EN
+   * ENTIER (`catalogKeys.products()`), ce qui rafraîchit du même coup l'écran
+   * `/services` : les deux listent désormais la même chose, et n'en rafraîchir
+   * qu'une ferait diverger l'affichage de deux onglets ouverts.
+   */
+  const createService = useMutation({
+    mutationFn: (name: string) => createProjectService(name),
+    onSuccess: async (service) => {
+      await queryClient.invalidateQueries({ queryKey: projectServiceKeys.all });
+      form.setValue("serviceId", service.id, { shouldDirty: true });
+    },
+    // Sans ce traitement, un refus passerait inaperçu : le champ resterait vide
+    // sans un mot. Deux cas réels — un nom de moins de deux caractères (422) et
+    // un compte LECTEUR, qui consulte le référentiel sans pouvoir l'alimenter
+    // (403). L'erreur se pose sur le champ visé.
+    onError: (error) =>
+      applyProblemToForm(error, form.setError, ["serviceId"]),
   });
 
   const mutation = useMutation({
@@ -197,12 +241,20 @@ export function ProjectFormDialog({
               <FieldError>{fieldError(errors.partnerId?.message)}</FieldError>
             </Field>
 
-            {/* SERVICE, facultatif : le libellé le dit, et « Aucun » ouvre la
-                liste — deux façons de le signaler, parce qu'un champ vide
-                sans mention laisse toujours croire qu'on a oublié de le
-                remplir. Le référentiel naît vide : tant qu'aucun service n'est
-                enregistré, seule l'entrée « Aucun » s'affiche, et la note en
-                dessous dit pourquoi. */}
+            {/* SERVICE, facultatif : la prestation dont relève le projet.
+
+                La liste est celle du CATALOGUE — exactement ce que l'écran
+                `/services` gère. Elle visait auparavant un second référentiel
+                que ce déroulant seul alimentait, si bien qu'une prestation
+                créée dans `/services` n'y apparaissait jamais ; les deux ont
+                été fusionnés le 2026-08-26 (cf.
+                `features/projects/api/services.ts`).
+
+                Créer depuis ce champ reste possible et crée un vrai article du
+                catalogue, à 0 MAD : on n'ouvre pas ce déroulant pour laisser
+                le projet non classé, et renvoyer vers un autre écran au milieu
+                d'une saisie ferait perdre le formulaire en cours. Le prix se
+                complète ensuite dans `/services`. */}
             <Field>
               <FieldLabel htmlFor="project-service">
                 {t("form.service")}
@@ -211,33 +263,22 @@ export function ProjectFormDialog({
                 control={form.control}
                 name="serviceId"
                 render={({ field }) => (
-                  <Select
-                    value={field.value === "" ? NO_SERVICE : field.value}
-                    onValueChange={(value) =>
-                      field.onChange(value === NO_SERVICE ? "" : value)
-                    }
-                  >
-                    <SelectTrigger id="project-service" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_SERVICE}>
-                        {t("form.noService")}
-                      </SelectItem>
-                      {(services ?? []).map((service) => (
-                        <SelectItem key={service.id} value={service.id}>
-                          {service.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    id="project-service"
+                    options={serviceOptions}
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder={t("form.noService")}
+                    searchPlaceholder={t("form.searchService")}
+                    emptyLabel={t("form.noServiceYet")}
+                    // Créer depuis la recherche, puis sélectionner d'office : on
+                    // n'ouvre pas ce champ pour laisser le service de côté.
+                    onCreate={(name) => createService.mutate(name)}
+                    createLabel={(name) => t("form.createService", { name })}
+                    disabled={createService.isPending}
+                  />
                 )}
               />
-              {(services ?? []).length === 0 && (
-                <p className="text-muted-foreground text-xs">
-                  {t("form.noServiceYet")}
-                </p>
-              )}
               <FieldError>{fieldError(errors.serviceId?.message)}</FieldError>
             </Field>
 

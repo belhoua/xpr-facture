@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Projects\Requests;
 
 use App\Modules\Projects\Enums\ProjectStatus;
-use App\Modules\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -30,16 +29,13 @@ final class ProjectUpdateRequest extends FormRequest
             'title' => ['sometimes', 'required', 'string', 'min:2', 'max:255'],
             // `sometimes` + `nullable` : la clé ABSENTE laisse le classement
             // intact, la clé à null le retire. Un projet mal classé doit
-            // pouvoir être déclassé sans qu'on ait à lui trouver un autre
-            // service.
-            'serviceId' => [
-                'sometimes',
-                'nullable',
-                'uuid',
-                Rule::exists('services', 'id')
-                    ->where('company_id', app(TenantContext::class)->requireId())
-                    ->whereNull('deleted_at'),
-            ],
+            // pouvoir être déclassé sans qu'on ait à lui trouver une autre
+            // prestation.
+            //
+            // Le reste des filtres vient de la création — voir
+            // `ProjectStoreRequest::serviceRules()`, qui dit pourquoi chacun
+            // est là.
+            'serviceId' => ['sometimes', ...ProjectStoreRequest::serviceRules()],
             'status' => ['sometimes', 'required', Rule::enum(ProjectStatus::class)],
             // Miroir de la contrainte CHECK `projects_progress_range_check` :
             // ici pour rendre un 422 lisible plutôt qu'une violation SQL brute
