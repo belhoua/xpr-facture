@@ -420,15 +420,15 @@
       "signature": "Signature : DIRECTION",
       "stamp": "Cachet & signature",
       "legal": {
-        "ice": "ICE {value}",
-        "if": "IF {value}",
-        "rc": "RC {value}",
-        "cnss": "CNSS {value}",
-        "patente": "Patente {value}",
+        "ice": "ICE : {value}",
+        "if": "IF : {value}",
+        "rc": "RC : {value}",
+        "cnss": "CNSS : {value}",
+        "patente": "Patente : {value}",
         "address": "Adresse : {value}",
         "rib": "RIB : {value}",
-        "phone": "Tél. : {value}",
-        "email": "E-mail : {value}"
+        "phone": "Tél : {value}",
+        "email": "Email : {value}"
       },
       "invoice": {
         "action": "Imprimer la facture",

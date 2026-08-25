@@ -433,7 +433,7 @@
        paysage n'aurait plus rien à voir avec les gabarits. */
     size: A4 portrait;
     /* Bas plus généreux que les trois autres côtés : il porte la bande du pied
-       légal fixé (trois lignes en 8,5 pt + son filet ≈ 12 mm), plus la marge
+       légal fixé (trois lignes en 8 pt + son filet ≈ 12 mm), plus la marge
        normale. Sans cette réserve, le contenu passerait dessous.
 
        Ces marges ne suppriment PAS les en-têtes et pieds du navigateur (URL,
@@ -538,7 +538,7 @@
      Marges LATÉRALES à 12 mm et marge HAUTE à 15 mm, comme demandé. La marge
      BASSE, elle, reste à 26 mm et ne peut pas descendre : le contrat porte le
      pied légal `position: fixed`, répété sur chaque feuille, dont les trois
-     lignes en 8,5 pt et le filet occupent ≈ 12 mm. La ramener à 15 mm ferait
+     lignes en 8 pt et le filet occupent ≈ 12 mm. La ramener à 15 mm ferait
      recouvrir les dernières lignes de chaque page par les mentions
      obligatoires — soit exactement la troncature qu'on vient corriger, mais en
      bas de TOUTES les pages au lieu d'une. */

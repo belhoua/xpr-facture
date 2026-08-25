@@ -24,10 +24,18 @@ import { BRAND } from "@/lib/brand";
  *    absence.
  */
 
-/** Assemble les fragments non vides d'une ligne de mentions. */
+/**
+ * Assemble les fragments non vides d'une ligne de mentions.
+ *
+ * Barre verticale par défaut, et non le point médian : entourée de ses deux
+ * espaces, elle découpe visuellement une ligne de six identifiants numériques
+ * là où le point médian se confond avec la ponctuation des chiffres à 15
+ * positions. C'est aussi la barre que porte le papier à en-tête de
+ * l'exploitant.
+ */
 function joinParts(
   parts: readonly (string | null | undefined)[],
-  separator = "  ·  ",
+  separator = "  |  ",
 ): string {
   return parts.filter((part): part is string => Boolean(part)).join(separator);
 }
@@ -62,15 +70,27 @@ export function Letterhead() {
 }
 
 /**
- * Pied de page légal, en TROIS lignes : identité et adresse, identifiants
- * fiscaux, coordonnées bancaires et de contact.
+ * Pied de page légal, en TROIS lignes calées sur le papier à en-tête de
+ * l'exploitant :
+ *
+ *  1. identité et identifiants administratifs — raison sociale, IF, CNSS, RC,
+ *     ICE, patente ;
+ *  2. adresse d'établissement et coordonnées bancaires ;
+ *  3. téléphone et adresse électronique.
+ *
+ * Ce découpage n'est pas cosmétique : il regroupe ce qu'un lecteur cherche
+ * ensemble. Les identifiants servent au contrôle fiscal, l'adresse et le RIB au
+ * règlement, le contact à la relance. Mélanger les trois — l'adresse au milieu
+ * des numéros de registre — oblige à balayer les trois lignes pour trouver le
+ * RIB, qui est l'information la plus consultée d'une facture.
  *
  * Les valeurs restent lues sur la SOCIÉTÉ ACTIVE et ne sont écrites nulle part
  * ici. Les inscrire en dur donnerait un pied juste pour l'exploitant actuel et
  * faux pour tous les autres : le produit est multi-société (§5), et une facture
  * portant l'ICE d'une entreprise tierce n'est pas un défaut d'affichage mais un
  * faux document. Les coordonnées de l'exploitant vivent donc en base, posées
- * par le seeder et modifiables depuis les paramètres.
+ * par le seeder (`AdminSeeder::fillLegalIdentity`) et modifiables depuis les
+ * paramètres.
  *
  * Un champ absent n'imprime pas de libellé vide — un pied annonçant « ICE : »
  * sans numéro serait pire que son absence — et une ligne entièrement vide
@@ -79,51 +99,47 @@ export function Letterhead() {
 export function LegalFooter({ company }: { company: ApiCompany }) {
   const t = useTranslations("documents.print.legal");
 
-  // Ligne 1 — qui émet, et où. Le nom affiché est celui de la marque ; la forme
-  // juridique reste celle de la fiche, elle fait partie des mentions
-  // obligatoires.
-  const identity = joinParts(
-    [
-      `${BRAND.name}${company.legal_form ? ` ${company.legal_form.toUpperCase()}` : ""}`,
-      // Le code postal n'a pas de colonne propre : il vit dans `city`
-      // (« OUJDA 60000 »), comme sur les en-têtes marocains courants.
-      joinParts([company.address, company.city], " "),
-    ],
-    " — ",
-  );
-
-  // Ligne 2 — les identifiants que l'administration exige sur toute pièce
-  // commerciale (§3). L'ordre suit celui du modèle de l'exploitant.
-  const legalIds = joinParts([
-    company.ice ? t("ice", { value: company.ice }) : null,
+  // Ligne 1 — QUI émet, et sous quels numéros. La raison sociale porte la forme
+  // juridique accolée au nom de marque (« BCAT.sarl »), telle qu'elle figure sur
+  // les documents de l'exploitant ; le souligné de l'enum (`sarl_au`) redevient
+  // une espace, c'est un identifiant de base de données, pas un libellé.
+  const identity = joinParts([
+    company.legal_form
+      ? `${BRAND.name}.${company.legal_form.replaceAll("_", " ")}`
+      : BRAND.name,
     company.if_number ? t("if", { value: company.if_number }) : null,
-    company.rc_number
-      ? t("rc", {
-          value: company.rc_city
-            ? `${company.rc_number} — ${company.rc_city}`
-            : company.rc_number,
-        })
-      : null,
     company.cnss ? t("cnss", { value: company.cnss }) : null,
+    company.rc_number ? t("rc", { value: company.rc_number }) : null,
+    company.ice ? t("ice", { value: company.ice }) : null,
     company.patente ? t("patente", { value: company.patente }) : null,
   ]);
 
-  // Ligne 3 — par où l'on paie et par où l'on joint. Le RIB en tête : c'est
-  // l'information qu'un client cherche sur une facture.
-  const banking = joinParts([
+  // Ligne 2 — OÙ l'on est établi, et sur quel compte on règle. Le code postal
+  // n'a pas de colonne propre : il vit dans `city` (« OUJDA 60000 »), comme sur
+  // les en-têtes marocains courants — d'où la virgule qui l'y rattache plutôt
+  // qu'un séparateur de champs.
+  const location = joinParts([
+    company.address
+      ? t("address", { value: joinParts([company.address, company.city], ", ") })
+      : null,
     company.bank_rib ? t("rib", { value: company.bank_rib }) : null,
+  ]);
+
+  // Ligne 3 — par où l'on joint.
+  const contact = joinParts([
     company.phone ? t("phone", { value: company.phone }) : null,
     company.email ? t("email", { value: company.email }) : null,
     company.website,
   ]);
 
   return (
-    <footer className="print-legal-footer border-foreground/60 mt-6 break-inside-avoid border-t pt-2 text-center text-[8.5pt] leading-relaxed">
+    <footer className="print-legal-footer border-foreground/60 mt-6 break-inside-avoid border-t pt-2 text-center text-[8pt] leading-relaxed">
       {identity ? <p className="font-bold">{identity}</p> : null}
-      {legalIds ? <p>{legalIds}</p> : null}
-      {/* `.amount` isole le sens de lecture : un RIB de 24 chiffres suivi d'un
-          numéro de téléphone se réordonnerait en arabe sans cette isolation. */}
-      {banking ? <p className="amount">{banking}</p> : null}
+      {/* `.amount` isole le sens de lecture : un RIB de 24 chiffres collé à un
+          numéro de rue se réordonnerait en arabe sans cette isolation, et un
+          numéro de téléphone suivi d'une adresse électronique de même. */}
+      {location ? <p className="amount">{location}</p> : null}
+      {contact ? <p className="amount">{contact}</p> : null}
     </footer>
   );
 }

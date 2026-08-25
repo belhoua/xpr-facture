@@ -420,15 +420,15 @@
       "signature": "Signature: MANAGEMENT",
       "stamp": "Stamp & signature",
       "legal": {
-        "ice": "ICE {value}",
-        "if": "TIN {value}",
-        "rc": "Trade register {value}",
-        "cnss": "CNSS {value}",
-        "patente": "Business tax {value}",
+        "ice": "ICE: {value}",
+        "if": "TIN: {value}",
+        "rc": "Trade register: {value}",
+        "cnss": "CNSS: {value}",
+        "patente": "Business tax: {value}",
         "address": "Address: {value}",
         "rib": "Bank account: {value}",
         "phone": "Phone: {value}",
-        "email": "E-mail: {value}"
+        "email": "Email: {value}"
       },
       "invoice": {
         "action": "Print invoice",

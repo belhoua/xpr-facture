@@ -140,6 +140,48 @@ Le **logo par société** attend le module Files : `companies` prévoit un
 `logo_file_id` qui n'est pas encore branché. Tant que la marque est fixée en
 dur, la question ne se pose pas.
 
+### 2.2 bis Les trois lignes du pied légal
+
+`LegalFooter` (`features/documents/components/letterhead.tsx`) est **partagé**
+par la facture, le devis, le contrat de convention et l'attestation de caution :
+une mention obligatoire ne peut pas figurer sur trois pièces sur quatre.
+
+Le bloc tient en **trois lignes**, dans cet ordre :
+
+| Ligne | Contenu | Source |
+|---|---|---|
+| 1 | raison sociale (`BRAND.name` + forme juridique), IF, CNSS, RC, ICE, patente | `companies.if_number`, `cnss`, `rc_number`, `ice`, `patente` |
+| 2 | adresse d'établissement (code postal compris) puis RIB | `companies.address`, `city`, `bank_rib` |
+| 3 | téléphone, adresse électronique, site | `companies.phone`, `email`, `website` |
+
+Le regroupement suit ce qu'un lecteur cherche **ensemble** : les identifiants
+servent au contrôle fiscal, l'adresse et le RIB au règlement, le contact à la
+relance. Disperser l'adresse au milieu des numéros de registre oblige à balayer
+les trois lignes pour trouver le RIB — l'information la plus consultée d'une
+facture.
+
+Séparateur : la **barre verticale** entourée de deux espaces. Le point médian
+qu'elle remplace se confondait avec la ponctuation des identifiants à 15
+chiffres. C'est aussi la barre du papier à en-tête de l'exploitant.
+
+Composition : **8 pt**, centré, sous un filet fin (`border-t`). Un fragment vide
+n'imprime pas son libellé, et une ligne entièrement vide disparaît plutôt que de
+laisser un filet orphelin.
+
+Les valeurs viennent **toutes** de la société active. Aucune n'est écrite dans
+le composant : le produit est multi-société (CLAUDE.md §5), et une facture
+portant l'ICE d'une entreprise tierce n'est pas un défaut d'affichage mais un
+faux document. Les coordonnées de l'exploitant sont posées par
+`AdminSeeder::fillLegalIdentity` et par la migration
+`2026_08_15_000001_fill_bcat_legal_identity`, puis modifiables depuis les
+paramètres.
+
+**Écart au modèle de la charte** : la ligne 1 imprime le RC **sans la ville du
+tribunal**, alors que `companies.rc_city` la porte (« Oujda ») et que
+CLAUDE.md §3 la range parmi les mentions attendues. C'est le format du papier à
+en-tête de l'exploitant, retenu sur sa demande. La remettre tient en un
+fragment — `rc_city` est déjà en base.
+
 ### 2.3 Correspondance des colonnes
 
 Les huit colonnes du détail sont **déclarées une seule fois**, dans
