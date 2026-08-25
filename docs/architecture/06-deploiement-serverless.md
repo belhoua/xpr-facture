@@ -24,7 +24,7 @@ posé par Laravel est attribué au domaine du frontend.
 deux qui cassent l'authentification (cf. §3.1).
 
 ```dotenv
-APP_NAME="XPR Facture"
+APP_NAME="BCAT"
 APP_ENV=production
 APP_KEY=base64:…              # OBLIGATOIRE — `php artisan key:generate --show`
 APP_DEBUG=false               # true le temps d'un diagnostic, jamais en régime
@@ -62,7 +62,7 @@ XPR_DEMO_DATA_ON_SIGNUP=false
 # --- Mail : un transport joignable depuis la fonction (API HTTPS de préférence) ---
 MAIL_MAILER=log               # à remplacer par un vrai transport
 MAIL_FROM_ADDRESS="no-reply@xpr.ma"
-MAIL_FROM_NAME="XPR Facture"
+MAIL_FROM_NAME="BCAT"
 ```
 
 Reporter les valeurs de dev (`MAIL_HOST=mailpit`, `DB_HOST=postgres`,
