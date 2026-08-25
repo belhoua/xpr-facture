@@ -3,10 +3,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { useEffect } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { useEffect, useMemo } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Dialog,
   DialogContent,
@@ -28,9 +29,11 @@ import { applyProblemToForm } from "@/features/auth/hooks/use-auth";
 import { fetchPartners, partnerKeys } from "@/features/partners/api/partners";
 import {
   cashKeys,
+  fetchCashCharges,
   createCashMovement,
   updateCashMovement,
 } from "@/features/cash/api/cash";
+import { dashboardKeys } from "@/features/dashboard/api/dashboard";
 import {
   CASH_DIRECTIONS,
   PAYMENT_METHODS,
@@ -39,11 +42,10 @@ import {
   type CashMovement,
   type CashMovementFormValues,
 } from "@/features/cash/schemas/cash";
+import { REFERENCE_STALE_TIME } from "@/lib/api/stale-times";
 
 const CURRENCIES = ["MAD", "EUR", "USD"] as const;
 
-/** Valeur d'item pour « aucun tiers » : Radix interdit la chaîne vide. */
-const NO_PARTNER = "__none__";
 
 /**
  * Champs du formulaire mappables depuis une erreur de validation serveur.
@@ -54,6 +56,7 @@ const SERVER_FIELDS = [
   "partnerId",
   "occurredAt",
   "label",
+  "charge",
   "method",
   "registerName",
   "currency",
@@ -68,6 +71,7 @@ function emptyValues(): CashMovementFormValues {
     partnerId: "",
     occurredAt: todayIso(),
     label: "",
+    charge: "",
     method: "cash",
     registerName: "",
     direction: "inflow",
@@ -83,6 +87,7 @@ function valuesFromMovement(movement: CashMovement): CashMovementFormValues {
     partnerId: movement.partnerId ?? "",
     occurredAt: movement.occurredAt,
     label: movement.label,
+    charge: movement.charge ?? "",
     // Seule une écriture SAISIE parvient ici — l'écran n'ouvre l'édition que
     // sur `source === "cash"`. Les deux replis couvrent le typage d'une ligne
     // de règlement, qui peut porter un mode et une caisse que le formulaire ne
@@ -120,14 +125,47 @@ export function CashMovementFormDialog({
     defaultValues: emptyValues(),
   });
 
-  // Répertoire des tiers pour le déroulant. `client` seulement : la caisse de
-  // cet écran suit les encaissements, et proposer les fournisseurs allongerait
-  // la liste de noms qu'on n'y cherche pas.
-  const partnerFilters = { type: "client" as const };
+  // Répertoire des tiers. TOUS les rôles depuis que la caisse porte les deux
+  // sens (2026-08-25) : un décaissement se fait au profit d'un FOURNISSEUR, que
+  // le filtre `client` masquait — on ne pouvait donc rattacher une sortie
+  // qu'aux clients, ce qui n'a pas de sens.
+  const partnerFilters = { type: "all" as const };
   const { data: partners } = useQuery({
     queryKey: partnerKeys.list(partnerFilters),
     queryFn: () => fetchPartners(partnerFilters),
   });
+
+  // Le SENS pilote l'affichage du champ de charge. `useWatch` et non
+  // `getValues` : celui-ci ne redéclenche aucun rendu, le champ n'apparaîtrait
+  // qu'au prochain pour une autre raison.
+  const direction = useWatch({ control: form.control, name: "direction" });
+
+  // Natures de charge déjà employées. Chargées seulement quand le tiroir est
+  // ouvert ET qu'il s'agit d'une sortie : sur un encaissement, le champ n'est
+  // pas affiché et la requête ne servirait à rien.
+  const { data: charges = [] } = useQuery({
+    queryKey: cashKeys.charges(),
+    queryFn: fetchCashCharges,
+    enabled: open && direction === "outflow",
+    staleTime: REFERENCE_STALE_TIME,
+  });
+
+  /**
+   * Options du sélecteur de tiers.
+   *
+   * L'ICE accompagne la raison sociale : deux fiches d'un même groupe portent
+   * souvent des noms très proches, et c'est l'identifiant qui les départage —
+   * il entre d'ailleurs dans le champ de recherche du composant.
+   */
+  const partnerOptions = useMemo(
+    () =>
+      (partners?.data ?? []).map((partner) => ({
+        value: partner.id,
+        label: partner.legalName,
+        hint: partner.ice ?? undefined,
+      })),
+    [partners],
+  );
 
   useEffect(() => {
     if (open) {
@@ -142,6 +180,8 @@ export function CashMovementFormDialog({
         : createCashMovement(values),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: cashKeys.all });
+      // Le solde de caisse figure aussi sur le tableau de bord.
+      await queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
       onOpenChange(false);
     },
     onError: (error) => {
@@ -185,33 +225,58 @@ export function CashMovementFormDialog({
                 control={form.control}
                 name="partnerId"
                 render={({ field }) => (
-                  <Select
-                    // Radix refuse la chaîne vide comme valeur d'item : le
-                    // sentinel NO_PARTNER porte « aucun tiers » dans la liste,
-                    // et redevient "" dans le formulaire.
-                    value={field.value === "" ? NO_PARTNER : field.value}
-                    onValueChange={(value) =>
-                      field.onChange(value === NO_PARTNER ? "" : value)
-                    }
-                  >
-                    <SelectTrigger id="cash-partner" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_PARTNER}>
-                        {t("form.noClient")}
-                      </SelectItem>
-                      {(partners?.data ?? []).map((partner) => (
-                        <SelectItem key={partner.id} value={partner.id}>
-                          {partner.legalName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  // Recherchable : le répertoire d'un cabinet compte des
+                  // centaines de fiches, et un déroulant ne se parcourt qu'à la
+                  // molette. Re-choisir la ligne déjà sélectionnée la retire —
+                  // c'est ce qui remplace l'entrée « aucun tiers » du déroulant.
+                  <Combobox
+                    id="cash-partner"
+                    options={partnerOptions}
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder={t("form.noClient")}
+                    searchPlaceholder={t("form.searchClient")}
+                    emptyLabel={t("form.noClientFound")}
+                  />
                 )}
               />
               <FieldError>{fieldError(errors.partnerId?.message)}</FieldError>
             </Field>
+
+            {/* La CHARGE ne concerne qu'une sortie : classer une entrée
+                d'argent en « Loyer » n'aurait pas de sens, et le serveur vide
+                d'ailleurs le champ sur un encaissement. Il apparaît donc avec
+                le sens choisi, plutôt que d'être désactivé — un champ grisé
+                dont on ne sait pas ce qui l'active occupe la place sans rien
+                apprendre. */}
+            {direction === "outflow" && (
+              <Field>
+                <FieldLabel htmlFor="cash-charge">{t("form.charge")}</FieldLabel>
+                {/* Un champ LIBRE avec suggestions, et non un `Combobox` :
+                    celui-ci impose de choisir dans la liste, or une dépense
+                    d'un genre nouveau ne doit pas attendre qu'on ait créé son
+                    référentiel. `<datalist>` filtre à la frappe comme un
+                    combobox, tout en laissant taper autre chose — et il est
+                    natif, donc accessible sans un composant de plus. */}
+                <Input
+                  id="cash-charge"
+                  list="cash-charge-options"
+                  autoComplete="off"
+                  placeholder={t("form.chargePlaceholder")}
+                  aria-invalid={Boolean(errors.charge)}
+                  {...form.register("charge")}
+                />
+                <datalist id="cash-charge-options">
+                  {charges.map((charge) => (
+                    <option key={charge} value={charge} />
+                  ))}
+                </datalist>
+                <p className="text-muted-foreground text-xs">
+                  {t("form.chargeHint")}
+                </p>
+                <FieldError>{fieldError(errors.charge?.message)}</FieldError>
+              </Field>
+            )}
 
             <Field>
               <FieldLabel htmlFor="cash-label">{t("form.label")}</FieldLabel>

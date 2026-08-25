@@ -41,6 +41,5 @@ export const inviteUserSchema = z.object({
   role: z.enum(["admin", "accountant", "sales", "viewer"]),
 });
 
-export type CompanyRole = z.infer<typeof companyRoleSchema>;
 export type CompanyUser = z.infer<typeof companyUserSchema>;
 export type InviteUserValues = z.infer<typeof inviteUserSchema>;

@@ -23,6 +23,7 @@ import { useLocale, useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { ConfirmDialog } from "@/components/patterns/confirm-dialog";
 import { DataTable, type Column } from "@/components/patterns/data-table";
@@ -54,6 +55,7 @@ import {
   documentKeys,
   fetchDocuments,
 } from "@/features/documents/api/documents";
+import { dashboardKeys } from "@/features/dashboard/api/dashboard";
 import {
   assignableStatuses,
   isConvertible,
@@ -70,6 +72,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { Link, usePathname, useRouter } from "@/lib/i18n/navigation";
 import { useDeferredMount } from "@/lib/use-deferred-mount";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { REFERENCE_STALE_TIME } from "@/lib/api/stale-times";
 
 /**
  * Les TROIS panneaux lourds de cet écran sont chargés à la demande.
@@ -108,8 +111,6 @@ const PaymentsModal = dynamic(
   { ssr: false },
 );
 
-/** Une heure : le référentiel de TVA et le catalogue ne bougent pas en séance. */
-const REFERENCE_STALE_TIME = 60 * 60 * 1000;
 
 /**
  * Liste des documents d'un TYPE donné — factures, devis, avoirs partagent cet
@@ -205,9 +206,31 @@ export function DocumentsView({ type }: { type: DocumentType }) {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteDocument(id),
-    onSuccess: async () => {
+    // Le document supprimé est capturé AVANT l'appel : `deleteTarget` est remis
+    // à null en fin d'opération, et le lire ensuite pour composer le message
+    // donnerait une phrase sans numéro.
+    onSuccess: async (_result, id) => {
+      const removed = deleteTarget?.id === id ? deleteTarget : null;
+
       await queryClient.invalidateQueries({ queryKey: documentKeys.all });
+      // Le chiffre d'affaires et le restant dû du tableau de bord se lisent sur
+      // les factures : une pièce supprimée les change tous les deux.
+      await queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
       setDeleteTarget(null);
+
+      // La ligne disparaît, ce qui se voit déjà. Le toast dit ce que la
+      // disparition ne dit pas : LAQUELLE est partie — sur une liste filtrée,
+      // une ligne qui s'efface peut tout aussi bien être sortie du filtre.
+      //
+      // Le message dit « document » et non « devis » : cette vue sert les deux
+      // écrans, et sa prop `type` en accepte huit. Nommer le type demanderait
+      // une clé par type — sept d'entre elles pour des écrans qui n'existent
+      // pas — ou produirait « le devis » sur `/invoices` au premier oubli.
+      toast.success(
+        removed?.number === null || removed?.number === undefined
+          ? t("delete.doneDraft")
+          : t("delete.done", { number: removed.number }),
+      );
     },
   });
 
@@ -298,6 +321,17 @@ export function DocumentsView({ type }: { type: DocumentType }) {
    * sans numéro n'a rien consommé dans la séquence, quel que soit son état.
    */
   const deletingNumber = deleteTarget?.number ?? null;
+
+  /**
+   * Le devis en cours de suppression a-t-il déjà produit une facture ?
+   *
+   * Troisième cas d'avertissement depuis le 2026-08-24, aux côtés du brouillon
+   * et de la pièce simplement numérotée : celui-ci laisse derrière lui une
+   * FACTURE, qui ne conservera de son devis que le numéro. C'est ce que la
+   * levée coûte, et c'est le moment de le dire — les deux textes existants
+   * parlent du trou dans la séquence, aucun ne parle de la pièce qui reste.
+   */
+  const deletingConverted = deleteTarget?.status === "converted";
 
   /**
    * Statuts filtrables : ceux du cycle du type, plus `cancelled`.
@@ -457,6 +491,23 @@ export function DocumentsView({ type }: { type: DocumentType }) {
                 </DropdownMenuItem>
               )}
 
+              {/* Modifiable MAIS pas supprimable — le cas d'un devis converti
+                  ou refusé, que le 2026-08-07 rouvre à l'édition sans rouvrir
+                  la suppression : effacer un devis converti couperait
+                  `parent_document_id` et sa facture perdrait la trace de ce
+                  dont elle découle.
+                  L'entrée est désactivée plutôt qu'absente, pour la raison
+                  déjà retenue plus bas : un menu qui montre « Modifier » sans
+                  « Supprimer » et sans rien dire se lit comme un
+                  dysfonctionnement, et c'est ce silence qui fait rouvrir le
+                  sujet. */}
+              {isEditable(row) && !isDeletable(row) && (
+                <DropdownMenuItem disabled>
+                  <Lock aria-hidden />
+                  {t("actions.notDeletable")}
+                </DropdownMenuItem>
+              )}
+
               {/* Ni l'un ni l'autre : document clos (annulé, refusé, converti)
                   ou type gelé. Désactivé plutôt qu'absent — sans cette mention,
                   l'utilisateur qui cherche « Modifier » conclut à un
@@ -574,22 +625,27 @@ export function DocumentsView({ type }: { type: DocumentType }) {
         />
       )}
 
-      {/* Deux avertissements distincts, parce que les deux gestes n'ont pas la
+      {/* TROIS avertissements distincts, parce que les trois gestes n'ont pas la
           même portée : jeter un brouillon ne laisse aucune trace, supprimer une
-          pièce NUMÉROTÉE troue définitivement la séquence. Un texte unique
-          finirait par mentir dans l'un des deux cas. */}
+          pièce NUMÉROTÉE troue définitivement la séquence, et supprimer un devis
+          CONVERTI laisse en plus une facture qui n'en gardera que le numéro. Un
+          texte unique finirait par mentir dans deux cas sur trois. */}
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title={
           deletingNumber === null
             ? t("delete.title")
-            : t("delete.issuedTitle", { number: deletingNumber })
+            : deletingConverted
+              ? t("delete.convertedTitle", { number: deletingNumber })
+              : t("delete.issuedTitle", { number: deletingNumber })
         }
         description={
           deletingNumber === null
             ? t("delete.description")
-            : t("delete.issuedDescription", { number: deletingNumber })
+            : deletingConverted
+              ? t("delete.convertedDescription", { number: deletingNumber })
+              : t("delete.issuedDescription", { number: deletingNumber })
         }
         confirmLabel={t("delete.confirm")}
         pending={deleteMutation.isPending}

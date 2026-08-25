@@ -24,7 +24,7 @@ services:
 
     envVars:
       - key: APP_NAME
-        value: XPR Facture
+        value: BCAT
       - key: APP_ENV
         value: production
       - key: APP_DEBUG
@@ -139,7 +139,7 @@ services:
       - key: MAIL_FROM_ADDRESS
         value: no-reply@xpr.ma
       - key: MAIL_FROM_NAME
-        value: XPR Facture
+        value: BCAT
 
       # --- Stockage de fichiers -------------------------------------------
       # Disque éphémère : tout fichier téléversé disparaît au redémarrage du

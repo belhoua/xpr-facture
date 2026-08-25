@@ -9,6 +9,7 @@ import { toast } from "sonner";
 
 import { ErrorState } from "@/components/patterns/error-state";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +37,7 @@ import {
   fetchDocument,
   updateDocument,
 } from "@/features/documents/api/documents";
+import { dashboardKeys } from "@/features/dashboard/api/dashboard";
 import {
   DocumentLineEditor,
   emptyLine,
@@ -48,9 +50,11 @@ import {
 } from "@/features/documents/schemas/document";
 import { computeTotals } from "@/features/documents/utils/totals";
 import { fetchPartners, partnerKeys } from "@/features/partners/api/partners";
+import { projectKeys } from "@/features/projects/api/projects";
 import { useClientProjects } from "@/features/projects/hooks/use-client-projects";
 import { toApiProblem } from "@/lib/api/client";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/format";
+import { REFERENCE_STALE_TIME } from "@/lib/api/stale-times";
 
 /** Champs mappables depuis une erreur de validation serveur (RFC 9457). */
 const SERVER_FIELDS = [
@@ -68,8 +72,6 @@ const SERVER_FIELDS = [
 /** Valeur d'item pour « aucun projet » : Radix interdit la chaîne vide. */
 const NO_PROJECT = "__none__";
 
-/** Une heure : le référentiel de TVA et le catalogue ne bougent pas en séance. */
-const REFERENCE_STALE_TIME = 60 * 60 * 1000;
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -302,6 +304,23 @@ export function DocumentFormDialog({
     [items, taxRates],
   );
 
+  /**
+   * Options du sélecteur de tiers.
+   *
+   * L'ICE accompagne la raison sociale : deux fiches d'un même groupe portent
+   * souvent des noms très proches, et c'est l'identifiant qui les départage —
+   * il entre d'ailleurs dans le champ de recherche du composant.
+   */
+  const partnerOptions = useMemo(
+    () =>
+      (partnersQuery.data?.data ?? []).map((partner) => ({
+        value: partner.id,
+        label: partner.displayName,
+        hint: partner.ice ?? undefined,
+      })),
+    [partnersQuery.data],
+  );
+
   const mutation = useMutation({
     mutationFn: (values: DocumentFormValues) =>
       isEdit && document
@@ -309,7 +328,23 @@ export function DocumentFormDialog({
         : createDocument(type, values),
     onSuccess: async (saved) => {
       await queryClient.invalidateQueries({ queryKey: documentKeys.all });
+      // Le chiffre d'affaires du tableau de bord vient de bouger.
+      await queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
       queryClient.setQueryData(documentKeys.detail(saved.id), saved);
+
+      // Un DEVIS sans chantier en ouvre un, au nom de son objet (règle du
+      // 2026-08-25, cf. `DocumentWriteService::withAutoProject()`). Le
+      // répertoire des projets vient donc de changer : sans cette invalidation,
+      // l'écran « Avancement de projet » servirait son cache et resterait à
+      // zéro projet jusqu'au rechargement complet de la page — exactement le
+      // symptôme qu'on vient de corriger côté serveur.
+      //
+      // Invalidé sur la seule présence d'un `projectId` : le devis peut aussi
+      // avoir REJOINT un chantier existant, auquel cas rien n'est créé mais son
+      // nombre de pièces rattachées, lui, a bougé.
+      if (saved.projectId !== null) {
+        await queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      }
 
       // Un nom saisi librement a ouvert une fiche client. L'annoncer n'est pas
       // décoratif : la fiche naît avec le seul nom, sans ICE ni adresse, et ces
@@ -394,32 +429,24 @@ export function DocumentFormDialog({
                 control={form.control}
                 name="partnerId"
                 render={({ field }) => (
-                  <Select
-                    value={field.value || "walk-in"}
-                    onValueChange={(value) =>
-                      field.onChange(value === "walk-in" ? "" : value)
-                    }
-                  >
-                    <SelectTrigger id="document-partner" className="w-full">
-                      <SelectValue placeholder={t("form.partnerPlaceholder")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {/* Saisie rapide : le nom est tapé à la main et le
-                          serveur en fait une fiche client — ou retrouve celle
-                          qui porte déjà ce nom. Ce n'est plus un « client de
-                          passage » : depuis le 2026-08-17, toute pièce est
-                          rattachée à un tiers, sans quoi elle n'apparaît dans
-                          aucun encours client. */}
-                      <SelectItem value="walk-in">
-                        {t("form.walkInClient")}
-                      </SelectItem>
-                      {(partnersQuery.data?.data ?? []).map((partner) => (
-                        <SelectItem key={partner.id} value={partner.id}>
-                          {partner.displayName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  // Recherchable (2026-08-26) : le répertoire d'un cabinet
+                  // compte des centaines de fiches, et un déroulant ne se
+                  // parcourt qu'à la molette.
+                  //
+                  // L'entrée « saisie rapide » du déroulant disparaît avec lui :
+                  // ne RIEN choisir revient au même, et le champ « nom du
+                  // client » qui apparaît juste en dessous porte déjà
+                  // l'explication. Re-cliquer sur le tiers sélectionné le
+                  // retire — c'est le chemin de retour vers la saisie libre.
+                  <Combobox
+                    id="document-partner"
+                    options={partnerOptions}
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder={t("form.walkInClient")}
+                    searchPlaceholder={t("form.searchPartner")}
+                    emptyLabel={t("form.noPartnerFound")}
+                  />
                 )}
               />
               <FieldError>{fieldError(errors.partnerId?.message)}</FieldError>
@@ -453,8 +480,15 @@ export function DocumentFormDialog({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        {/* Sur un DEVIS, ne rien choisir n'est plus « aucun
+                            projet » : le serveur en ouvre un au nom de l'objet
+                            (règle du 2026-08-25). L'option annonce donc ce
+                            qu'elle fait — la laisser s'appeler « Aucun projet »
+                            proposerait un choix sans effet. */}
                         <SelectItem value={NO_PROJECT}>
-                          {t("form.noProject")}
+                          {type === "quote"
+                            ? t("form.projectFromSubject")
+                            : t("form.noProject")}
                         </SelectItem>
                         {projects.map((project) => (
                           <SelectItem key={project.id} value={project.id}>
@@ -469,10 +503,17 @@ export function DocumentFormDialog({
                     qu'un déroulant à une seule entrée « aucun projet », dont
                     on ne saurait pas s'il est vide ou encore en train de
                     charger. */}
-                {!projectsPending && projects.length === 0 && (
+                {type === "quote" ? (
                   <p className="text-muted-foreground text-xs">
-                    {t("form.noProjectForClient")}
+                    {t("form.projectFromSubjectHint")}
                   </p>
+                ) : (
+                  !projectsPending &&
+                  projects.length === 0 && (
+                    <p className="text-muted-foreground text-xs">
+                      {t("form.noProjectForClient")}
+                    </p>
+                  )
                 )}
                 <FieldError>{fieldError(errors.projectId?.message)}</FieldError>
               </Field>

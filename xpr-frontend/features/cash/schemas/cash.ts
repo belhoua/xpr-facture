@@ -58,6 +58,12 @@ export const cashMovementSchema = z.object({
   clientName: z.string().nullable(),
   occurredAt: z.iso.date(),
   label: z.string(),
+  /**
+   * Nature de la dépense (« Loyer », « Fournitures de bureau »). `null` sur un
+   * encaissement — une entrée d'argent n'est pas une charge — et sur les
+   * sorties saisies avant que le champ n'existe (2026-08-26).
+   */
+  charge: z.string().nullable(),
   method: cashEntryMethodSchema,
   /** `null` sur un règlement : il n'entre dans aucune caisse physique. */
   registerName: z.string().nullable(),
@@ -78,7 +84,6 @@ export const cashSummarySchema = z.object({
 
 export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
 export type CashEntryMethod = z.infer<typeof cashEntryMethodSchema>;
-export type CashEntrySource = z.infer<typeof cashEntrySourceSchema>;
 export type CashMovement = z.infer<typeof cashMovementSchema>;
 export type CashSummary = z.infer<typeof cashSummarySchema>;
 
@@ -112,7 +117,6 @@ export function isEditableMethod(
  */
 export const CASH_DIRECTIONS = ["inflow", "outflow"] as const;
 
-export type CashDirection = (typeof CASH_DIRECTIONS)[number];
 
 /**
  * Source de vérité de la validation du formulaire de caisse (§9). Montant en
@@ -126,6 +130,13 @@ export const cashMovementFormSchema = z.object({
   partnerId: z.string(),
   occurredAt: z.string().min(1, "validation.required"),
   label: z.string().trim().min(2, "validation.required").max(255),
+  /**
+   * Nature de la charge. FACULTATIVE, et "" vaut « non classée » : l'exiger
+   * obligerait à inventer une nature pour chaque sortie pressée, et une nature
+   * inventée vaut moins qu'une case vide. Le serveur l'ignore sur un
+   * encaissement plutôt que de la refuser.
+   */
+  charge: z.string().trim().max(120, "validation.tooLong"),
   method: paymentMethodSchema,
   registerName: z.string().trim().min(1, "validation.required").max(255),
   direction: z.enum(CASH_DIRECTIONS),

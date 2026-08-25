@@ -34,9 +34,8 @@ import {
 import { fetchPartners, partnerKeys } from "@/features/partners/api/partners";
 import { formatAmount } from "@/lib/format";
 import { useRouter } from "@/lib/i18n/navigation";
+import { REFERENCE_STALE_TIME } from "@/lib/api/stale-times";
 
-/** Une heure : la liste des clients ne change pas en cours de saisie. */
-const REFERENCE_STALE_TIME = 60 * 60 * 1000;
 
 /**
  * Champs que le serveur nomme à l'identique, et qu'une erreur RFC 9457 peut donc

@@ -39,6 +39,7 @@ import {
   type ProductFormValues,
 } from "@/features/catalog/schemas/product";
 import { SERVICE_UNITS } from "@/features/services/schemas/service";
+import { REFERENCE_STALE_TIME } from "@/lib/api/stale-times";
 
 /**
  * Champs que le serveur nomme à l'identique et qu'une erreur RFC 9457 peut
@@ -56,7 +57,6 @@ const SERVER_FIELDS = [
   "isActive",
 ] as const;
 
-const REFERENCE_STALE_TIME = 60 * 60 * 1000;
 
 /**
  * Un service ne se stocke pas et n'a pas de prix de revient à l'écran : les

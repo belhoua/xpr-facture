@@ -2,11 +2,13 @@ import {
   deliverableSchema,
   projectListSchema,
   projectSchema,
+  projectSummarySchema,
   type Deliverable,
   type DeliverableFormValues,
   type Project,
   type ProjectFormValues,
   type ProjectList,
+  type ProjectSummary,
 } from "@/features/projects/schemas/project";
 import { api, ensureCsrfCookie } from "@/lib/api/client";
 
@@ -24,23 +26,47 @@ export const projectKeys = {
   all: ["projects"] as const,
   list: (filters: ProjectFilters) =>
     [...projectKeys.all, "list", filters] as const,
+  summary: (filters: ProjectFilters) =>
+    [...projectKeys.all, "summary", filters] as const,
   detail: (id: string) => [...projectKeys.all, "detail", id] as const,
 };
+
+/** Paramètres communs à la liste et aux comptes : les deux doivent concorder. */
+function toParams(filters: ProjectFilters): Record<string, string | undefined> {
+  return {
+    search: filters.search.trim() || undefined,
+    // « all » est un état de l'interface, pas un filtre serveur : l'envoyer
+    // ferait rejeter une valeur d'enum inconnue.
+    status: filters.status === "all" ? undefined : filters.status,
+    partnerId: filters.partnerId === "all" ? undefined : filters.partnerId,
+  };
+}
 
 export async function fetchProjects(
   filters: ProjectFilters,
 ): Promise<ProjectList> {
-  const { data } = await api.get("/projects", {
-    params: {
-      search: filters.search.trim() || undefined,
-      // « all » est un état de l'interface, pas un filtre serveur : l'envoyer
-      // ferait rejeter une valeur d'enum inconnue.
-      status: filters.status === "all" ? undefined : filters.status,
-      partnerId: filters.partnerId === "all" ? undefined : filters.partnerId,
-    },
-  });
+  const { data } = await api.get("/projects", { params: toParams(filters) });
 
   return projectListSchema.parse(data);
+}
+
+/**
+ * Comptes des quatre cartes. Endpoint dédié, et non un décompte des lignes
+ * reçues : la liste est paginée, compter la page afficherait « 25 projets » sur
+ * un portefeuille qui en compte quarante — et faux sans le dire.
+ *
+ * Des NOMBRES DE PROJETS, jamais de montants : un projet n'est pas une pièce
+ * commerciale, il n'a ni total ni règlement. Ce qu'un chantier a rapporté se lit
+ * sur l'écran « situations par client », filtré par projet.
+ */
+export async function fetchProjectSummary(
+  filters: ProjectFilters,
+): Promise<ProjectSummary> {
+  const { data } = await api.get("/projects/summary", {
+    params: toParams(filters),
+  });
+
+  return projectSummarySchema.parse(data);
 }
 
 export async function fetchProject(id: string): Promise<Project> {
@@ -102,12 +128,6 @@ export async function updateProjectProgress(
   const { data } = await api.patch(`/projects/${id}`, progress);
 
   return projectSchema.parse(data);
-}
-
-export async function deleteProject(id: string): Promise<void> {
-  await ensureCsrfCookie();
-
-  await api.delete(`/projects/${id}`);
 }
 
 /**

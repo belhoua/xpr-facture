@@ -72,7 +72,6 @@ export const paymentSummarySchema = z.object({
   status: z.string(),
 });
 
-export type PaymentSummary = z.infer<typeof paymentSummarySchema>;
 
 export const paymentListSchema = z.object({
   data: z.array(paymentSchema),

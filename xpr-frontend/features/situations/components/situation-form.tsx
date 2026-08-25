@@ -37,6 +37,7 @@ import {
 } from "@/features/situations/schemas/situation";
 import { useRouter } from "@/lib/i18n/navigation";
 import { cn } from "@/lib/utils";
+import { REFERENCE_STALE_TIME } from "@/lib/api/stale-times";
 
 /**
  * Pastilles du sélecteur, alignées sur les teintes du badge de liste : « non
@@ -61,8 +62,6 @@ const SERVER_FIELDS = ["partnerId", "projectId", "subject", "issuedAt", "status"
 /** Valeur d'item pour « aucun projet » : Radix interdit la chaîne vide. */
 const NO_PROJECT = "__none__";
 
-/** Une heure : la liste des clients ne change pas en cours de saisie. */
-const REFERENCE_STALE_TIME = 60 * 60 * 1000;
 
 /**
  * Création et correction d'une situation.

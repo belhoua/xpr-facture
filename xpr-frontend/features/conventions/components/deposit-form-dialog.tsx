@@ -42,9 +42,8 @@ import {
   type DepositFormValues,
   type FileDeposit,
 } from "@/features/conventions/schemas/convention";
+import { REFERENCE_STALE_TIME } from "@/lib/api/stale-times";
 
-/** Une heure : la liste des conventions ne change pas en cours de saisie. */
-const REFERENCE_STALE_TIME = 60 * 60 * 1000;
 
 /** Champs que le serveur nomme à l'identique (erreurs RFC 9457). */
 const SERVER_FIELDS = [

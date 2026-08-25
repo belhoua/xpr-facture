@@ -125,7 +125,6 @@ export const documentListSchema = z.object({
 export type Document = z.infer<typeof documentSchema>;
 export type DocumentItem = z.infer<typeof documentItemSchema>;
 export type DocumentList = z.infer<typeof documentListSchema>;
-export type TaxSummaryLine = z.infer<typeof taxSummaryLineSchema>;
 
 /* ------------------------------------------------------------- Formulaire */
 
@@ -161,7 +160,6 @@ export const documentItemFormSchema = z.object({
   taxRateId: z.string(),
 });
 
-export type DocumentItemFormValues = z.infer<typeof documentItemFormSchema>;
 
 const baseDocumentFormSchema = z
   .object({
@@ -329,16 +327,38 @@ export function isEditable(document: Document): boolean {
 }
 
 /**
+ * Types dont la suppression reste ouverte une fois le document CONVERTI.
+ *
+ * Le DEVIS seul, depuis le 2026-08-24, sur décision explicite de l'exploitant.
+ * Miroir de `DocumentType::deletableWhenConverted()`, où le coût de la levée est
+ * détaillé — en deux mots : le devis disparaît de l'application, sa facture n'en
+ * garde que le numéro, et la séquence `DEV-` prend un trou de plus.
+ */
+const DELETABLE_WHEN_CONVERTED: readonly string[] = ["quote"];
+
+/**
  * Un brouillon se jette ; une pièce numérotée troue la séquence.
  *
- * L'état TERMINAL ferme la suppression pour TOUS les types, y compris le devis
- * que `isEditable` rouvre désormais : supprimer un devis converti couperait le
- * lien de parenté et sa facture perdrait la trace de ce dont elle découle.
- * Miroir de `DocumentWriteService::assertDeletable()`.
+ * L'état TERMINAL ferme la suppression, à UNE exception près : le devis
+ * CONVERTI (2026-08-24). L'objection qui tenait cette borne fermée — la facture
+ * perdrait la trace de ce dont elle découle — est levée côté serveur, où
+ * `Document::parent()` résout désormais un parent supprimé : la facture
+ * continue d'afficher le numéro de son devis.
+ *
+ * `cancelled` et `refused` restent fermés pour tous les types, le devis
+ * compris. L'annulation surtout : c'est le seul état terminal issu d'un acte
+ * volontaire, et supprimer la pièce effacerait la trace de l'acte.
+ *
+ * Miroir de `DocumentWriteService::assertDeletable()`. Le prédicat ne DÉCIDE
+ * rien : le serveur répond 409 de son côté, et l'élargir ici sans l'y élargir
+ * ne ferait qu'offrir un geste voué à échouer.
  */
 export function isDeletable(document: Document): boolean {
   if (TERMINAL_STATUSES.includes(document.status)) {
-    return false;
+    return (
+      document.status === "converted" &&
+      DELETABLE_WHEN_CONVERTED.includes(document.type)
+    );
   }
 
   return (

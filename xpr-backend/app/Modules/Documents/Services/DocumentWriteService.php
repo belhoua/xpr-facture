@@ -14,6 +14,7 @@ use App\Modules\Documents\Models\DocumentItem;
 use App\Modules\Partners\Enums\PartnerType;
 use App\Modules\Partners\Models\Partner;
 use App\Modules\Projects\Models\Project;
+use App\Modules\Projects\Services\ProjectWriteService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -62,6 +63,10 @@ final class DocumentWriteService
         private readonly DocumentNumberService $numbers,
         private readonly DocumentCalculator $calculator,
         private readonly DocumentItemBuilder $itemBuilder,
+        // Le module Projets écrit ses propres lignes : un devis sans chantier
+        // en ouvre un, il ne le fabrique pas lui-même
+        // (cf. `withAutoProject()`).
+        private readonly ProjectWriteService $projects,
     ) {}
 
     /**
@@ -597,48 +602,6 @@ final class DocumentWriteService
     }
 
     /**
-     * Enregistre le montant TOTAL encaissé sur un document émis, et en déduit
-     * son état de règlement.
-     *
-     * C'est délibérément le CUMUL et non un versement à ajouter : sans table de
-     * règlements, un « +1 000 » rejoué par une double soumission gonflerait le
-     * montant encaissé sans trace. Un total absolu est idempotent.
-     *
-     * Cette écriture ne heurte PAS l'immuabilité du §3 : elle ne touche ni au
-     * numéro, ni au montant dû, ni aux lignes — rien de ce que le document
-     * atteste. Encaisser n'est pas modifier la créance.
-     *
-     * @throws ConflictHttpException si le document n'est pas encore émis, ou ne
-     *                               porte pas de créance
-     */
-    public function recordSettlement(Document $document, int $paidCents): Document
-    {
-        if (! $document->type->isReceivable()) {
-            throw new ConflictHttpException(__('This document type does not carry a receivable.'));
-        }
-
-        if (! $document->isIssued()) {
-            throw new ConflictHttpException(__('Issue the document before recording a settlement.'));
-        }
-
-        if ($document->status->isTerminal()) {
-            throw new ConflictHttpException(__('A cancelled document cannot be settled.'));
-        }
-
-        if ($paidCents > $document->total_cents) {
-            // Doublé par la contrainte `documents_paid_not_above_total_check` :
-            // ici pour rendre un 409 lisible plutôt qu'une erreur SQL brute.
-            throw new ConflictHttpException(__('The settled amount exceeds the document total.'));
-        }
-
-        $document->paid_cents = max(0, $paidCents);
-        $document->status = $document->settlementStatus();
-        $document->save();
-
-        return $document->refresh()->load('items');
-    }
-
-    /**
      * Annule un document ÉMIS — seul changement d'état permis sur un document
      * immuable (§3). Un brouillon se supprime, il ne s'annule pas.
      */
@@ -810,6 +773,90 @@ final class DocumentWriteService
         // qu'une fois celui-ci résolu — une saisie au nom libre peut même
         // l'avoir créé à l'instant.
         $columns += $this->projectColumn($data, $columns, $existing);
+
+        // Puis, à défaut de projet, le chantier ouvert d'office pour un DEVIS.
+        $columns = $this->withAutoProject($data, $columns, $existing);
+
+        return $columns;
+    }
+
+    /**
+     * Ouvre d'office le CHANTIER d'un devis qui n'en désigne aucun.
+     *
+     * ── Pourquoi cette règle existe (2026-08-25) ──────────────────────────
+     *
+     * Demandée par l'exploitant : un devis accepté devient un chantier à
+     * suivre, et le rattachement fait à la main était systématiquement oublié —
+     * l'écran « Avancement de projet » restait vide alors que l'affaire
+     * tournait. Le projet naît donc avec la proposition, sous l'objet du devis.
+     *
+     * ── Ce que la règle coûte, et qu'il faut savoir ───────────────────────
+     *
+     * **« Aucun projet » n'est plus un choix possible sur un devis.** Le
+     * formulaire transmet toujours `projectId`, à `null` quand le déroulant est
+     * vide : il n'existe donc aucun moyen de distinguer « je n'en veux pas » de
+     * « je n'y ai pas pensé ». La règle tranche en faveur du rattachement, et
+     * l'interface a été reformulée en conséquence — le déroulant annonce
+     * « Créé depuis l'objet » plutôt que « Aucun projet », faute de quoi il
+     * proposerait une option sans effet.
+     *
+     * Détacher un devis de son chantier est donc, de la même façon, sans effet
+     * durable : le projet se recrée à l'enregistrement suivant. Le seul moyen
+     * d'avoir un devis sans projet est de laisser son objet vide.
+     *
+     * ── Le périmètre, et pourquoi il s'arrête là ──────────────────────────
+     *
+     *  - le DEVIS seul. Une facture, une situation ou un avoir n'ouvrent pas de
+     *    chantier : la facture née d'un devis hérite déjà du projet de celui-ci
+     *    (cf. `DocumentConversionService`), et créer un projet par facture
+     *    d'achat ou par avoir n'aurait aucun sens ;
+     *  - un OBJET renseigné. C'est lui qui nomme le projet ; sans objet, il n'y
+     *    a pas de nom à lui donner et rien n'est créé ;
+     *  - un CLIENT renseigné. `projects.partner_id` est NOT NULL : un devis
+     *    saisi au nom libre sans fiche tiers ne peut pas porter de projet.
+     *
+     * Le projet est RÉUTILISÉ s'il en existe déjà un du même intitulé chez le
+     * même client — comparaison insensible à la casse et aux espaces de bord,
+     * sans quoi deux devis d'un même chantier écrits « Villa Anfa » et « villa
+     * anfa » ouvriraient deux chantiers concurrents.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $columns  colonnes déjà résolues
+     * @return array<string, mixed>
+     */
+    private function withAutoProject(array $data, array $columns, ?Document $existing): array
+    {
+        // Un projet déjà résolu — choisi au formulaire, ou conservé par un
+        // PATCH qui ne parle pas du sujet — n'est jamais remplacé.
+        $resolved = $columns['project_id'] ?? $existing?->project_id;
+
+        if ($resolved !== null) {
+            return $columns;
+        }
+
+        $type = $columns['type'] ?? $existing?->type;
+
+        if ($type instanceof DocumentType) {
+            $type = $type->value;
+        }
+
+        if ($type !== DocumentType::Quote->value) {
+            return $columns;
+        }
+
+        $partnerId = array_key_exists('partner_id', $columns)
+            ? $columns['partner_id']
+            : $existing?->partner_id;
+
+        $subject = array_key_exists('subject', $columns)
+            ? $columns['subject']
+            : $existing?->subject;
+
+        if (! is_string($partnerId) || ! is_string($subject) || trim($subject) === '') {
+            return $columns;
+        }
+
+        $columns['project_id'] = $this->projects->openFor($partnerId, trim($subject))->id;
 
         return $columns;
     }
@@ -1145,14 +1192,18 @@ final class DocumentWriteService
      */
     private function assertDeletable(Document $document): void
     {
-        // Un état TERMINAL ferme la suppression pour TOUS les types, y compris
-        // ceux que `reopensWhenTerminal()` laisse désormais rouvrir à
-        // l'édition. Les deux actes ne coûtent pas la même chose : rouvrir un
-        // devis converti le fait diverger de sa facture, le SUPPRIMER coupe le
-        // lien `parent_document_id` et la facture perd la trace de ce dont elle
-        // découle — question qu'on pose précisément en litige. Le soft delete
-        // n'y change rien : la relation ne résout plus une ligne supprimée.
-        if ($document->status->isTerminal()) {
+        // Un état TERMINAL ferme la suppression, à UNE exception près depuis le
+        // 2026-08-24 : le devis CONVERTI, sur demande expresse de l'exploitant
+        // (cf. `DocumentType::deletableWhenConverted()`, qui dit ce que la
+        // levée coûte). L'objection qui tenait cette borne fermée — la facture
+        // perdrait la trace de ce dont elle découle — est levée du même coup :
+        // `Document::parent()` résout désormais un parent supprimé, la facture
+        // continue donc d'afficher le numéro de son devis.
+        //
+        // `cancelled` et `refused` restent fermés pour tous les types, le devis
+        // compris. L'annulation surtout : c'est le seul état terminal issu d'un
+        // acte volontaire, et supprimer la pièce effacerait la trace de l'acte.
+        if ($document->status->isTerminal() && ! self::terminalDeletionAllowed($document)) {
             throw new DocumentNotEditable;
         }
 
@@ -1164,6 +1215,20 @@ final class DocumentWriteService
         if (! $document->type->deletableOnceIssued()) {
             throw new DocumentNotEditable;
         }
+    }
+
+    /**
+     * Le seul état terminal qui laisse encore supprimer, et pour le seul type
+     * qui l'a demandé.
+     *
+     * Écrit en toutes lettres plutôt que déduit de `isTerminal()` : la règle
+     * est une EXCEPTION, et une exception qui se lit comme une règle générale
+     * finit par s'étendre toute seule au type suivant.
+     */
+    private static function terminalDeletionAllowed(Document $document): bool
+    {
+        return $document->status === DocumentStatus::Converted
+            && $document->type->deletableWhenConverted();
     }
 
     /**

@@ -126,24 +126,3 @@ export const NAVIGATION: readonly NavGroup[] = [
     ],
   },
 ];
-
-/**
- * Aplatissement pour la palette ⌘K et la résolution du fil d'Ariane.
- *
- * Les sous-entrées y figurent : « Ajouter une situation » doit être atteignable
- * au clavier sans passer par la sidebar. La DÉDUPLICATION par `href` est
- * nécessaire — l'entrée parente `/situations` est reprise dans ses enfants sous
- * le libellé « Liste des situations », et la palette afficherait deux fois la
- * même destination. La première occurrence gagne, donc le libellé du parent.
- */
-export const NAV_ITEMS: readonly NavItem[] = Array.from(
-  NAVIGATION.flatMap((group) =>
-    group.items.flatMap((item) => [item, ...(item.children ?? [])]),
-  )
-    .reduce(
-      (unique, item) =>
-        unique.has(item.href) ? unique : unique.set(item.href, item),
-      new Map<string, NavItem>(),
-    )
-    .values(),
-);
