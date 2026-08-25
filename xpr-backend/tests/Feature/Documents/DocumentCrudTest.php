@@ -455,22 +455,68 @@ it('supprime un devis émis (levée du 2026-08-07)', function (): void {
     expect(Document::query()->withTrashed()->find($quote->id))->not->toBeNull();
 });
 
-// La borne qui SUBSISTE, et le seul endroit où édition et suppression divergent
-// désormais : un devis converti se MODIFIE mais ne se SUPPRIME pas. L'effacer
-// couperait le lien de parenté, et sa facture perdrait la trace de ce dont elle
-// découle — question qu'on pose précisément en litige.
-it('refuse de supprimer un devis converti (la facture perdrait sa parenté)', function (): void {
+// Levée du 2026-08-24 : un devis CONVERTI se supprime, sur demande expresse de
+// l'exploitant. L'objection qui tenait la borne fermée — la facture perdrait la
+// trace de ce dont elle découle — est levée par `Document::parent()`, qui résout
+// désormais un parent supprimé. Les deux moitiés sont éprouvées ensemble : la
+// suppression seule, sans la parenté conservée, serait la régression que la
+// borne empêchait.
+it('supprime un devis converti (levée du 2026-08-24)', function (): void {
     [$user] = workspaceAccount();
     $quote = Document::query()
         ->where('type', 'quote')
         ->whereNotNull('number')
         ->firstOrFail();
 
-    actingAs($user)->postJson("/api/v1/documents/{$quote->id}/convert")->assertCreated();
+    $invoiceId = actingAs($user)
+        ->postJson("/api/v1/documents/{$quote->id}/convert")
+        ->assertCreated()
+        ->json('id');
+
+    actingAs($user)->deleteJson("/api/v1/documents/{$quote->id}")->assertNoContent();
+
+    // Soft delete : la ligne reste en base, hors de portée de l'application.
+    expect(Document::query()->find($quote->id))->toBeNull();
+    expect(Document::query()->withTrashed()->find($quote->id))->not->toBeNull();
+
+    // Et la facture continue de nommer le devis dont elle découle.
+    actingAs($user)
+        ->getJson("/api/v1/documents/{$invoiceId}")
+        ->assertOk()
+        ->assertJsonPath('parentDocumentId', $quote->id)
+        ->assertJsonPath('parentNumber', $quote->number);
+});
+
+// Les deux autres états terminaux restent FERMÉS, le devis compris. L'annulation
+// surtout : c'est le seul état terminal issu d'un acte volontaire, et supprimer
+// la pièce effacerait la trace de l'acte lui-même.
+it('refuse encore de supprimer un devis ANNULÉ', function (): void {
+    [$user] = workspaceAccount();
+    $quote = Document::query()
+        ->where('type', 'quote')
+        ->whereNotNull('number')
+        ->firstOrFail();
+
+    actingAs($user)->postJson("/api/v1/documents/{$quote->id}/cancel")->assertOk();
 
     actingAs($user)->deleteJson("/api/v1/documents/{$quote->id}")->assertStatus(409);
 
     expect(Document::query()->find($quote->id))->not->toBeNull();
+});
+
+// La levée porte sur le DEVIS et sur lui seul : une facture convertie en avoir,
+// ou tout autre type parvenu à un état terminal, reste fermée. Sans ce test, la
+// prochaine ouverture d'un type hériterait de l'exception par simple effet de
+// bord.
+it('refuse de supprimer une pièce ANNULÉE d’un autre type', function (): void {
+    [$user, $company] = workspaceAccount();
+    // Facture émise SANS règlement : une facture déjà encaissée refuserait
+    // l'annulation elle-même, et le test échouerait avant d'avoir rien prouvé.
+    $invoice = payableInvoice($company->id);
+
+    actingAs($user)->postJson("/api/v1/documents/{$invoice->id}/cancel")->assertOk();
+
+    actingAs($user)->deleteJson("/api/v1/documents/{$invoice->id}")->assertStatus(409);
 });
 
 it('annule un document émis', function (): void {

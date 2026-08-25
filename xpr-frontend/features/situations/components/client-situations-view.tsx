@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Letterhead } from "@/features/documents/components/letterhead";
 import { fetchPartner, partnerKeys } from "@/features/partners/api/partners";
 import type { Document } from "@/features/documents/schemas/document";
 import {
@@ -34,7 +35,10 @@ import {
 } from "@/features/situations/api/situations";
 import { useClientProjects } from "@/features/projects/hooks/use-client-projects";
 import { SituationStatusBadge } from "@/features/situations/components/situation-status-badge";
-import { SITUATION_STATUSES } from "@/features/situations/schemas/situation";
+import {
+  SETTLEMENT_DOCUMENT_TYPES,
+  SITUATION_STATUSES,
+} from "@/features/situations/schemas/situation";
 import { toApiProblem } from "@/lib/api/client";
 import { formatDate, formatMoney, formatNumber } from "@/lib/format";
 import { Link } from "@/lib/i18n/navigation";
@@ -42,14 +46,6 @@ import { useDebouncedValue } from "@/lib/use-debounced-value";
 
 /** Filtres proposés : le cycle de règlement, plus les situations annulées. */
 const STATUS_FILTERS = [...SITUATION_STATUSES, "cancelled"] as const;
-
-/**
- * Ce qui entre dans le solde d'un client : ses situations d'avancement ET ses
- * factures. Le devis en est exclu — il propose, il ne crée aucune créance, et
- * l'additionner gonflerait le « reste à payer » d'un montant que personne ne
- * doit.
- */
-const CLIENT_DOCUMENT_TYPES = ["situation", "invoice"] as const;
 
 /** Sentinelle « tous les projets » : Radix interdit la chaîne vide en valeur. */
 const ALL_PROJECTS = "all";
@@ -102,7 +98,7 @@ export function ClientSituationsView({ clientId }: { clientId: string }) {
     status,
     partnerId: clientId,
     projectId: projectId === ALL_PROJECTS ? "" : projectId,
-    types: CLIENT_DOCUMENT_TYPES,
+    types: SETTLEMENT_DOCUMENT_TYPES,
   };
 
   const { data: partner } = useQuery({
@@ -135,7 +131,7 @@ export function ClientSituationsView({ clientId }: { clientId: string }) {
       id: "type",
       header: t("table.documentType"),
       // Ternaire et non une clé construite : l'écran ne demande que ces deux
-      // types (CLIENT_DOCUMENT_TYPES), et `t(\`…${row.type}\`)` sortirait du
+      // types (SETTLEMENT_DOCUMENT_TYPES), et `t(\`…${row.type}\`)` sortirait du
       // typage des messages pour couvrir sept types qui n'y arriveront jamais.
       cell: (row) => (
         <span className="text-muted-foreground text-xs">
@@ -225,6 +221,15 @@ export function ClientSituationsView({ clientId }: { clientId: string }) {
     {
       id: "status",
       header: t("table.status"),
+      // Centré SUR LE PAPIER seulement. À l'écran, la colonne est la dernière
+      // d'une ligne alignée à gauche et un centrage la ferait flotter ; à
+      // l'impression, la colonne est calibrée sur le mot le plus long et le
+      // badge, plus étroit, se retrouverait collé au filet de gauche.
+      //
+      // `align-middle` parce que la ligne imprimée peut être haute de plusieurs
+      // lignes — la colonne « Règlements » empile ses écritures — et un badge
+      // aligné en haut d'une cellule de trois lignes se lit comme un décalage.
+      className: "print:text-center print:align-middle",
       cell: (row) => <SituationStatusBadge status={row.status} />,
     },
   ];
@@ -232,7 +237,43 @@ export function ClientSituationsView({ clientId }: { clientId: string }) {
   return (
     // `print-document` déclenche la mise en page d'impression définie dans
     // globals.css : fond blanc, filtres masqués, tableau non tronqué.
-    <div className="print-document">
+    //
+    // `print-statement` y ajoute la page nommée de l'état d'encours : marge de
+    // page nulle — seul moyen de priver l'URL et la date du navigateur de la
+    // zone où il les dessine — et les 15 mm rendus par un padding. Le détail du
+    // compromis est dans `globals.css`, sous `@page statement`.
+    <div className="print-document print-statement">
+      {/* Papier à en-tête, SUR LE PAPIER SEULEMENT.
+
+          `Letterhead` est le même composant que celui des devis, factures et
+          contrats : logo BCAT, baseline et filet de séparation. En écrire un
+          second ici l'aurait fait diverger du premier au prochain changement de
+          logo — et un état d'encours remis au client doit porter exactement la
+          même identité qu'une facture.
+
+          Masqué à l'écran (`hidden print:block`) : la page applicative a déjà
+          son en-tête et sa barre de navigation, un second logo n'y servirait
+          qu'à occuper la hauteur utile. */}
+      <div className="hidden print:block">
+        <Letterhead />
+        {/* La DATE D'ÉDITION, que le document doit porter lui-même.
+
+            Les en-têtes et pieds du navigateur — URL, date, pagination — ne
+            sont pas supprimables en CSS : c'est une case de sa boîte de
+            dialogue d'impression. Une fois décochée, plus rien ne date la
+            feuille, et un encours sans date ne veut rien dire : le solde
+            imprimé aujourd'hui n'est pas celui de la semaine prochaine. */}
+        <p className="text-muted-foreground mt-2 text-center text-[9pt]">
+          {t("client.printedOn", {
+            date: formatDate(new Date().toISOString(), locale, {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            }),
+          })}
+        </p>
+      </div>
+
       <PageHeader
         title={partner?.legalName ?? t("byClient.title")}
         description={t("client.description")}

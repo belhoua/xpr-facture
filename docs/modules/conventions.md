@@ -206,6 +206,89 @@ La fiche de dépôt porte une mention explicite : elle est un document de suivi,
 seul le récépissé de l'organisme fait foi. BCAT n'a pas qualité pour émettre un
 récépissé.
 
+### 6.0 Mise en page A4 (2026-08-26)
+
+Le contrat est le seul document du dépôt qui tient sur **plusieurs pages** en
+régime normal — dix articles, dont quatre portent une énumération. C'est donc le
+seul où la fragmentation se voit, et il a sa propre page nommée :
+
+```css
+@page contract { size: A4 portrait; margin: 15mm }
+.print-contract { page: contract }
+```
+
+Scopée : devis, factures et état d'encours gardent leurs marges respectives.
+`@page` est une règle de document, la redéfinir globalement les aurait tous
+touchés.
+
+**Le pied légal revient dans le FLUX pour ce document.** Il est
+`position: fixed` partout ailleurs — donc répété au bas de chaque feuille, ce
+qu'on veut d'une pièce commerciale dont les mentions obligatoires (§3) valent
+pour la page 2 comme pour la page 1, et qui tient de toute façon sur une page.
+Sur un contrat de trois ou quatre pages, ce pied fixé était répété partout et la
+bande de 26 mm qu'il fallait lui réserver rognait autant de hauteur utile sur
+toutes les feuilles — quand elle ne laissait pas la dernière ligne d'un article
+passer dessous.
+
+En flux, il s'imprime **une fois, à la fin**, après le bloc de signature, et les
+marges retombent à 15 mm uniformes. Ce que cela coûte, assumé : les mentions
+légales ne figurent plus au bas de chaque page du contrat. Il n'est pas une
+pièce fiscale — l'obligation de mention par page ne le vise pas — et son
+en-tête BCAT ouvre déjà le document.
+
+**Fragmentation des articles** : chaque article porte `contract-article`, en
+flux bloc pleine largeur et insécable. Avec une exception qui règle le cas
+réel — `break-inside: avoid` sur un bloc **plus haut qu'une page est ignoré**,
+le moteur devant bien le couper quelque part. Les articles à énumération
+s'autorisent donc la coupure, encadrée par `orphans: 3 / widows: 3` : trois
+lignes minimum de part et d'autre. C'est ce qui distingue une page bien coupée
+d'une page tronquée.
+
+Le `display: block` ne vise QUE les articles : le bloc de signature est un flex
+à deux colonnes qu'une règle générale ferait passer l'une sous l'autre.
+
+### 6.1 Personnalisation avant impression
+
+Le contrat se retouche avant le tirage, comme les devis et les factures. Deux
+mécanismes, qui répondent à deux besoins distincts :
+
+| Mécanisme | Portée | Composant |
+|---|---|---|
+| Panneau « Personnaliser » | les **données** du contrat | `ConventionPrintPanel` |
+| Édition libre au clavier | **tout** le texte, articles compris | `EditableSheet` |
+
+Le panneau couvre le n° de dossier (les pointillés du modèle), la ville et la
+date, l'identité du maître d'ouvrage (raison sociale, ICE, RC, adresse, plus une
+mention libre propre au tirage), le projet (description, adresse, titre foncier),
+les **lots de l'article 1**, le délai d'exécution et les clauses particulières
+imprimées au-dessus des signatures. Le document se recompose à la frappe : c'est
+l'aperçu.
+
+Trois décisions à connaître :
+
+- **Rien n'est enregistré.** `ConventionPrintDraft` (`features/conventions/print-draft.ts`)
+  est un état volatile ; recharger la page rétablit la convention. Un contrat
+  déjà envoyé ne doit pas changer parce qu'on a corrigé une coquille pour un
+  tirage, et ce qui doit durer se corrige dans le formulaire. Le panneau le dit
+  sous son titre, et un bouton rétablit les données enregistrées.
+- **Les honoraires ne sont pas retouchables.** `instalmentsCents` est calculé par
+  le serveur, qui fait autorité sur l'arrondi (§7 de la charte) : laisser
+  modifier un montant ici produirait un échéancier dont les trois parts ne font
+  plus le total. Un honoraire qui change est un avenant, pas une retouche
+  d'impression.
+- **Le panneau l'emporte sur l'édition libre.** `EditableSheet` fige sa
+  sous-arborescence pour que React n'efface pas la frappe en cours ; une
+  retouche du panneau doit donc la **remonter** (`key={revision}`), ce qui
+  emporte le texte tapé à la main. L'ordre d'usage est celui-là : régler les
+  champs, retoucher le texte, imprimer.
+
+Le panneau flotte le long du bord à partir de **1400 px** — la largeur à partir
+de laquelle la marge laissée par une feuille A4 centrée (794 px) dépasse la
+sienne. En dessous, il reprend sa place dans le flux au-dessus du document : un
+panneau flottant sur un écran étroit recouvrirait ce qu'il sert à régler. Il ne
+s'imprime pas (`no-print`, et le sélecteur `aside` de la feuille d'impression le
+vise déjà).
+
 ## 7. Tests
 
 `tests/Feature/Conventions/` — 19 cas, tous verts :

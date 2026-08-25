@@ -78,6 +78,16 @@ export const projectListSchema = z.object({
 
 export type ProjectList = z.infer<typeof projectListSchema>;
 
+/** Comptes de l'écran. Miroir de `ProjectSummaryController`. */
+export const projectSummarySchema = z.object({
+  count: z.int().nonnegative(),
+  inProgress: z.int().nonnegative(),
+  incomplete: z.int().nonnegative(),
+  completed: z.int().nonnegative(),
+});
+
+export type ProjectSummary = z.infer<typeof projectSummarySchema>;
+
 /* ------------------------------------------------------------- Formulaires */
 
 export const projectFormSchema = z.object({
@@ -126,6 +136,67 @@ export const deliverableFormSchema = z.object({
 });
 
 export type DeliverableFormValues = z.infer<typeof deliverableFormSchema>;
+
+/**
+ * La fiche est-elle INCOMPLÈTE ?
+ *
+ * Deux manques, et deux seulement : pas de description, ou aucun livrable
+ * annoncé. Ce sont les champs qu'un projet ouvert à la hâte laisse
+ * systématiquement derrière lui — un titre, un client, et plus rien — et ceux
+ * qu'il faut reprendre pour que la fiche serve à quelque chose.
+ *
+ * Le SERVICE n'entre pas dans le compte, bien qu'il soit lui aussi facultatif :
+ * le référentiel des services naît vide, et l'y inclure marquerait « à
+ * compléter » l'intégralité des projets d'une société qui ne s'en sert pas — un
+ * signal qui ne redescend jamais à zéro n'en est plus un.
+ *
+ * Miroir exact de `ProjectService::INCOMPLETE_SQL`. Les deux DOIVENT dire la
+ * même chose : le compte de la carte vient du serveur, le bandeau de la ligne se
+ * décide ici, et ils se contrediraient sous les yeux de l'utilisateur.
+ *
+ * Le DÉTAIL de ce qui manque est rendu par `missingParts()`, dont cette
+ * fonction n'est que le verdict.
+ */
+export function isIncomplete(project: Project): boolean {
+  return missingParts(project).length > 0;
+}
+
+/** Ce qui manque à la fiche, dans l'ordre où on le renseigne. */
+export type MissingPart = "description" | "deliverable";
+
+/**
+ * Le DÉTAIL de ce qui manque, et non le seul verdict.
+ *
+ * Ajouté le 2026-08-26 après un signalement précis : renseigner la description
+ * d'un projet ne faisait pas disparaître le bandeau, et rien ne disait pourquoi.
+ * Le message ne mentait pas — « pas encore de description OU d'étape livrée » —
+ * mais il restait identique avant et après, ce qui se lit comme un écran qui
+ * n'a pas pris en compte la saisie.
+ *
+ * Le bandeau nomme donc désormais ce qui reste à faire, et la liste raccourcit
+ * à mesure qu'on la traite. C'est la même règle, énoncée autrement.
+ *
+ * Le SERVICE n'y entre toujours pas, bien qu'il soit lui aussi facultatif : le
+ * référentiel se remplit à l'usage, et l'y inclure marquerait « à compléter »
+ * tous les projets d'une société qui ne classe pas ses missions — un signal qui
+ * ne redescend jamais à zéro n'en est plus un.
+ */
+export function missingParts(project: Project): readonly MissingPart[] {
+  const parts: MissingPart[] = [];
+
+  if ((project.description ?? "").trim() === "") {
+    parts.push("description");
+  }
+
+  // `deliverableCount` est absent de certaines réponses (la relation n'est pas
+  // toujours chargée) : `?? 0` le traite comme « aucun livrable connu », ce qui
+  // penche du côté du signalement plutôt que du silence.
+  if ((project.deliverableCount ?? project.deliverables?.length ?? 0) === 0) {
+    parts.push("deliverable");
+  }
+
+  return parts;
+}
 
 /**
  * Un projet ANNULÉ ne progresse plus : lui pousser un pourcentage décrirait un

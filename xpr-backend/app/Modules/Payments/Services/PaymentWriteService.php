@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Payments\Services;
 
 use App\Modules\Accounting\Enums\DocumentType;
+use App\Modules\Cash\Services\PaymentCashMirror;
 use App\Modules\Documents\Enums\DocumentStatus;
 use App\Modules\Documents\Models\Document;
 use App\Modules\Payments\Enums\PaymentMethod;
@@ -39,6 +40,11 @@ final class PaymentWriteService
 {
     public function __construct(
         private readonly PaymentScanStorage $scans,
+        // Le journal de caisse porte une COPIE de chaque règlement depuis le
+        // 2026-08-25. Elle s'écrit dans la transaction du règlement : une
+        // facture réglée sans mouvement de caisse — ou l'inverse — ne doit
+        // jamais être visible (cf. `PaymentCashMirror`).
+        private readonly PaymentCashMirror $cashMirror,
     ) {}
 
     /**
@@ -89,6 +95,12 @@ final class PaymentWriteService
 
             $this->refreshSettlement($invoice);
 
+            // La relation est posée à la main : `sync()` lit `$payment->invoice`
+            // pour composer le libellé et retrouver le tiers, et la recharger
+            // depuis la base coûterait une requête pour un objet qu'on tient.
+            $payment->setRelation('invoice', $invoice);
+            $this->cashMirror->sync($payment);
+
             return $payment->refresh();
         });
     }
@@ -108,6 +120,12 @@ final class PaymentWriteService
             $invoice = Document::query()->find($payment->invoice_id);
 
             $payment->delete();
+
+            // Le règlement part en soft delete, sa copie en caisse s'efface
+            // pour de bon : un reflet conservé avec un `deleted_at` n'apprend
+            // rien à personne et compterait double à la première lecture faite
+            // sans son scope.
+            $this->cashMirror->forget($payment);
 
             if ($invoice instanceof Document) {
                 $this->refreshSettlement($invoice);

@@ -44,8 +44,28 @@ export function generateStaticParams() {
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("app");
+  const name = t("name");
 
-  return { title: { default: t("name"), template: `%s — ${t("name")}` } };
+  return {
+    // `template` donne « Factures — BCAT » sur les écrans qui posent leur
+    // propre titre, `default` sert ceux qui n'en posent aucun.
+    title: { default: name, template: `%s — ${name}` },
+    // DESCRIPTION, absente jusqu'au 2026-08-26 : sans elle, un moteur compose
+    // lui-même l'extrait à partir du premier texte trouvé sur la page, et une
+    // application derrière authentification n'en offre aucun qui la décrive.
+    // Celle-ci est traduite, contrairement au nom : c'est une phrase, pas une
+    // marque.
+    description: t("tagline"),
+    // Le nom d'application qu'affichent les navigateurs mobiles quand la page
+    // est ajoutée à l'écran d'accueil.
+    applicationName: name,
+    openGraph: {
+      siteName: name,
+      title: name,
+      description: t("tagline"),
+      type: "website",
+    },
+  };
 }
 
 export default async function LocaleLayout({

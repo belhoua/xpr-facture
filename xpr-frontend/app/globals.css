@@ -271,6 +271,23 @@
   body {
     background: white !important;
     color: black !important;
+    /* Les FONDS et les couleurs de texte sont imprimés tels quels.
+
+       Sans cette propriété, les navigateurs suppriment tout aplat pour
+       économiser l'encre — et les pastilles de statut, qui ne se distinguent
+       QUE par leur teinte, sortiraient en rectangles blancs identiques. Sur un
+       état d'encours où « payé », « partiel » et « non payé » se lisent d'un
+       coup d'œil à la couleur, c'est l'information même qui disparaît.
+
+       L'effet reste contenu : les variables de thème sont déjà forcées en clair
+       juste au-dessus, la feuille est blanche et le texte noir. Ce qui subsiste
+       de coloré, ce sont les statuts et le gris très clair des en-têtes de
+       tableau — soit exactement ce qu'on veut voir sur le papier.
+
+       Les deux graphies : la propriété standard, et le préfixe WebKit que
+       Safari reste seul à exiger. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   /* Chrome applicatif : hors sujet sur une feuille de papier. La sidebar et la
@@ -410,12 +427,219 @@
   }
 
   @page {
-    /* A4 : format du papier au Maroc, et la largeur sur laquelle les gabarits
-       de documents sont calés. */
-    size: A4;
+    /* A4 PORTRAIT : format du papier au Maroc, et la largeur sur laquelle les
+       gabarits de documents sont calés. L'orientation est écrite en toutes
+       lettres — c'est déjà la valeur par défaut, mais un tableau large en
+       paysage n'aurait plus rien à voir avec les gabarits. */
+    size: A4 portrait;
     /* Bas plus généreux que les trois autres côtés : il porte la bande du pied
        légal fixé (trois lignes en 8,5 pt + son filet ≈ 12 mm), plus la marge
-       normale. Sans cette réserve, le contenu passerait dessous. */
+       normale. Sans cette réserve, le contenu passerait dessous.
+
+       Ces marges ne suppriment PAS les en-têtes et pieds du navigateur (URL,
+       date, titre, pagination) : aucune règle CSS ne les atteint, ils relèvent
+       de la case « En-têtes et pieds de page » de sa boîte de dialogue
+       d'impression. Les documents portent donc eux-mêmes ce qui doit figurer
+       sur le papier — mentions légales pour les pièces commerciales, date
+       d'édition pour l'état d'encours d'un client. */
     margin: 14mm 14mm 26mm;
+  }
+
+  /* ------------------------------------------- État d'encours d'un client
+
+     Une PAGE NOMMÉE, et non une redéfinition de `@page` ci-dessus.
+
+     `@page` est une règle de DOCUMENT : la modifier s'appliquerait à toute
+     feuille imprimée depuis l'application. Ramener sa marge basse de 26 mm à
+     15 mm ferait chevaucher le pied légal fixé des devis et des factures avec
+     la dernière ligne de leur tableau — un dégât silencieux, sur des pièces
+     opposables, pour un écran qui n'a rien à voir.
+
+     L'écran « situations par client » n'a pas ce pied fixé : la réserve de
+     26 mm ne lui sert à rien.
+
+     Support : les pages nommées sont lues par Chrome et Edge. Ailleurs, la
+     règle est ignorée sans erreur et l'écran garde les marges par défaut du
+     dépôt — la dégradation est invisible, c'est ce qui rend ce choix sûr.
+
+     ── `margin: 0`, et ce qu'il achète (2026-08-25) ──────────────────────
+
+     Marge de page NULLE, sur décision explicite de l'exploitant après exposé
+     du compromis. C'est le seul levier CSS qui atteigne les en-têtes et pieds
+     du navigateur : Chrome et Edge les dessinent DANS la zone de marge de la
+     feuille ; sans marge, ils n'ont plus d'endroit où le faire et l'URL comme
+     la date disparaissent.
+
+     Ce que cela coûte, et qu'aucune règle ne rattrape :
+
+      - le contenu part du bord PHYSIQUE du papier. Les 15 mm sont rendus par
+        le `padding` ci-dessous, qui n'est pas une marge de page : sur un
+        document de PLUSIEURS pages, il s'applique en haut de la première et en
+        bas de la dernière, jamais entre les deux. Les pages intermédiaires
+        commencent donc à quelques millimètres du bord, dans la zone que
+        beaucoup d'imprimantes ne savent pas encrer — un état d'encours long
+        peut y perdre sa première ligne ;
+      - le repli, si le cas se présente : rétablir `margin: 15mm` ici et
+        décocher « En-têtes et pieds de page » dans la boîte d'impression du
+        navigateur. C'est le seul moyen d'avoir les deux à la fois, au prix
+        d'un réglage à faire une fois par poste.
+
+     Les marges LATÉRALES, elles, tiennent sur toutes les pages : un padding
+     horizontal n'est pas concerné par la fragmentation. */
+  @page statement {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  .print-statement {
+    page: statement;
+    /* Rend au document les 15 mm que la page ne porte plus. Voir ci-dessus
+       pour ce que ce padding tient et ce qu'il ne tient pas. */
+    padding: 15mm;
+  }
+
+  /* ── Densité du tableau d'encours ────────────────────────────────────────
+
+     La cause de fond des colonnes tronquées, et la raison pour laquelle
+     ajuster le seul badge n'y suffisait pas.
+
+     L'écran affiche NEUF colonnes une fois masquée celle du chantier (elle
+     porte `hideBelow: "lg"`, et la page A4 fait ~794 px de large : le palier
+     `lg` ne matche pas à l'impression, `md` si). Sur 180 mm utiles, les seuls
+     paddings d'écran — `px-3`, soit 24 px par cellule — en consomment déjà une
+     trentaine.
+
+     Le coupable principal n'est pourtant pas le padding mais le
+     `white-space: nowrap` que `DataTable` pose sur chaque cellule : il empêche
+     l'objet d'un document de se replier, la colonne prend la largeur de la plus
+     longue phrase, et le tableau pousse au-delà du papier — où il n'est pas
+     coupé proprement, il est coupé net. Le texte se replie donc à l'impression.
+
+     DEUX exceptions, qui ne doivent jamais se couper en deux : les MONTANTS,
+     dont un retour à la ligne au milieu des chiffres serait illisible, et les
+     BADGES de statut, dont la boîte perdrait son sens. */
+  .print-statement :is(th, td) {
+    padding: 1.5mm 2mm;
+    font-size: 9pt;
+    white-space: normal;
+  }
+
+  .print-statement .amount,
+  .print-statement [data-status] {
+    white-space: nowrap;
+  }
+
+  /* ------------------------------------------- Contrat de convention
+
+     Le contrat est le seul document du dépôt qui tient sur PLUSIEURS pages en
+     régime normal : dix articles, dont trois portent une énumération. C'est
+     donc le seul où la fragmentation se voit, et où elle doit être réglée.
+
+     Marges LATÉRALES à 12 mm et marge HAUTE à 15 mm, comme demandé. La marge
+     BASSE, elle, reste à 26 mm et ne peut pas descendre : le contrat porte le
+     pied légal `position: fixed`, répété sur chaque feuille, dont les trois
+     lignes en 8,5 pt et le filet occupent ≈ 12 mm. La ramener à 15 mm ferait
+     recouvrir les dernières lignes de chaque page par les mentions
+     obligatoires — soit exactement la troncature qu'on vient corriger, mais en
+     bas de TOUTES les pages au lieu d'une. */
+  @page contract {
+    size: A4 portrait;
+    margin: 15mm;
+  }
+
+  .print-contract {
+    page: contract;
+  }
+
+  /* ── Le pied légal REVIENT DANS LE FLUX, pour ce document seulement ──────
+
+     Il est `position: fixed` partout ailleurs, donc répété au bas de chaque
+     feuille : c'est ce qu'on veut d'un pied légal sur une pièce commerciale,
+     dont les mentions obligatoires (§3) valent pour la page 2 comme pour la
+     page 1. Une facture tient d'ailleurs sur une page dans l'immense majorité
+     des cas.
+
+     Le contrat, lui, en fait trois ou quatre. Un pied fixé y était répété au
+     bas de chaque page, et la bande de 26 mm qu'il fallait lui réserver rognait
+     autant de hauteur utile sur TOUTES les feuilles — quand elle ne laissait
+     pas la dernière ligne d'un article passer dessous.
+
+     En flux, il s'imprime UNE FOIS, à la fin, après le bloc de signature. Ce
+     que cela coûte, et qui est assumé : les mentions légales ne figurent plus
+     au bas de chaque page du contrat, seulement sur la dernière. Le contrat
+     n'est pas une pièce fiscale — il n'est pas visé par l'obligation de
+     mention par page —, et son en-tête BCAT ouvre déjà le document.
+
+     `!important` sur les trois propriétés : la règle générale les pose
+     elle-même avec `!important` pour `margin-top`, et une spécificité plus
+     forte ne suffirait pas à la surcharger. */
+  .print-contract .print-legal-footer {
+    position: static !important;
+    /* Restaure l'écart d'avec le bloc de signature. La règle générale
+       l'annule, parce qu'entre un contenu et un pied collé au bas de la
+       feuille cette marge ne sépare rien — ici, elle sépare à nouveau. */
+    margin-top: 10mm !important;
+    /* Le pied ne se coupe pas entre deux pages : trois lignes de mentions
+       réparties de part et d'autre d'une coupure seraient illisibles. */
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Aucune SECTION ne se coupe au milieu.
+
+     `page-break-inside` en complément du `break-inside` que porte déjà la
+     classe utilitaire : la propriété moderne suffit aux moteurs récents,
+     l'ancienne reste lue par les pilotes d'impression PDF de certains systèmes,
+     et elles ne se contredisent jamais.
+
+     La règle ne touche PAS au `display` : le bloc de signature est un flex à
+     deux colonnes — client à gauche, bureau de contrôle à droite — qu'un
+     `display: block` général ferait passer l'une sous l'autre. Le flux bloc est
+     imposé aux ARTICLES seulement, juste en dessous. */
+  .print-contract section {
+    page-break-inside: avoid;
+  }
+
+  /* Les ARTICLES, en flux vertical pleine largeur.
+
+     Explicite, alors que c'est déjà leur comportement : une section héritant
+     d'un contexte flex ou grid ne se fragmente pas comme un bloc, et sa fin
+     peut disparaître au lieu de passer à la page suivante. La garde vaut pour
+     la mise en page qui viendra. */
+  .print-contract .contract-article {
+    display: block;
+    width: 100%;
+  }
+
+  /* EXCEPTION, et c'est elle qui règle le cas des articles longs.
+
+     `break-inside: avoid` sur un bloc PLUS HAUT qu'une page est ignoré : le
+     moteur doit bien le couper quelque part, et il le fait alors sans égard
+     pour le contenu — d'où une ligne isolée en bas de feuille, ou un titre
+     d'article séparé de son texte.
+
+     Les articles à énumération (1, 2, 7, 8) dépassent régulièrement la
+     demi-page. On les laisse donc se fragmenter, mais en imposant un MINIMUM de
+     trois lignes de part et d'autre de la coupure : c'est ce que règlent
+     `orphans` et `widows`, et c'est ce qui distingue une page bien coupée d'une
+     page tronquée. */
+  .print-contract .contract-article:has(> ul) {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .print-contract p,
+  .print-contract li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* Aucune contrainte de hauteur ni de débordement sur le chemin du contenu :
+     une seule d'entre elles, posée par un utilitaire d'écran, masquerait la fin
+     des textes longs au lieu de les faire passer à la page suivante. */
+  .print-contract,
+  .print-contract * {
+    overflow: visible !important;
+    max-height: none !important;
   }
 }

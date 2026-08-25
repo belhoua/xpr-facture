@@ -1,13 +1,21 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { FolderKanban, Plus, Search } from "lucide-react";
-import { useTranslations } from "next-intl";
+import {
+  CheckCircle2,
+  FolderKanban,
+  Loader,
+  Plus,
+  Search,
+  TriangleAlert,
+} from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 
 import { DataTable, type Column } from "@/components/patterns/data-table";
 import { PageHeader } from "@/components/patterns/page-header";
+import { StatCard } from "@/components/patterns/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,17 +27,21 @@ import {
 } from "@/components/ui/select";
 import { fetchPartners, partnerKeys } from "@/features/partners/api/partners";
 import {
+  fetchProjectSummary,
   fetchProjects,
   projectKeys,
   type ProjectFilters,
 } from "@/features/projects/api/projects";
+import { IncompleteProjectBadge } from "@/features/projects/components/incomplete-project-notice";
 import { ProgressBar } from "@/features/projects/components/progress-bar";
 import { ProjectStatusBadge } from "@/features/projects/components/project-status-badge";
 import {
+  isIncomplete,
   PROJECT_STATUSES,
   type Project,
 } from "@/features/projects/schemas/project";
 import { toApiProblem } from "@/lib/api/client";
+import { formatNumber } from "@/lib/format";
 import { useDeferredMount } from "@/lib/use-deferred-mount";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 
@@ -50,7 +62,21 @@ const ProjectFormDialog = dynamic(
 );
 
 /**
- * Avancement de projet : la liste, ses deux filtres, et le tiroir de détail.
+ * Avancement de projet : quatre comptes, la liste, ses deux filtres, et le
+ * tiroir de détail.
+ *
+ * Les cartes comptent des PROJETS et rien d'autre. Aucun montant n'y figure, et
+ * ce n'est pas un oubli : un projet n'est pas une pièce commerciale — ni total,
+ * ni TVA, ni règlement (cf. `projectSchema`). Ce qu'un chantier a rapporté se
+ * lit sur l'écran « situations par client », filtré par projet, où les
+ * règlements sont connus ; l'afficher ici obligerait à additionner des devis et
+ * des factures pour annoncer un chiffre d'affaires qui n'en serait pas un.
+ *
+ * Les comptes viennent d'un endpoint d'agrégats (`/projects/summary`) et NON
+ * d'un décompte des lignes reçues : la liste est paginée, compter la page
+ * afficherait « 25 projets » sur un portefeuille qui en compte quarante — et
+ * faux sans le dire. Les deux requêtes partagent les mêmes filtres, pour que les
+ * chiffres du haut décrivent exactement les lignes du bas.
  *
  * L'ordre est celui du serveur — du plus récent au plus ancien — et n'est pas
  * rejoué ici : trier à nouveau côté client ne trierait que la page reçue, ce
@@ -62,6 +88,7 @@ const ProjectFormDialog = dynamic(
 export function ProjectsView() {
   const t = useTranslations("projects");
   const tCommon = useTranslations("common");
+  const locale = useLocale();
 
   const [search, setSearch] = useState("");
 
@@ -84,6 +111,14 @@ export function ProjectsView() {
     placeholderData: keepPreviousData,
   });
 
+  // MÊMES filtres que la liste : c'est ce qui garantit que les quatre cartes
+  // décrivent exactement les lignes affichées en dessous.
+  const { data: summary, isPending: summaryPending } = useQuery({
+    queryKey: projectKeys.summary(filters),
+    queryFn: () => fetchProjectSummary(filters),
+    placeholderData: keepPreviousData,
+  });
+
   // Le filtre par client a besoin du répertoire des tiers. `fetchPartners`
   // demande déjà 100 lignes au serveur, largement au-delà de la page par
   // défaut : un déroulant qui ne montrerait que les 25 premiers clients
@@ -98,7 +133,15 @@ export function ProjectsView() {
     {
       id: "title",
       header: t("table.title"),
-      cell: (row) => <span className="font-medium">{row.title}</span>,
+      // Le badge est POSÉ SUR LE TITRE et non dans une colonne à lui : une
+      // colonne de plus, vide sur les fiches complètes, ferait payer sa largeur
+      // à tout le tableau pour un signal qui ne concerne que quelques lignes.
+      cell: (row) => (
+        <span className="flex items-center gap-2">
+          <span className="font-medium">{row.title}</span>
+          {isIncomplete(row) ? <IncompleteProjectBadge /> : null}
+        </span>
+      ),
     },
     {
       id: "client",
@@ -164,6 +207,34 @@ export function ProjectsView() {
           </Button>
         }
       />
+
+      {/* Quatre COMPTES de projets, mêmes filtres que la liste. */}
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label={t("kpi.count")}
+          value={formatNumber(summary?.count ?? 0, locale)}
+          icon={FolderKanban}
+          loading={summaryPending}
+        />
+        <StatCard
+          label={t("kpi.inProgress")}
+          value={formatNumber(summary?.inProgress ?? 0, locale)}
+          icon={Loader}
+          loading={summaryPending}
+        />
+        <StatCard
+          label={t("kpi.incomplete")}
+          value={formatNumber(summary?.incomplete ?? 0, locale)}
+          icon={TriangleAlert}
+          loading={summaryPending}
+        />
+        <StatCard
+          label={t("kpi.completed")}
+          value={formatNumber(summary?.completed ?? 0, locale)}
+          icon={CheckCircle2}
+          loading={summaryPending}
+        />
+      </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative min-w-56 flex-1">

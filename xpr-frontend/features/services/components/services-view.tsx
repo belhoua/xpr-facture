@@ -132,6 +132,12 @@ export function ServicesView() {
     },
     {
       id: "kind",
+      // Cette colonne montre la CATÉGORIE de l'article, jamais son `type` —
+      // qui vaut « service » sur chaque ligne de cet écran, et n'apprendrait
+      // donc rien. L'en-tête a dit « Type » jusqu'au 2026-08-26 : un article
+      // sans catégorie y affichait un tiret qu'on lisait comme un type
+      // manquant, au point de faire chercher un filtre de type inexistant
+      // ailleurs dans l'application.
       header: t("columns.kind"),
       hideBelow: "md",
       cell: (row) =>

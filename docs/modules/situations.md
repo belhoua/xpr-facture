@@ -266,7 +266,7 @@ suffit :
 
 | Route | Écran |
 |---|---|
-| `/situations` | Liste + recherche, filtre de statut, plage de dates |
+| `/situations` | 4 indicateurs + liste (situations **et** factures), recherche, filtre de statut, de chantier, plage de dates |
 | `/situations/create` | Formulaire de saisie |
 | `/situations/[id]/edit` | Correction |
 | `/situations/[id]/print` | Vue imprimable d'une situation |
@@ -279,6 +279,39 @@ URL, donc survit au rechargement et se partage par lien.
 Le module réutilise le contrat `Document` du serveur en lecture — c'est la même
 ressource. `features/situations/schemas/situation.ts` ne porte que le schéma de
 **saisie**, qui lui est propre.
+
+### Périmètre des deux écrans de suivi (2026-08-24)
+
+`/situations` et `/situations/by-client/[clientId]` portent sur les **mêmes
+types de pièces** : `SETTLEMENT_DOCUMENT_TYPES = ["situation", "invoice"]`,
+déclaré une seule fois dans `schemas/situation.ts`. Le devis en est exclu — il
+propose, il ne crée aucune créance, et l'additionner gonflerait le « reste à
+payer » d'un montant que personne ne doit.
+
+La liste `/situations` ne montrait que les situations jusqu'à cette date. Une
+facture née d'un devis transféré n'y figurait donc jamais : sur un dossier qui
+ne travaille qu'au devis, l'écran restait vide et ses indicateurs à zéro alors
+que des créances existaient. Ce qu'un client doit ne dépend pas du type de pièce
+par lequel on le lui a demandé.
+
+Deux conséquences de ce mélange, tenues dans `situations-view.tsx` :
+
+- **les actions se lisent sur le type de la ligne.** Une situation se corrige et
+  se supprime depuis l'écran ; une facture, non — elle est gelée par son numéro
+  (§3), sa correction passe par un avoir, et son cycle de vie vit sur
+  `/invoices`. Un crayon sur une facture mènerait à un formulaire de situation
+  qui refuse son type (`SituationEditor`, garde déjà en place) ;
+- **l'impression passe par `printRoute(document)`**, la table type → gabarit du
+  module Documents : la facture s'imprime en facture, pas dans la feuille de
+  suivi d'une situation. Le clic sur la ligne suit la même règle — formulaire
+  pour une situation, facture imprimable pour une facture, seule vue d'une
+  facture qui ait sa propre URL.
+
+Les quatre indicateurs des deux écrans viennent de `/documents/summary` et non
+d'une somme des lignes affichées : la liste est paginée, additionner la page
+donnerait un total faux dès la 26ᵉ pièce — et faux sans le dire. Liste et
+agrégats partagent les mêmes filtres, ce qui garantit que les chiffres du haut
+décrivent exactement les lignes du bas.
 
 ### Navigation
 

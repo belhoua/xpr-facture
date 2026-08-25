@@ -169,6 +169,31 @@ it('laisse le projet INTACT sur un PATCH qui ne le porte pas', function (): void
         ->assertJsonPath('projectId', $project->id);
 });
 
+it('conserve le PROJET quand le devis devient facture', function (): void {
+    [$user, $company] = workspaceAccount();
+    $project = clientWithProject($company->id);
+
+    $quote = actingAs($user)
+        ->postJson('/api/v1/documents', projectDocumentPayload([
+            'type' => 'quote',
+            'partnerId' => $project->partner_id,
+            'projectId' => $project->id,
+        ]))
+        ->assertCreated()
+        ->json();
+
+    // Le rattachement suivait le tiers mais PAS le chantier jusqu'au
+    // 2026-08-24 : la facture produite repartait détachée, donc absente du
+    // filtre « chantier » de l'écran par client et de ses quatre indicateurs.
+    // Le devis y figurait, la facture non — le chantier montrait le proposé
+    // sans jamais montrer le facturé.
+    actingAs($user)
+        ->postJson("/api/v1/documents/{$quote['id']}/convert")
+        ->assertCreated()
+        ->assertJsonPath('partnerId', $project->partner_id)
+        ->assertJsonPath('projectId', $project->id);
+});
+
 // ── Le filtre de lecture, et les totaux qui en dépendent ──────────────────
 
 it('restreint les totaux au projet demandé', function (string $key): void {

@@ -242,7 +242,7 @@ final class WorkspaceDemoDataService
             ['name' => 'Journée de conseil', 'reference' => 'CONS-J', 'category' => 'Prestation', 'type' => ProductType::Service, 'unit' => 'jour', 'price' => 450_000, 'cost' => 200_000, 'tax' => $standard],
             ['name' => 'Développement sur mesure', 'reference' => 'DEV-H', 'category' => 'Prestation', 'type' => ProductType::Service, 'unit' => 'heure', 'price' => 60_000, 'cost' => 28_000, 'tax' => $standard],
             ['name' => 'Maintenance applicative', 'reference' => 'MNT-M', 'category' => 'Maintenance', 'type' => ProductType::Service, 'unit' => 'mois', 'price' => 350_000, 'cost' => 150_000, 'tax' => $standard],
-            ['name' => 'Licence XPR Facture', 'reference' => 'LIC-XPR', 'category' => 'Licences & abonnements', 'type' => ProductType::Service, 'unit' => 'an', 'price' => 1_200_000, 'cost' => null, 'tax' => $standard],
+            ['name' => 'Licence logicielle BCAT', 'reference' => 'LIC-BCAT', 'category' => 'Licences & abonnements', 'type' => ProductType::Service, 'unit' => 'an', 'price' => 1_200_000, 'cost' => null, 'tax' => $standard],
             ['name' => 'Hébergement mutualisé', 'reference' => 'HEB-M', 'category' => 'Licences & abonnements', 'type' => ProductType::Service, 'unit' => 'mois', 'price' => 45_000, 'cost' => 18_000, 'tax' => $reduced],
             ['name' => 'Mission de contrôle technique', 'reference' => 'CTC-M', 'category' => 'Contrôle technique', 'type' => ProductType::Service, 'unit' => 'mission', 'price' => 950_000, 'cost' => 780_000, 'tax' => $standard],
             ['name' => 'Visite de chantier', 'reference' => 'CTC-V', 'category' => 'Contrôle technique', 'type' => ProductType::Service, 'unit' => 'intervention', 'price' => 320_000, 'cost' => 245_000, 'tax' => $standard],
@@ -289,7 +289,7 @@ final class WorkspaceDemoDataService
             ['client' => 'Société Immobilière Anfa', 'days' => 60, 'status' => DocumentStatus::Cancelled, 'lines' => [['CTC-M', '12'], ['CTC-V', '12']]],
             ['client' => 'Boulangerie Al Fath', 'days' => 45, 'status' => DocumentStatus::Paid, 'lines' => [['HEB-M', '12'], ['MNT-M', '1']]],
             ['client' => 'Atlas Distribution S.A.R.L.', 'days' => 25, 'status' => DocumentStatus::Overdue, 'lines' => [['CONS-J', '6'], ['DEV-H', '30']]],
-            ['client' => 'Café Maure', 'days' => 18, 'status' => DocumentStatus::Sent, 'lines' => [['LIC-XPR', '1']]],
+            ['client' => 'Café Maure', 'days' => 18, 'status' => DocumentStatus::Sent, 'lines' => [['LIC-BCAT', '1']]],
             ['client' => 'TechMaroc Solutions', 'days' => 12, 'status' => DocumentStatus::Partial, 'lines' => [['DEV-H', '120'], ['MNT-M', '3']]],
             ['client' => 'Riad Azur', 'days' => 8, 'status' => DocumentStatus::Paid, 'lines' => [['CONS-J', '4'], ['HEB-M', '6']]],
         ];

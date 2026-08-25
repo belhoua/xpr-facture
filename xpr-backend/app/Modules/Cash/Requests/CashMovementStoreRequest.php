@@ -35,6 +35,12 @@ final class CashMovementStoreRequest extends FormRequest
             'partnerId' => ['nullable', 'uuid'],
             'occurredAt' => ['required', 'date'],
             'label' => ['required', 'string', 'min:2', 'max:255'],
+            // Nature de la charge, sur un décaissement. FACULTATIVE : l'exiger
+            // obligerait à inventer une nature pour chaque sortie pressée, et
+            // une nature inventée vaut moins qu'une case vide. Ignorée sur un
+            // encaissement — le service la vide plutôt que de la refuser, comme
+            // il le fait des champs d'effet sur un règlement en espèces.
+            'charge' => ['nullable', 'string', 'max:120'],
             'method' => ['required', Rule::in(['cash', 'cheque', 'transfer', 'card', 'effect'])],
             'registerName' => ['required', 'string', 'min:1', 'max:255'],
             'amountCents' => ['required', 'integer', 'not_in:0', 'between:-9999999999,9999999999'],

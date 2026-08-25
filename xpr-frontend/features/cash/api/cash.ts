@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import {
   cashMovementSchema,
   cashSummarySchema,
@@ -10,6 +12,7 @@ import { api, ensureCsrfCookie } from "@/lib/api/client";
 
 export const cashKeys = {
   all: ["cash"] as const,
+  charges: () => [...cashKeys.all, "charges"] as const,
   summary: (period: string, direction?: string) =>
     [...cashKeys.all, "summary", period, direction ?? "all"] as const,
 };
@@ -42,6 +45,8 @@ export interface CashMovementPayload {
   partnerId: string | null;
   occurredAt: string;
   label: string;
+  /** `null` = non classée. Ignorée par le serveur sur un encaissement. */
+  charge: string | null;
   /**
    * Le sous-ensemble SAISISSABLE, pas celui que le journal sait afficher : la
    * table des mouvements ignore `lcn` et `deposit`, qui n'existent que sur un
@@ -62,11 +67,26 @@ export function toCashPayload(
     partnerId: values.partnerId || null,
     occurredAt: values.occurredAt,
     label: values.label.trim(),
+    charge: values.charge.trim() || null,
     method: values.method,
     registerName: values.registerName.trim(),
     amountCents: values.direction === "outflow" ? -cents : cents,
     currency: values.currency,
   };
+}
+
+/**
+ * Natures de charge déjà employées, pour alimenter le champ de saisie.
+ *
+ * Le champ reste LIBRE : cette liste propose, elle n'impose pas. Elle n'est pas
+ * dérivée du journal déjà chargé par l'écran, qui est borné à une période — un
+ * déroulant qui oublierait « Loyer » faute de loyer ce mois-ci pousserait à le
+ * ressaisir, donc à créer un doublon d'orthographe.
+ */
+export async function fetchCashCharges(): Promise<readonly string[]> {
+  const { data } = await api.get("/cash/charges");
+
+  return z.object({ data: z.array(z.string()) }).parse(data).data;
 }
 
 export async function createCashMovement(

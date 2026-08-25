@@ -2,10 +2,14 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowDownRight,
   ArrowUpRight,
+  FileText,
+  Lock,
   MoreHorizontal,
   Pencil,
   Plus,
+  Scale,
   Trash2,
   Wallet,
 } from "lucide-react";
@@ -22,6 +26,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -36,9 +41,12 @@ import {
   deleteCashMovement,
   fetchCashSummary,
 } from "@/features/cash/api/cash";
+import { dashboardKeys } from "@/features/dashboard/api/dashboard";
 import type { CashMovement } from "@/features/cash/schemas/cash";
 import { toApiProblem } from "@/lib/api/client";
 import { formatDate, formatMoney } from "@/lib/format";
+import { Link } from "@/lib/i18n/navigation";
+import { cn } from "@/lib/utils";
 import { useDeferredMount } from "@/lib/use-deferred-mount";
 
 /**
@@ -55,17 +63,25 @@ const CashMovementFormDialog = dynamic(
 const PERIODS = ["last7", "last30", "last90", "year"] as const;
 
 /**
- * Suivi des ENCAISSEMENTS : un total en tête, le journal des entrées dessous.
+ * Mouvements de caisse : trois cumuls en tête, le journal complet dessous.
  *
- * L'écran ne montre volontairement ni solde ni décaissements. C'est un état des
- * recettes, pas une balance de trésorerie — deux lectures distinctes qui, mises
- * côte à côte, se faisaient concurrence sans que rien ne dise laquelle
- * répondait à la question posée.
+ * ── Ce que l'écran montrait jusqu'au 2026-08-25 ───────────────────────────
  *
- * Le filtrage est demandé au SERVEUR (`direction: "inflow"`) et non appliqué
- * ici : trier ou filtrer une liste déjà reçue ne porterait que sur ce qui a été
- * transmis. Les trois cumuls, eux, restent calculés sur la période entière —
- * `inflowCents` est donc le total encaissé, que le filtre soit posé ou non.
+ * Les seuls ENCAISSEMENTS, et un seul total. C'était un état des recettes, pas
+ * une balance de trésorerie ; l'exploitant demande désormais les deux sens et
+ * leur solde, ce qui referme un défaut au passage — le formulaire acceptait
+ * déjà la saisie d'un décaissement, que le journal filtré ne réaffichait
+ * jamais. On pouvait donc enregistrer une sortie et ne plus jamais la revoir.
+ *
+ * Le filtre `direction: "inflow"` est retiré pour cette raison, et pour une
+ * seconde : les trois cartes doivent décrire les lignes en dessous. Un
+ * « décaissement total » posé au-dessus d'un journal qui n'en contient aucun
+ * annoncerait un chiffre invérifiable sur l'écran qui le porte.
+ *
+ * Les cumuls viennent du SERVEUR — `inflowCents`, `outflowCents` (en valeur
+ * absolue) et `balanceCents` — jamais d'une somme des lignes reçues : le solde
+ * net recalculé ici ferait cohabiter deux arrondis, et c'est l'écran qui
+ * afficherait l'écart.
  *
  * La liste a DEUX sources, fusionnées par le serveur : les écritures saisies
  * ici, et les règlements reçus sur les factures. Le champ `source` les
@@ -86,15 +102,19 @@ export function CashView() {
   const [editing, setEditing] = useState<CashMovement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CashMovement | null>(null);
 
+  // Aucun filtre de sens : le journal porte les entrées ET les sorties, faute
+  // de quoi les trois cartes du haut décriraient autre chose que ses lignes.
   const { data, isPending, isError, error, refetch } = useQuery({
-    queryKey: cashKeys.summary(period, "inflow"),
-    queryFn: () => fetchCashSummary(period, "inflow"),
+    queryKey: cashKeys.summary(period),
+    queryFn: () => fetchCashSummary(period),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteCashMovement(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: cashKeys.all });
+      // Le solde de caisse figure aussi sur le tableau de bord.
+      await queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
       setDeleteTarget(null);
     },
   });
@@ -132,6 +152,15 @@ export function CashView() {
     },
     { id: "label", header: t("columns.label"), cell: (row) => row.label },
     {
+      id: "charge",
+      header: t("columns.charge"),
+      hideBelow: "lg",
+      // Le tiret dit « non classée » — le cas d'un encaissement, où la nature
+      // n'a pas de sens, comme d'une sortie saisie sans classement.
+      cell: (row) =>
+        row.charge ?? <span className="text-muted-foreground">—</span>,
+    },
+    {
       id: "method",
       header: t("columns.method"),
       hideBelow: "md",
@@ -154,11 +183,18 @@ export function CashView() {
       id: "amount",
       header: t("columns.amount"),
       align: "end",
-      // Plus de branche sur le signe : la liste ne porte que des encaissements,
-      // et conserver le rouge du décaissement laisserait croire qu'il pourrait
-      // encore s'en afficher un.
+      // Le SENS se lit sur la couleur, comme dans les trois cartes du haut :
+      // vert ce qui entre, rouge ce qui sort. La branche avait été retirée
+      // quand le journal ne portait que des encaissements ; elle revient avec
+      // eux (2026-08-25). Le montant garde son signe — la couleur seule ne
+      // suffit pas sur une photocopie en noir et blanc.
       cell: (row) => (
-        <span className="amount text-status-paid font-medium">
+        <span
+          className={cn(
+            "amount font-medium",
+            row.amountCents < 0 ? "text-status-overdue" : "text-status-paid",
+          )}
+        >
           {formatMoney(row.amountCents, locale, row.currency)}
         </span>
       ),
@@ -169,13 +205,53 @@ export function CashView() {
       align: "end",
       cell: (row) =>
         // Un RÈGLEMENT ne se corrige que depuis sa facture, dont il dérive le
-        // cumul encaissé et le statut. Les deux actions retomberaient d'ailleurs
-        // sur un 404 — l'identifiant n'est pas celui d'un mouvement — mais
-        // c'est bien la règle métier, pas la route absente, qui les retire ici.
+        // cumul encaissé et le statut. Le serveur refuse d'ailleurs les deux
+        // gestes en 409 (`CashMovementWriteService::assertEditable`) — mais
+        // c'est bien la règle métier, pas le refus, qui les retire ici.
+        //
+        // Un MENU aux entrées désactivées, et non le tiret muet d'avant, qui
+        // portait l'explication dans un `title` qu'il fallait survoler au pixel
+        // près, sur un caractère ne ressemblant à aucun bouton. Même
+        // raisonnement que le menu des devis — une action absente sans un mot se
+        // lit comme un dysfonctionnement. L'entrée vers la facture, elle, est
+        // bien active : c'est le seul endroit où ce mouvement se corrige, et il
+        // vaut mieux y conduire que de dire d'y aller.
         row.source === "payment" ? (
-          <span className="text-muted-foreground" title={t("readOnly")}>
-            —
-          </span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t("actions.open")}
+                className="opacity-60 transition-opacity group-hover/row:opacity-100 data-[state=open]:opacity-100"
+              >
+                <MoreHorizontal aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              <DropdownMenuLabel className="text-muted-foreground text-xs font-normal whitespace-normal">
+                {t("readOnly")}
+              </DropdownMenuLabel>
+
+              {/* `invoiceId` est nul si la facture a été supprimée depuis :
+                  l'entrée disparaît alors plutôt que d'ouvrir une page vide. */}
+              {row.invoiceId !== null && (
+                <DropdownMenuItem asChild>
+                  <Link href={`/invoices?document=${row.invoiceId}`}>
+                    <FileText aria-hidden />
+                    {t("actions.openInvoice", {
+                      number: row.invoiceNumber ?? "",
+                    })}
+                  </Link>
+                </DropdownMenuItem>
+              )}
+
+              <DropdownMenuItem disabled>
+                <Lock aria-hidden />
+                {t("actions.mirrored")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -235,17 +311,48 @@ export function CashView() {
         }
       />
 
-      {/* Seule carte de l'écran, et volontairement PAS étirée sur toute la
-          largeur : un chiffre unique perdu au milieu d'un bandeau de 1200 px se
-          lit moins bien qu'une tuile à sa mesure. C'est le fait d'être seule,
-          non sa taille, qui la met en valeur. */}
-      <div className="mb-3 sm:max-w-sm">
+      {/* Trois cumuls de la période, dans l'ordre où on les lit : ce qui est
+          entré, ce qui est sorti, ce qui reste. La grille s'étire ici sur toute
+          la largeur — contrairement à la tuile unique d'avant, que sa taille
+          réduite mettait en valeur — parce que trois grandeurs qui se comparent
+          doivent partager la même ligne de base et la même largeur. */}
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard
           label={t("inflowTotal")}
           icon={ArrowUpRight}
+          tone="positive"
           loading={isPending}
           value={
             data ? formatMoney(data.inflowCents, locale, data.currency) : "—"
+          }
+        />
+        <StatCard
+          label={t("outflowTotal")}
+          icon={ArrowDownRight}
+          tone="negative"
+          loading={isPending}
+          // `outflowCents` arrive en VALEUR ABSOLUE du serveur : la carte
+          // annonce « ce qui est sorti », une grandeur positive. Le signe
+          // appartient aux lignes du journal, pas à un cumul intitulé
+          // « décaissement total ».
+          value={
+            data ? formatMoney(data.outflowCents, locale, data.currency) : "—"
+          }
+        />
+        <StatCard
+          label={t("netBalance")}
+          icon={Scale}
+          // NEUTRE, délibérément : le solde n'est ni une entrée ni une sortie,
+          // et lui donner une troisième couleur ferait trois signaux là où deux
+          // suffisent. Son SIGNE, lui, se lit sur le montant — un solde négatif
+          // s'affiche avec son moins.
+          loading={isPending}
+          // Valeur du SERVEUR, pas `inflow - outflow` recalculé ici : les
+          // règlements de factures entrent dans le solde par un autre chemin
+          // que les mouvements saisis (cf. `CashSummaryService`), et refaire la
+          // soustraction à l'écran finirait par diverger de la base.
+          value={
+            data ? formatMoney(data.balanceCents, locale, data.currency) : "—"
           }
         />
       </div>
@@ -282,7 +389,22 @@ export function CashView() {
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title={t("delete.title")}
-        description={t("delete.description")}
+        // La ligne visée est NOMMÉE : le journal aligne des montants proches et
+        // des libellés qui se ressemblent, et une confirmation anonyme fait
+        // valider la suppression de la ligne d'à côté. Même règle que la
+        // suppression d'un document, qui nomme son numéro.
+        description={
+          deleteTarget
+            ? t("delete.described", {
+                label: deleteTarget.label,
+                amount: formatMoney(
+                  Math.abs(deleteTarget.amountCents),
+                  locale,
+                  deleteTarget.currency,
+                ),
+              })
+            : t("delete.description")
+        }
         confirmLabel={t("delete.confirm")}
         pending={deleteMutation.isPending}
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}

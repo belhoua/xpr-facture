@@ -1,5 +1,5 @@
 /**
- * Catalogue des packs d'abonnement XPR Suite.
+ * Catalogue des packs d'abonnement BCAT.
  *
  * Les prix sont en CENTIMES de dirham (CLAUDE.md §7) : 19 900 = 199,00 MAD.
  * Ce catalogue est de la CONFIGURATION PRODUIT, pas une donnée factice — il
@@ -7,7 +7,20 @@
  * simple type et où les valeurs viendront de l'API.
  */
 
-export const PLAN_IDS = ["free", "standard", "pro"] as const;
+/**
+ * Packs commercialisés.
+ *
+ * Le pack GRATUIT a été retiré le 2026-08-26, sur décision commerciale de
+ * l'exploitant. Retiré du CATALOGUE et non masqué sur la vitrine : la landing
+ * et le tunnel de souscription lisent la même liste, et n'en filtrer qu'une
+ * aurait fait choisir « Standard » sur la page d'accueil pour retrouver une
+ * offre gratuite à l'étape suivante.
+ *
+ * Aucun chemin ne casse : `/subscribe/payment?plan=free` répondait déjà 404 —
+ * la page refuse tout plan à prix nul — et la Phase 3 n'ayant pas encore de
+ * table `subscriptions`, aucun compte n'y est abonné.
+ */
+export const PLAN_IDS = ["standard", "pro"] as const;
 
 export type PlanId = (typeof PLAN_IDS)[number];
 
@@ -29,13 +42,6 @@ export interface Plan {
 }
 
 export const PLANS: readonly Plan[] = [
-  {
-    id: "free",
-    monthlyPriceCents: 0,
-    yearlyPriceCents: 0,
-    featureCount: 6,
-    highlighted: false,
-  },
   {
     id: "standard",
     // 199 MAD/mois, ou 1 990 MAD/an (soit 2 mois offerts).

@@ -59,7 +59,10 @@ export function PlanPicker() {
         </div>
       </div>
 
-      <div className="mt-10 grid gap-5 md:grid-cols-3">
+      {/* Deux colonnes comme la vitrine, et pour la même raison : le pack
+          gratuit a quitté le catalogue (2026-08-26), deux cartes sur trois
+          colonnes laisseraient un tiers de bandeau vide. */}
+      <div className="mx-auto mt-10 grid max-w-4xl gap-5 md:grid-cols-2">
         {PLANS.map((plan) => (
           <PricingCard
             key={plan.id}

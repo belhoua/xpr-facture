@@ -32,6 +32,7 @@ final class CashMovementUpdateRequest extends FormRequest
             'partnerId' => ['nullable', 'uuid'],
             'occurredAt' => ['required', 'date'],
             'label' => ['required', 'string', 'min:2', 'max:255'],
+            'charge' => ['nullable', 'string', 'max:120'],
             'method' => ['required', Rule::in(['cash', 'cheque', 'transfer', 'card', 'effect'])],
             'registerName' => ['required', 'string', 'min:1', 'max:255'],
             'amountCents' => ['required', 'integer', 'not_in:0', 'between:-9999999999,9999999999'],

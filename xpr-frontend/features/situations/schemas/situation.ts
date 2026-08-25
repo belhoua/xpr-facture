@@ -34,6 +34,22 @@ export const SITUATION_STATUSES = [
 ] as const;
 
 export type SituationStatus = (typeof SITUATION_STATUSES)[number];
+
+/**
+ * Types de pièces qui entrent dans l'ENCOURS d'un client.
+ *
+ * La situation d'avancement ET la facture : ce qu'un client doit ne dépend pas
+ * du type de pièce par lequel on le lui a demandé, et une facture née d'un devis
+ * transféré est une créance au même titre qu'une situation. Le DEVIS en est
+ * exclu — il propose, il ne crée aucune créance, et l'additionner gonflerait le
+ * « reste à payer » d'un montant que personne ne doit.
+ *
+ * Déclarée ici et non dans chaque écran : la liste `/situations` et l'écran d'un
+ * client interrogent le même endpoint avec le même périmètre. Deux constantes
+ * jumelles auraient divergé au premier type ajouté, et l'une des deux se serait
+ * mise à afficher un encours que l'autre ignore.
+ */
+export const SETTLEMENT_DOCUMENT_TYPES = ["situation", "invoice"] as const;
 export const situationFormSchema = z
   .object({
     /**

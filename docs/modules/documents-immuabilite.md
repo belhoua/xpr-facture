@@ -17,7 +17,7 @@ d'édition silencieusement destructrice.
 | Acte | Prédicat (`Accounting\Enums\DocumentType`) | Garde (`DocumentWriteService`) |
 |---|---|---|
 | `update()` | `freezesOnIssue()` | `assertEditable()` |
-| `delete()` | `deletableOnceIssued()` | `assertDeletable()` |
+| `delete()` | `deletableOnceIssued()` + `deletableWhenConverted()` | `assertDeletable()` |
 
 | Type | Modifiable une fois numéroté ? | Supprimable une fois numérotée ? | Depuis |
 |---|---|---|---|
@@ -39,8 +39,9 @@ Ce qui subsiste, pour tous les types :
   acte délibéré, avec son endpoint et sa permission propres
   (`documents.cancel`) ; la rouvrir effacerait la trace de l'annulation
   elle-même, et `cancel` ne signifierait plus rien. Borne non négociable ;
-- **un état terminal ferme la SUPPRESSION**, y compris pour le devis que
-  l'édition rouvre désormais (cf. §2 ter) ;
+- **un état terminal ferme la SUPPRESSION**, à une exception près : le devis
+  `converted` (2026-08-24, cf. §2 quater). `refused` et `cancelled` restent
+  fermés pour tous les types ;
 - la suppression est un **soft delete** : la ligne demeure en base avec son
   `deleted_at`, seule l'application cesse de l'afficher. C'est la seule
   atténuation des trous de séquence.
@@ -152,13 +153,10 @@ chercher.
 - **refusé** — bien plus léger : un devis refusé n'engage rien, aucune pièce
   fiscale n'en dépend.
 
-### La seule divergence qui subsiste entre les deux prédicats
+### La divergence qui subsistait entre les deux prédicats
 
-Un devis converti se **modifie** mais ne se **supprime** pas. L'effacer couperait
-le lien de parenté, et sa facture perdrait la trace de ce dont elle découle —
-question qu'on pose précisément en litige. C'est aujourd'hui le seul point où
-`assertEditable()` et `assertDeletable()` ne répondent pas la même chose, et la
-raison pour laquelle les deux méthodes restent séparées.
+Un devis converti se **modifiait** mais ne se **supprimait** pas. Cette borne est
+tombée le 2026-08-24 : voir §2 quater.
 
 ### Comment révoquer
 
@@ -169,6 +167,59 @@ raison pour laquelle les deux méthodes restent séparées.
 
 Puis reprendre les tests de `DocumentCrudTest.php` et les deux prédicats
 frontend, qui ne font que refléter le serveur.
+
+---
+
+## 2 quater. Suppression d'un devis converti (2026-08-24)
+
+Demandé par l'exploitant, **après que le coût lui a été exposé et qu'il a
+maintenu sa demande** — même protocole que les levées du 6 et du 7 août.
+
+La dernière borne de §2 ter tombe : un devis `converted` se supprime.
+`DocumentType::deletableWhenConverted()` porte la règle, et
+`DocumentWriteService::terminalDeletionAllowed()` l'applique comme une
+**exception nommée** plutôt qu'en assouplissant `isTerminal()` — une exception
+qui se lit comme une règle générale finit par s'étendre toute seule au type
+suivant.
+
+### Ce que la levée coûte, et ce qui l'atténue
+
+L'objection qui tenait cette borne fermée était la perte de parenté de la
+facture. Elle est traitée, pas ignorée : `Document::parent()` résout désormais
+son parent **`withTrashed()`**. La facture continue donc d'afficher le numéro du
+devis dont elle découle, y compris supprimé — la traçabilité invoquée pour
+fermer la porte est ce qu'il fallait préserver en l'ouvrant.
+
+Ce qui est perdu malgré tout :
+
+- **le devis n'est plus consultable** par l'application. « Sur quelle
+  proposition cette facture repose-t-elle » reçoit un numéro, plus un document.
+  En litige, c'est moins. La ligne existe toujours en base (soft delete), hors
+  de portée sans requête SQL directe ;
+- **la séquence `DEV-` prend un trou de plus**, irréversible, comme toute
+  suppression numérotée depuis le 2026-08-07.
+
+`children()` n'est **pas** modifiée : une liste de pièces issues d'un document
+doit continuer d'ignorer les supprimées, sans quoi chaque écran devrait filtrer
+lui-même. Seule la parenté remonte le fil.
+
+### La portée, et ce qui reste fermé
+
+| Cas | Suppression |
+|---|---|
+| Devis `converted` | **ouverte** (2026-08-24) |
+| Devis `refused` | fermée — non demandée. Un devis refusé ne porte pourtant aucune descendance : la borne subsiste parce que personne ne l'a levée, pas parce qu'elle protège davantage |
+| Devis `cancelled` | fermée **délibérément**, ici comme à l'édition : l'annulation est le seul état terminal issu d'un acte volontaire, et supprimer la pièce effacerait la trace de l'acte |
+| Tout autre type en état terminal | fermée |
+
+### Comment révoquer
+
+Faire rendre `false` à `DocumentType::deletableWhenConverted()`, retirer
+`->withTrashed()` de `Document::parent()`, et retirer `"quote"` de
+`DELETABLE_WHEN_CONVERTED` (`features/documents/schemas/document.ts`). Puis
+reprendre `DocumentCrudTest.php`, où trois tests encadrent la levée : la
+suppression d'un devis converti **avec** la parenté conservée, le refus sur un
+devis annulé, le refus sur une pièce annulée d'un autre type.
 
 ---
 
@@ -183,15 +234,25 @@ sans l'empêcher. Deux prédicats y répondent aux deux du backend —
 Deux conséquences visibles :
 
 - le menu « … » propose **Modifier** et **Supprimer** sur un devis, une facture,
-  un avoir ou une situation, quel que soit leur statut hors terminal. Un devis
-  `converted` ou `refused` garde **Modifier seul** — la suppression y reste
-  fermée. L'entrée désactivée « Émis : non modifiable » ne s'affiche plus que sur
-  une pièce annulée, ou sur les types jamais ouverts (proforma, bon de commande,
-  bon de livraison, bordereau, facture d'achat) ;
-- la confirmation de suppression a **deux textes**. Sur un brouillon, elle
+  un avoir ou une situation, quel que soit leur statut hors terminal — et sur un
+  devis `converted` depuis le 2026-08-24 (cf. §4 bis). Un devis `refused` garde
+  **Modifier seul**, et une entrée désactivée **« Clos : suppression
+  impossible »** le dit à sa place : un menu qui montrait « Modifier » sans
+  « Supprimer » et sans un mot se lisait comme un dysfonctionnement. L'entrée
+  « Émis : non modifiable » couvre l'autre cas — ni l'un ni l'autre : pièce
+  annulée, ou type jamais ouvert (proforma, bon de commande, bon de livraison,
+  bordereau, facture d'achat) ;
+- la confirmation de suppression a **trois textes**. Sur un brouillon, elle
   signale qu'aucun trou n'est laissé. Sur une pièce numérotée, elle nomme le
-  numéro perdu et rappelle que la correction habituelle est un avoir. Un texte
-  unique finirait par mentir dans l'un des deux cas.
+  numéro perdu et rappelle que la correction habituelle est un avoir. Sur un
+  devis **converti**, elle ajoute ce que les deux autres ne disent pas : une
+  facture reste derrière, et elle n'en gardera que le numéro. Un texte unique
+  finirait par mentir dans deux cas sur trois ;
+- la suppression réussie lève un **toast** nommant le numéro parti. La ligne qui
+  disparaît ne suffit pas à le dire : sur une liste filtrée, une ligne qui
+  s'efface peut tout aussi bien être sortie du filtre. Le message dit
+  « document » et non « devis » — la vue sert les deux écrans, et nommer le type
+  demanderait une clé par type.
 
 Le formulaire d'édition recharge le **détail** du document avant de se
 pré-remplir : la liste n'expose pas les lignes (`items`), et s'en contenter
@@ -211,9 +272,19 @@ seuls chemins par lesquels un document en engendre un autre.
 | Devis → facture | `POST /documents/{id}/convert` | le devis passe `converted`, état **terminal** — mais son contenu reste modifiable depuis le 2026-08-07 (§2 ter) |
 | Facture → avoir | `POST /documents/{id}/credit-note` | **aucun** — c'est l'avoir qui s'impute sur la facture, jamais l'inverse |
 
-Ce que la copie reprend : le tiers, l'objet, la ville d'établissement, la
-devise, les notes et conditions, **et les lignes avec leurs montants déjà
-calculés**. Les taux de TVA ne sont pas recalculés : ce sont des instantanés
+Ce que la copie reprend : le tiers, **le projet**, l'objet, la ville
+d'établissement, la devise, les notes et conditions, **et les lignes avec leurs
+montants déjà calculés**.
+
+> Le **projet** ne suivait pas jusqu'au 2026-08-24. La facture née d'un devis de
+> chantier repartait détachée : elle disparaissait du filtre « chantier » de
+> l'écran « situations par client » et de ses quatre indicateurs, qui se
+> calculent sur ce même filtre. Le devis y figurait, la facture non — le
+> chantier montrait le proposé sans jamais montrer le facturé. La cohérence
+> client → projet n'a pas à être revérifiée à la copie : le couple
+> `(partner_id, project_id)` est repris d'un document que `DocumentWriteService`
+> a déjà validé. Verrouillé par `DocumentProjectLinkTest`.
+ Les taux de TVA ne sont pas recalculés : ce sont des instantanés
 légaux (§3), et les recalculer appliquerait le barème d'aujourd'hui à un
 document d'hier. Les dates, elles, repartent de zéro — l'échéance de paiement se
 compte depuis la facturation, pas depuis la proposition.

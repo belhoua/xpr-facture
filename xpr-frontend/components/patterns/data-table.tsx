@@ -27,6 +27,13 @@ export interface Column<T> {
   align?: "start" | "end";
   /** Masque la colonne sous md — les tableaux denses débordent sur mobile. */
   hideBelow?: "md" | "lg";
+  /**
+   * Classes portées par la cellule ET par son en-tête.
+   *
+   * Les deux, parce qu'une colonne se règle en colonne : une largeur posée sur
+   * le seul `<td>` laisse le `<th>` en décider autrement, et un alignement posé
+   * sur le seul corps laisse l'intitulé de travers au-dessus.
+   */
   className?: string;
 }
 
@@ -99,6 +106,7 @@ export function DataTable<T>({
                     "text-muted-foreground bg-muted/40 px-3 py-2 text-xs font-medium tracking-wide whitespace-nowrap uppercase",
                     column.align === "end" ? "text-end" : "text-start",
                     column.hideBelow && HIDE_CLASS[column.hideBelow],
+                    column.className,
                   )}
                 >
                   {column.header}

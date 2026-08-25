@@ -55,6 +55,58 @@ final class ProjectWriteService
     }
 
     /**
+     * Le chantier de ce client portant cet intitulé — réutilisé, ou ouvert.
+     *
+     * Point d'entrée de l'ouverture AUTOMATIQUE d'un projet depuis un devis
+     * (cf. `DocumentWriteService::withAutoProject()`, qui dit pourquoi la règle
+     * existe et ce qu'elle coûte). Il vit ici et non dans le module Documents :
+     * créer un projet est une écriture du module Projets, et la dupliquer
+     * ailleurs ferait diverger les deux au premier champ ajouté.
+     *
+     * ── Réutiliser plutôt que créer ───────────────────────────────────────
+     *
+     * La recherche est insensible à la CASSE et aux espaces de bord. Deux devis
+     * du même chantier écrits « Villa Anfa » et « villa anfa  » ouvriraient
+     * sinon deux chantiers concurrents, et l'écran d'avancement afficherait
+     * deux fois la même affaire. `LOWER(BTRIM(...))` des deux côtés : la
+     * comparaison porte sur ce que l'œil lit, pas sur ce que la frappe a laissé.
+     *
+     * Aucun index ne couvre cette expression. C'est assumé : la requête est
+     * déjà restreinte à un client par `partner_id`, qui est indexé
+     * (`projects_company_id_partner_id_index`), et un client compte des projets
+     * par dizaines, pas par milliers.
+     *
+     * Les projets SUPPRIMÉS ne sont pas réutilisés — le global scope de soft
+     * delete les écarte. Un chantier qu'on a retiré de l'écran ne doit pas
+     * ressusciter parce qu'un devis reprend son intitulé.
+     *
+     * Le projet naît « en cours » à 0 %, sans description ni livrable : il est
+     * donc « à compléter » au sens de l'écran d'avancement, et c'est exact —
+     * il n'a qu'un nom et un client (cf. `docs/modules/projects.md`).
+     */
+    public function openFor(string $partnerId, string $title): Project
+    {
+        $title = trim($title);
+
+        $existing = Project::query()
+            ->where('partner_id', $partnerId)
+            ->whereRaw('LOWER(BTRIM(title)) = LOWER(?)', [$title])
+            ->first();
+
+        if ($existing instanceof Project) {
+            return $existing;
+        }
+
+        return Project::query()->create([
+            'partner_id' => $partnerId,
+            'title' => $title,
+            'status' => ProjectStatus::InProgress->value,
+            'progress_percentage' => 0,
+            'created_by' => Auth::id(),
+        ]);
+    }
+
+    /**
      * Correction d'un projet.
      *
      * PATCH partiel : seules les clés PRÉSENTES sont écrites. C'est ce qui

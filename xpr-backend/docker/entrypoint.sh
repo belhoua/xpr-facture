@@ -6,7 +6,7 @@
 # le build figerait des valeurs vides.
 set -e
 
-echo "→ XPR Facture — démarrage du backend"
+echo "→ BCAT — démarrage du backend"
 
 # --- Garde-fous : échouer avec un message lisible plutôt qu'une stack trace ---
 

@@ -6,8 +6,6 @@ namespace App\Modules\Cash\Services;
 
 use App\Modules\Cash\Models\CashMovement;
 use App\Modules\Cash\Resources\CashMovementResource;
-use App\Modules\Cash\Resources\InvoicePaymentEntryResource;
-use App\Modules\Payments\Models\Payment;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -25,14 +23,23 @@ use Illuminate\Support\Collection;
  * encaissés sur une facture — l'écran ne mentait pas sur sa table, il mentait
  * sur la trésorerie, qui est la question posée.
  *
- * La fusion se fait ICI, EN LECTURE, et pas en dupliquant chaque règlement dans
- * `cash_movements` à l'écriture. La raison tient en une phrase : un règlement
- * est déjà écrit quelque part, et deux copies d'un même fait divergent toujours
- * — au retrait d'un règlement, à la correction d'un montant, ou le jour où
- * quelqu'un supprime la copie depuis l'écran Caisses sans que la facture en
- * sache rien. Ici, la caisse LIT les règlements : elle ne peut pas les
- * contredire, et les règlements déjà en base apparaissent sans reprise de
- * données.
+ * ── La fusion en lecture a été REMPLACÉE par un miroir (2026-08-25) ───────
+ *
+ * Ce service lisait `payments` et les fusionnait aux mouvements à l'affichage.
+ * Sur demande expresse de l'exploitant, chaque règlement écrit désormais sa
+ * propre ligne dans `cash_movements` (cf. `PaymentCashMirror`).
+ *
+ * Cette lecture NE DOIT PLUS interroger `payments`, et c'est le point le plus
+ * important de ce fichier : les miroirs sont déjà dans `cash_movements`, les
+ * relire ailleurs compterait chaque règlement DEUX FOIS — 200 MAD affichés pour
+ * 100 encaissés, sur les trois cartes comme dans le journal. Le service ne
+ * connaît donc plus qu'une seule table.
+ *
+ * Ce que le changement coûte, dit ici parce que c'est ici qu'on viendra
+ * chercher : la caisse ne peut plus se contenter de relire la source, elle
+ * dépend d'une copie tenue à jour. Toute écriture de règlement qui
+ * contournerait `PaymentWriteService` laisserait le journal en retard, sans que
+ * rien ne le signale. `xpr:backfill-cash-mirror` répare cet écart.
  *
  * ── Les cumuls portent TOUJOURS sur la période entière ─────────────────────
  *
@@ -64,44 +71,44 @@ final class CashSummaryService
         // Le TIERS est chargé d'emblée : l'écran affiche son nom sur chaque
         // ligne, et le lire mouvement par mouvement ferait une requête par
         // ligne du journal.
+        // Le TIERS est chargé d'emblée, et la FACTURE avec lui : l'écran
+        // affiche le nom du client sur chaque ligne et le numéro de la pièce
+        // sur celles qui viennent d'un règlement. Les lire ligne à ligne ferait
+        // une requête par mouvement du journal.
         $movements = CashMovement::query()
-            ->with('partner')
+            ->with(['partner', 'payment.invoice'])
             ->whereBetween('occurred_at', [$from->toDateString(), $to->toDateString()])
             ->get();
 
-        // Même raison pour la FACTURE : c'est elle qui porte le nom du client
-        // figé à l'émission et le numéro affiché sur la ligne. Le scope tenant
-        // s'applique aux deux modèles (`BelongsToCompany`), et le soft delete
-        // de `Payment` écarte d'office les règlements retirés — un chèque
-        // revenu impayé ne doit plus compter dans les encaissements.
-        $payments = Payment::query()
-            ->with('invoice')
-            ->whereBetween('paid_on', [$from->toDateString(), $to->toDateString()])
-            ->get();
-
+        // UNE SEULE TABLE, et c'est la garde principale de ce service : les
+        // règlements sont déjà dans `cash_movements` sous forme de miroirs
+        // (`payment_id` non nul). Rouvrir une requête sur `payments` ici
+        // compterait chaque encaissement deux fois.
+        //
         // Un règlement est toujours positif (`payments_amount_positive_check`),
-        // donc toujours un encaissement : il entre dans `inflowCents` sans
-        // condition de signe, et jamais dans `outflowCents`.
-        $paymentsTotal = (int) $payments->sum('amount_cents');
-
-        $inflowCents = (int) $movements->where('amount_cents', '>', 0)->sum('amount_cents') + $paymentsTotal;
+        // son miroir l'est donc aussi : il tombe du bon côté sans traitement
+        // particulier.
+        $inflowCents = (int) $movements->where('amount_cents', '>', 0)->sum('amount_cents');
         $outflowCents = (int) abs((int) $movements->where('amount_cents', '<', 0)->sum('amount_cents'));
-        $balanceCents = (int) $movements->sum('amount_cents') + $paymentsTotal;
+        $balanceCents = (int) $movements->sum('amount_cents');
 
-        $listed = $this->listFor($movements, $payments, $direction);
+        $listed = $this->listFor($movements, $direction);
 
         return [
             'balanceCents' => $balanceCents,
             'inflowCents' => $inflowCents,
             'outflowCents' => $outflowCents,
-            'currency' => $this->resolveCurrency($movements, $payments),
+            'currency' => $this->resolveCurrency($movements),
             'movements' => $listed,
         ];
     }
 
     /**
-     * Les deux sources fusionnées, filtrées par sens, du plus récent au plus
-     * ancien.
+     * Le journal filtré par sens, du plus récent au plus ancien.
+     *
+     * UNE seule source depuis le miroir (2026-08-25) : les règlements sont dans
+     * `cash_movements` comme les écritures saisies, il n'y a donc plus deux
+     * collections à fusionner ni deux formes de ligne à composer.
      *
      * Le tri porte sur les MODÈLES et non sur les lignes sérialisées : la
      * seconde clé est `created_at`, qui ne figure pas dans la sortie et
@@ -110,36 +117,21 @@ final class CashSummaryService
      * qui n'en garantit aucun.
      *
      * @param  EloquentCollection<int, CashMovement>  $movements
-     * @param  EloquentCollection<int, Payment>  $payments
      * @param  'inflow'|'outflow'|null  $direction
      * @return list<array<string, mixed>>
      */
-    private function listFor(
-        EloquentCollection $movements,
-        EloquentCollection $payments,
-        ?string $direction,
-    ): array {
-        $listedMovements = match ($direction) {
+    private function listFor(EloquentCollection $movements, ?string $direction): array
+    {
+        $listed = match ($direction) {
             'inflow' => $movements->where('amount_cents', '>', 0),
             'outflow' => $movements->where('amount_cents', '<', 0),
             default => $movements,
         };
 
-        // Aucun règlement n'est un décaissement : le filtre « sorties » n'en
-        // rend aucun, plutôt que d'en rendre au signe inversé.
-        $listedPayments = $direction === 'outflow' ? new EloquentCollection : $payments;
-
-        /** @var Collection<int, Model> $entries */
-        $entries = (new Collection($listedMovements->all()))
-            ->merge($listedPayments->all())
-            ->sortByDesc(fn (Model $entry): string => $this->sortKey($entry))
-            ->values();
-
         /** @var list<array<string, mixed>> $rows */
-        $rows = $entries
-            ->map(fn (Model $entry): array => $entry instanceof Payment
-                ? InvoicePaymentEntryResource::make($entry)->resolve()
-                : CashMovementResource::make($entry)->resolve())
+        $rows = (new Collection($listed->all()))
+            ->sortByDesc(fn (Model $entry): string => $this->sortKey($entry))
+            ->map(fn (Model $entry): array => CashMovementResource::make($entry)->resolve())
             ->values()
             ->all();
 
@@ -147,16 +139,15 @@ final class CashSummaryService
     }
 
     /**
-     * Clé de tri chronologique, comparable entre les deux sources.
+     * Clé de tri chronologique.
      *
-     * Une chaîne et non un tableau : la date de valeur (`occurred_at` /
-     * `paid_on`) est un jour sans heure des deux côtés, et le `created_at`
-     * accolé — à la microseconde — départage les écritures d'un même jour dans
-     * leur ordre de saisie.
+     * Une chaîne et non un tableau : `occurred_at` est un jour sans heure, et
+     * le `created_at` accolé — à la microseconde — départage les écritures d'un
+     * même jour dans leur ordre de saisie.
      */
     private function sortKey(Model $entry): string
     {
-        $valueDate = $entry instanceof Payment ? $entry->paid_on : $entry->getAttribute('occurred_at');
+        $valueDate = $entry->getAttribute('occurred_at');
         $createdAt = $entry->getAttribute('created_at');
 
         return ($valueDate instanceof Carbon ? $valueDate->toDateString() : '')
@@ -174,19 +165,12 @@ final class CashSummaryService
      * « 0,00 ».
      *
      * @param  EloquentCollection<int, CashMovement>  $movements
-     * @param  EloquentCollection<int, Payment>  $payments
      */
-    private function resolveCurrency(EloquentCollection $movements, EloquentCollection $payments): string
+    private function resolveCurrency(EloquentCollection $movements): string
     {
         $first = $movements->first();
 
-        if ($first instanceof CashMovement) {
-            return $first->currency;
-        }
-
-        $firstPayment = $payments->first();
-
-        return $firstPayment instanceof Payment ? $firstPayment->currency : 'MAD';
+        return $first instanceof CashMovement ? $first->currency : 'MAD';
     }
 
     /** @return array{0: Carbon, 1: Carbon} */

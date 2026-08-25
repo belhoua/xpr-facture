@@ -1,7 +1,7 @@
 {
   "app": {
-    "name": "XPR Facture",
-    "tagline": "Facturation conforme, rapide, marocaine"
+    "name": "BCAT",
+    "tagline": "Bureau de Contrôle & Assistance Technique"
   },
   "common": {
     "loading": "Chargement…",
@@ -150,7 +150,6 @@
     "yearlyHint": "2 mois offerts",
     "perMonth": "/ mois",
     "billedYearly": "facturé {amount} par an",
-    "free": "Gratuit",
     "mostPopular": "Le plus choisi",
     "choose": "Choisir {plan}",
     "current": "Pack actuel",
@@ -162,18 +161,6 @@
       "done": "Confirmation"
     },
     "plans": {
-      "free": {
-        "name": "Gratuit",
-        "tagline": "Pour tester la facturation conforme",
-        "features": [
-          "10 factures par mois",
-          "1 utilisateur",
-          "1 société",
-          "Modèle de facture standard",
-          "Export PDF",
-          "Support par e-mail"
-        ]
-      },
       "standard": {
         "name": "Standard",
         "tagline": "Pour les TPE et auto-entrepreneurs actifs",
@@ -307,6 +294,7 @@
       "print": "Imprimer / PDF",
       "edit": "Modifier",
       "delete": "Supprimer",
+      "notDeletable": "Clos : suppression impossible",
       "frozen": "Émis : non modifiable",
       "issue": "Émettre",
       "cancel": "Annuler",
@@ -319,7 +307,11 @@
       "description": "Ce brouillon n'a pas de numéro : sa suppression ne laisse aucun trou dans la numérotation.",
       "issuedTitle": "Supprimer le document {number} ?",
       "issuedDescription": "Ce document est émis et numéroté. Sa suppression laisse un trou définitif dans la séquence : le numéro {number} ne sera pas réattribué.",
-      "confirm": "Supprimer"
+      "convertedTitle": "Supprimer le devis {number} ?",
+      "convertedDescription": "Ce devis a produit une facture. Sa suppression laisse un trou définitif dans la séquence — le numéro {number} ne sera pas réattribué — et la facture n'en conservera que ce numéro : le devis lui-même ne sera plus consultable.",
+      "confirm": "Supprimer",
+      "done": "Le document {number} a été supprimé.",
+      "doneDraft": "Le brouillon a été supprimé."
     },
     "cancelConfirm": {
       "title": "Annuler ce document ?",
@@ -340,6 +332,8 @@
       "partner": "Client",
       "partnerPlaceholder": "Choisir un client…",
       "walkInClient": "Nouveau client (saisir le nom)",
+      "searchPartner": "Rechercher un client…",
+      "noPartnerFound": "Aucun client trouvé.",
       "clientName": "Nom du client",
       "clientPlaceholder": "Nom du client ou de la société",
       "subject": "Objet",
@@ -382,6 +376,8 @@
       "project": "Projet",
       "noProject": "Aucun projet",
       "noProjectForClient": "Ce client n'a aucun projet ouvert.",
+      "projectFromSubject": "Ouvrir un chantier depuis l'objet",
+      "projectFromSubjectHint": "Sans chantier choisi, un projet est ouvert au nom de l'objet du devis. Un chantier du même intitulé est réutilisé plutôt que dupliqué.",
       "numberEditHint": "Modifier le numéro d'une pièce déjà remise au client : le numéro imprimé ne correspondra plus."
     },
     "totals": {
@@ -465,7 +461,7 @@
   },
   "situations": {
     "title": "Situations",
-    "description": "Suivi des montants dus et des avances encaissées",
+    "description": "Situations d'avancement et factures : montants dus, encaissés et solde",
     "searchPlaceholder": "Rechercher par numéro, objet ou client…",
     "status": {
       "sent": "Non payé",
@@ -510,8 +506,8 @@
       "viewSituations": "Voir les situations"
     },
     "empty": {
-      "title": "Aucune situation",
-      "description": "Enregistrez une première situation pour suivre les montants dus par vos clients."
+      "title": "Aucune pièce",
+      "description": "Enregistrez une situation, ou transférez un devis en facture, pour suivre les montants dus par vos clients."
     },
     "delete": {
       "title": "Supprimer cette situation ?",
@@ -562,6 +558,7 @@
     "client": {
       "title": "Situations du client",
       "description": "Situations et factures rattachées à ce client",
+      "printedOn": "Situation arrêtée au {date}",
       "wrongType": "Ce document n'est pas une situation.",
       "empty": {
         "title": "Aucune pièce trouvée",
@@ -653,9 +650,21 @@
     "print": {
       "action": "Imprimer le contrat",
       "back": "Retour aux conventions",
+      "customize": "Personnaliser",
+      "editHint": "Cliquez dans le document pour le corriger au clavier. Les retouches ne sont pas enregistrées et ne servent qu'à cette impression.",
       "noCompany": "Aucune société active : l'en-tête du document ne peut pas être composé.",
       "noDossierNotice": "Dossier non encore déposé : le numéro sera reporté au premier dépôt.",
-      "noLots": "Aucun lot renseigné."
+      "noLots": "Aucun lot renseigné.",
+      "panel": {
+        "title": "Personnaliser avant impression",
+        "description": "Ces retouches ne valent que pour ce tirage : la convention enregistrée n'est pas modifiée. Elles remplacent le texte tapé directement dans le document.",
+        "close": "Fermer le panneau",
+        "ownerNote": "Mention sous le bloc client",
+        "ownerNotePlaceholder": "Représenté par M. …, agissant en qualité de …",
+        "clauses": "Clauses et notes particulières",
+        "clausesHint": "Imprimées au-dessus des signatures. Videz le champ pour n'imprimer aucune clause.",
+        "reset": "Rétablir les données enregistrées"
+      }
     }
   },
   "deposits": {
@@ -770,7 +779,7 @@
     "columns": {
       "reference": "Référence",
       "name": "Service",
-      "kind": "Type",
+      "kind": "Catégorie",
       "unit": "Unité",
       "price": "Prix HT",
       "discount": "Remise",
@@ -874,7 +883,7 @@
   },
   "cash": {
     "title": "Caisses",
-    "description": "Suivi des encaissements par client, règlements de factures compris",
+    "description": "Journal des mouvements : encaissements, décaissements et règlements de factures",
     "newEntry": "Nouveau mouvement",
     "balance": "Solde actuel",
     "inflow": "Encaissements",
@@ -884,14 +893,15 @@
       "date": "Date",
       "client": "Client",
       "label": "Libellé",
+      "charge": "Charge",
       "method": "Mode",
       "register": "Caisse",
       "amount": "Montant",
       "actions": "Actions"
     },
     "empty": {
-      "title": "Aucun encaissement",
-      "description": "Les encaissements et les règlements de factures enregistrés sur la période apparaîtront ici."
+      "title": "Aucun mouvement",
+      "description": "Les mouvements de caisse et les règlements de factures enregistrés sur la période apparaîtront ici."
     },
     "methods": {
       "cash": "Espèces",
@@ -909,6 +919,9 @@
       "editDescription": "Corrigez les informations de ce mouvement de caisse.",
       "date": "Date",
       "label": "Libellé",
+      "charge": "Charge / Nature de la dépense",
+      "chargePlaceholder": "Loyer, Fournitures de bureau, Frais de déplacement…",
+      "chargeHint": "Facultatif. Les natures déjà employées sont proposées ; vous pouvez en saisir une nouvelle.",
       "labelPlaceholder": "Ex. Encaissement facture, achat fournitures…",
       "method": "Mode de règlement",
       "register": "Caisse",
@@ -919,7 +932,9 @@
       "submit": "Enregistrer le mouvement",
       "submitting": "Enregistrement…",
       "client": "Client",
-      "noClient": "Aucun client"
+      "noClient": "Aucun client",
+      "searchClient": "Rechercher un tiers…",
+      "noClientFound": "Aucun tiers trouvé."
     },
     "direction": {
       "inflow": "Encaissement",
@@ -928,15 +943,20 @@
     "actions": {
       "open": "Ouvrir les actions",
       "edit": "Modifier",
-      "delete": "Supprimer"
+      "delete": "Supprimer",
+      "openInvoice": "Ouvrir la facture {number}",
+      "mirrored": "Non modifiable ici"
     },
     "delete": {
       "title": "Supprimer ce mouvement ?",
       "description": "Cette action est définitive.",
+      "described": "« {label} » — {amount}. Cette action est définitive.",
       "confirm": "Supprimer"
     },
     "inflowTotal": "Encaissement total",
-    "readOnly": "Règlement de facture : à corriger depuis la facture"
+    "outflowTotal": "Décaissement total",
+    "netBalance": "Solde net (total caisse)",
+    "readOnly": "Ce mouvement provient d'un règlement de facture. Corrigez-le ou supprimez-le depuis les règlements de la facture correspondante."
   },
   "users": {
     "title": "Utilisateurs",
@@ -1041,7 +1061,7 @@
     "hero": {
       "badge": "Conformité DGI native",
       "title": "La facturation marocaine, enfin rapide et conforme",
-      "subtitle": "XPR Facture réunit devis, factures, encaissements et caisse dans une interface pensée pour les TPE, PME et auto-entrepreneurs au Maroc. Une facture conforme en moins de 60 secondes.",
+      "subtitle": "BCAT réunit devis, factures, encaissements et caisse dans une interface pensée pour les TPE, PME et auto-entrepreneurs au Maroc. Une facture conforme en moins de 60 secondes.",
       "ctaPrimary": "Créer un compte",
       "ctaSecondary": "Se connecter"
     },
@@ -1149,6 +1169,12 @@
       "allClients": "Tous les clients",
       "allStatuses": "Tous les statuts"
     },
+    "kpi": {
+      "count": "Total projets",
+      "inProgress": "En cours",
+      "incomplete": "À compléter",
+      "completed": "Terminés"
+    },
     "table": {
       "title": "Projet",
       "client": "Client",
@@ -1168,6 +1194,15 @@
       "saveProgress": "Enregistrer l'avancement",
       "addDeliverable": "Ajouter un livrable",
       "removeDeliverable": "Retirer ce livrable"
+    },
+    "incomplete": {
+      "badge": "À compléter",
+      "title": "Informations incomplètes",
+      "action": "Compléter la fiche",
+      "missing": {
+        "description": "Il manque la description du projet.",
+        "deliverable": "Aucune étape livrée n'a encore été enregistrée."
+      }
     },
     "detail": {
       "progressTitle": "Avancement",
@@ -1196,7 +1231,9 @@
       "saving": "Enregistrement…",
       "service": "Service (facultatif)",
       "noService": "Aucun",
-      "noServiceYet": "Aucun service enregistré pour l'instant."
+      "searchService": "Rechercher ou créer un service…",
+      "createService": "Créer le service « {name} »",
+      "noServiceYet": "Aucun service au catalogue. Tapez un nom pour en créer un."
     }
   }
 }

@@ -38,7 +38,6 @@ export function PricingCard({
 
   const monthly = displayedMonthlyCents(plan, period);
   const charged = chargedCents(plan, period);
-  const isFree = plan.monthlyPriceCents === 0;
   const planName = t(`plans.${plan.id}.name`);
 
   return (
@@ -63,25 +62,21 @@ export function PricingCard({
         </p>
       </div>
 
+      {/* Plus de branche « gratuit » : le pack a été retiré du catalogue le
+          2026-08-26 (cf. `PLAN_IDS`), et tous les packs commercialisés portent
+          un prix. La garder aurait laissé un chemin que plus aucune donnée
+          n'emprunte. */}
       <div className="mt-5">
-        {isFree ? (
-          <p className="text-3xl font-semibold tracking-tight">{t("free")}</p>
-        ) : (
-          <>
-            <div className="flex items-baseline gap-1.5">
-              <span className="amount text-3xl font-semibold tracking-tight">
-                {formatMoney(monthly, locale)}
-              </span>
-              <span className="text-muted-foreground text-sm">
-                {t("perMonth")}
-              </span>
-            </div>
-            {period === "yearly" && (
-              <p className="text-muted-foreground mt-1 text-xs">
-                {t("billedYearly", { amount: formatMoney(charged, locale) })}
-              </p>
-            )}
-          </>
+        <div className="flex items-baseline gap-1.5">
+          <span className="amount text-3xl font-semibold tracking-tight">
+            {formatMoney(monthly, locale)}
+          </span>
+          <span className="text-muted-foreground text-sm">{t("perMonth")}</span>
+        </div>
+        {period === "yearly" && (
+          <p className="text-muted-foreground mt-1 text-xs">
+            {t("billedYearly", { amount: formatMoney(charged, locale) })}
+          </p>
         )}
       </div>
 

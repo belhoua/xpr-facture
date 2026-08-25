@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Cash\Controllers\CashChargesController;
 use App\Modules\Cash\Controllers\CashMovementDeleteController;
 use App\Modules\Cash\Controllers\CashMovementsController;
 use App\Modules\Cash\Controllers\CashMovementStoreController;
@@ -22,6 +23,11 @@ Route::middleware(['api', 'auth:sanctum', 'tenant'])
         Route::get('cash/movements', CashMovementsController::class)
             ->middleware('permission:'.Permission::CashView->value);
         Route::get('cash', CashMovementsController::class)
+            ->middleware('permission:'.Permission::CashView->value);
+        // AVANT `cash/movements/{movement}` n'aurait pas de sens ici — le
+        // segment diffère —, mais l'ordre reste celui du fichier : les routes
+        // fixes d'abord, les paramétrées ensuite.
+        Route::get('cash/charges', CashChargesController::class)
             ->middleware('permission:'.Permission::CashView->value);
         Route::post('cash/movements', CashMovementStoreController::class)
             ->middleware('permission:'.Permission::CashManage->value);

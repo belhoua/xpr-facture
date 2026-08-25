@@ -8,6 +8,7 @@ use App\Modules\Projects\Controllers\ProjectDeleteController;
 use App\Modules\Projects\Controllers\ProjectListController;
 use App\Modules\Projects\Controllers\ProjectShowController;
 use App\Modules\Projects\Controllers\ProjectStoreController;
+use App\Modules\Projects\Controllers\ProjectSummaryController;
 use App\Modules\Projects\Controllers\ProjectUpdateController;
 use App\Modules\Tenancy\Enums\Permission;
 use Illuminate\Support\Facades\Route;
@@ -27,6 +28,11 @@ Route::middleware(['api', 'auth:sanctum', 'tenant'])
     ->prefix('api/v1')
     ->group(function (): void {
         Route::get('projects', ProjectListController::class)
+            ->middleware('permission:'.Permission::ProjectsView->value);
+        // AVANT `projects/{project}` : Laravel retient la première route qui
+        // matche, et le paramètre libre capterait « summary » comme s'il
+        // s'agissait d'un identifiant — 404 sur un endpoint pourtant déclaré.
+        Route::get('projects/summary', ProjectSummaryController::class)
             ->middleware('permission:'.Permission::ProjectsView->value);
         Route::get('projects/{project}', ProjectShowController::class)
             ->middleware('permission:'.Permission::ProjectsView->value);

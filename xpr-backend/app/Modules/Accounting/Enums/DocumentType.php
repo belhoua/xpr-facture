@@ -253,6 +253,46 @@ enum DocumentType: string
     }
 
     /**
+     * La suppression reste-t-elle ouverte une fois le document CONVERTI ?
+     *
+     * Oui pour le DEVIS depuis le 2026-08-24, **à la demande expresse de
+     * l'exploitant** après que le coût lui a été exposé. Non pour tout autre
+     * type, et non pour les deux autres états terminaux du devis lui-même :
+     *
+     *  - `refused` n'a pas été demandé. Un devis refusé ne porte pourtant
+     *    aucune descendance, il serait donc moins risqué à supprimer que
+     *    celui-ci : la borne subsiste parce que personne ne l'a levée, pas
+     *    parce qu'elle protège quelque chose de plus ;
+     *  - `cancelled` reste fermé DÉLIBÉRÉMENT, ici comme à l'édition :
+     *    l'annulation est le seul état terminal issu d'un acte volontaire, et
+     *    supprimer la pièce effacerait la trace de l'annulation elle-même.
+     *
+     * ── Ce que cette levée coûte ──────────────────────────────────────────
+     *
+     * Un devis converti a produit une FACTURE, qui le désigne par
+     * `parent_document_id`. Le supprimer ne coupe pas le lien — le soft delete
+     * laisse la ligne en base et `Document::parent()` la résout désormais
+     * `withTrashed()` — mais il change ce que ce lien vaut :
+     *
+     *  - la facture continue d'afficher le numéro du devis dont elle découle,
+     *    y compris supprimé. C'est l'atténuation, et elle est volontaire : la
+     *    traçabilité invoquée pour fermer cette porte est ce qu'il fallait
+     *    préserver en l'ouvrant ;
+     *  - le devis, lui, n'est plus consultable par l'application. « Sur quelle
+     *    proposition cette facture repose-t-elle » reçoit un numéro, plus un
+     *    document. En litige, c'est moins ;
+     *  - la séquence `DEV-` prend un trou de plus, irréversible, comme toute
+     *    suppression numérotée depuis le 2026-08-07. Un devis n'atteste rien
+     *    auprès de la DGI — il propose — et un trou dans `DEV-` n'est
+     *    opposable à personne. Le même raisonnement ne vaudrait pas sur une
+     *    pièce fiscale, et c'est pourquoi la facture reste, elle, fermée ici.
+     */
+    public function deletableWhenConverted(): bool
+    {
+        return $this === self::Quote;
+    }
+
+    /**
      * Types dont une société dispose dès son inscription. Les autres (achats,
      * expédition) sont créés à la demande, quand le module correspondant est
      * livré : une séquence jamais utilisée n'a pas à exister.

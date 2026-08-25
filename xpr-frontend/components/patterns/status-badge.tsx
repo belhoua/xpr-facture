@@ -66,6 +66,23 @@ export function StatusBadge({
       data-status={status}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset whitespace-nowrap",
+        // ── À L'IMPRESSION ────────────────────────────────────────────────
+        //
+        // Le liseré d'écran est un `ring`, donc un `box-shadow` : il ne prend
+        // aucune place dans le flux et son rendu sur papier dépend du moteur —
+        // absent chez les uns, décalé d'un demi-pixel chez les autres, jamais
+        // aligné sur la boîte qu'il est censé cerner. Il cède la place à une
+        // vraie BORDURE, qui est une boîte et s'imprime comme telle.
+        //
+        // `border-current` et non un gris neutre : le texte et la pastille
+        // portent déjà la teinte du statut, un cadre gris les désolidariserait.
+        // La couleur du cadre reste donc celle de l'état qu'il encadre.
+        //
+        // 10 px et `leading-tight` : le tableau imprimé est plus dense que
+        // l'écran, et un badge à 12 px y pousse la ligne au point de faire
+        // déborder la colonne. La hauteur du badge suit son texte — il n'a
+        // aucune hauteur fixe à annuler.
+        "print:gap-1 print:border print:border-current print:text-[10px] print:leading-tight print:shadow-none",
         STATUS_COLOR[status],
         className,
       )}

@@ -1,7 +1,7 @@
 {
   "app": {
-    "name": "XPR Invoice",
-    "tagline": "Compliant, fast, Moroccan invoicing"
+    "name": "BCAT",
+    "tagline": "Bureau de Contrôle & Assistance Technique"
   },
   "common": {
     "loading": "Loading…",
@@ -150,7 +150,6 @@
     "yearlyHint": "2 months free",
     "perMonth": "/ month",
     "billedYearly": "billed {amount} per year",
-    "free": "Free",
     "mostPopular": "Most popular",
     "choose": "Choose {plan}",
     "current": "Current plan",
@@ -162,18 +161,6 @@
       "done": "Confirmation"
     },
     "plans": {
-      "free": {
-        "name": "Free",
-        "tagline": "To try compliant invoicing",
-        "features": [
-          "10 invoices per month",
-          "1 user",
-          "1 company",
-          "Standard invoice template",
-          "PDF export",
-          "Email support"
-        ]
-      },
       "standard": {
         "name": "Standard",
         "tagline": "For active micro-businesses and auto-entrepreneurs",
@@ -307,6 +294,7 @@
       "print": "Print / PDF",
       "edit": "Edit",
       "delete": "Delete",
+      "notDeletable": "Closed: cannot be deleted",
       "frozen": "Issued: read-only",
       "issue": "Issue",
       "cancel": "Cancel",
@@ -319,7 +307,11 @@
       "description": "This draft has no number: deleting it leaves no gap in the numbering.",
       "issuedTitle": "Delete document {number}?",
       "issuedDescription": "This document is issued and numbered. Deleting it leaves a permanent gap in the sequence: number {number} will not be reassigned.",
-      "confirm": "Delete"
+      "convertedTitle": "Delete quote {number}?",
+      "convertedDescription": "This quote produced an invoice. Deleting it leaves a permanent gap in the sequence — number {number} will not be reused — and the invoice will keep only that number: the quote itself will no longer be viewable.",
+      "confirm": "Delete",
+      "done": "Document {number} has been deleted.",
+      "doneDraft": "The draft has been deleted."
     },
     "cancelConfirm": {
       "title": "Cancel this document?",
@@ -340,6 +332,8 @@
       "partner": "Customer",
       "partnerPlaceholder": "Pick a customer…",
       "walkInClient": "New customer (type the name)",
+      "searchPartner": "Search a client…",
+      "noPartnerFound": "No client found.",
       "clientName": "Customer name",
       "clientPlaceholder": "Customer or company name",
       "subject": "Subject",
@@ -382,6 +376,8 @@
       "project": "Project",
       "noProject": "No project",
       "noProjectForClient": "This customer has no open project.",
+      "projectFromSubject": "Open a project from the subject",
+      "projectFromSubjectHint": "With no project selected, one is opened under the quote's subject. An existing project with the same name is reused rather than duplicated.",
       "numberEditHint": "Changing the number of a document already sent: the printed number will no longer match."
     },
     "totals": {
@@ -465,7 +461,7 @@
   },
   "situations": {
     "title": "Statements",
-    "description": "Tracking of amounts due and advances received",
+    "description": "Progress statements and invoices: amounts due, collected and outstanding",
     "searchPlaceholder": "Search by number, subject or client…",
     "status": {
       "sent": "Unpaid",
@@ -510,8 +506,8 @@
       "viewSituations": "View statements"
     },
     "empty": {
-      "title": "No statements",
-      "description": "Record a first statement to track the amounts your clients owe."
+      "title": "No document",
+      "description": "Record a progress statement, or turn a quote into an invoice, to track what your clients owe."
     },
     "delete": {
       "title": "Delete this statement?",
@@ -562,6 +558,7 @@
     "client": {
       "title": "Client statements",
       "description": "Situations and invoices linked to this client",
+      "printedOn": "Statement as at {date}",
       "wrongType": "This document is not a statement.",
       "empty": {
         "title": "No document found",
@@ -653,9 +650,21 @@
     "print": {
       "action": "Print contract",
       "back": "Back to conventions",
+      "customize": "Customise",
+      "editHint": "Click anywhere in the document to correct it. Edits are not saved and apply to this printout only.",
       "noCompany": "No active company: the letterhead cannot be composed.",
       "noDossierNotice": "File not submitted yet: the number will be filled in on the first submission.",
-      "noLots": "No inspected works listed."
+      "noLots": "No inspected works listed.",
+      "panel": {
+        "title": "Customise before printing",
+        "description": "These edits apply to this printout only: the saved convention is left untouched. They replace text typed directly into the document.",
+        "close": "Close the panel",
+        "ownerNote": "Note below the client block",
+        "ownerNotePlaceholder": "Represented by Mr …, acting as …",
+        "clauses": "Specific clauses and notes",
+        "clausesHint": "Printed above the signatures. Clear the field to print no clause at all.",
+        "reset": "Restore the saved data"
+      }
     }
   },
   "deposits": {
@@ -770,7 +779,7 @@
     "columns": {
       "reference": "Reference",
       "name": "Service",
-      "kind": "Type",
+      "kind": "Category",
       "unit": "Unit",
       "price": "Net price",
       "discount": "Discount",
@@ -874,7 +883,7 @@
   },
   "cash": {
     "title": "Cash registers",
-    "description": "Incoming payments tracked by client, invoice settlements included",
+    "description": "Cash journal: money in, money out and invoice settlements",
     "newEntry": "New entry",
     "balance": "Current balance",
     "inflow": "Money in",
@@ -884,14 +893,15 @@
       "date": "Date",
       "client": "Client",
       "label": "Description",
+      "charge": "Category",
       "method": "Method",
       "register": "Register",
       "amount": "Amount",
       "actions": "Actions"
     },
     "empty": {
-      "title": "No incoming payment",
-      "description": "Incoming payments and invoice settlements recorded over the period will appear here."
+      "title": "No movement",
+      "description": "Cash movements and invoice settlements recorded over the period will appear here."
     },
     "methods": {
       "cash": "Cash",
@@ -909,6 +919,9 @@
       "editDescription": "Correct the details of this cash movement.",
       "date": "Date",
       "label": "Description",
+      "charge": "Expense category",
+      "chargePlaceholder": "Rent, Office supplies, Travel costs…",
+      "chargeHint": "Optional. Categories already in use are suggested; you may type a new one.",
       "labelPlaceholder": "e.g. Invoice payment, office supplies…",
       "method": "Payment method",
       "register": "Register",
@@ -919,7 +932,9 @@
       "submit": "Save movement",
       "submitting": "Saving…",
       "client": "Client",
-      "noClient": "No client"
+      "noClient": "No client",
+      "searchClient": "Search a contact…",
+      "noClientFound": "No contact found."
     },
     "direction": {
       "inflow": "Inflow",
@@ -928,15 +943,20 @@
     "actions": {
       "open": "Open actions",
       "edit": "Edit",
-      "delete": "Delete"
+      "delete": "Delete",
+      "openInvoice": "Open invoice {number}",
+      "mirrored": "Not editable here"
     },
     "delete": {
       "title": "Delete this movement?",
       "description": "This action is permanent.",
+      "described": "“{label}” — {amount}. This cannot be undone.",
       "confirm": "Delete"
     },
     "inflowTotal": "Total incoming",
-    "readOnly": "Invoice settlement — correct it from the invoice"
+    "outflowTotal": "Total cash out",
+    "netBalance": "Net balance (cash on hand)",
+    "readOnly": "This entry comes from an invoice payment. Edit or delete it from that invoice's payments."
   },
   "users": {
     "title": "Users",
@@ -1041,7 +1061,7 @@
     "hero": {
       "badge": "Native DGI compliance",
       "title": "Moroccan invoicing, finally fast and compliant",
-      "subtitle": "XPR Invoice brings quotes, invoices, payments and cash management into one interface built for Moroccan small and medium businesses. A compliant invoice in under 60 seconds.",
+      "subtitle": "BCAT brings quotes, invoices, payments and cash management into one interface built for Moroccan small businesses and sole traders. A compliant invoice in under 60 seconds.",
       "ctaPrimary": "Create account",
       "ctaSecondary": "Sign in"
     },
@@ -1149,6 +1169,12 @@
       "allClients": "All clients",
       "allStatuses": "All statuses"
     },
+    "kpi": {
+      "count": "Total projects",
+      "inProgress": "In progress",
+      "incomplete": "To complete",
+      "completed": "Completed"
+    },
     "table": {
       "title": "Project",
       "client": "Client",
@@ -1168,6 +1194,15 @@
       "saveProgress": "Save progress",
       "addDeliverable": "Add a deliverable",
       "removeDeliverable": "Remove this deliverable"
+    },
+    "incomplete": {
+      "badge": "To complete",
+      "title": "Incomplete information",
+      "action": "Complete the project",
+      "missing": {
+        "description": "The project description is missing.",
+        "deliverable": "No delivered milestone has been recorded yet."
+      }
     },
     "detail": {
       "progressTitle": "Progress",
@@ -1196,7 +1231,9 @@
       "saving": "Saving…",
       "service": "Service (optional)",
       "noService": "None",
-      "noServiceYet": "No service recorded yet."
+      "searchService": "Search or create a service…",
+      "createService": "Create service “{name}”",
+      "noServiceYet": "No service in the catalogue yet. Type a name to create one."
     }
   }
 }

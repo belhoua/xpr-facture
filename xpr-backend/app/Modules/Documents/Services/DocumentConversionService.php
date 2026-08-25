@@ -94,6 +94,19 @@ final class DocumentConversionService
         $target = new Document([
             'type' => $type->value,
             'partner_id' => $source->partner_id,
+            // Le PROJET suit la pièce, au même titre que le tiers.
+            //
+            // Il ne suivait pas jusqu'au 2026-08-24 : une facture née d'un
+            // devis de chantier repartait sans rattachement. Elle disparaissait
+            // alors du filtre « chantier » de l'écran « situations par client »
+            // — et de ses quatre indicateurs, qui se calculent sur ce même
+            // filtre. Le devis restait rattaché, la facture non : le chantier
+            // affichait un montant proposé sans jamais montrer le facturé.
+            //
+            // La cohérence client → projet, elle, n'a pas à être revérifiée
+            // ici : le couple (partner_id, project_id) est repris tel quel
+            // d'un document que `DocumentWriteService` a déjà validé.
+            'project_id' => $source->project_id,
             'parent_document_id' => $source->id,
             'client_name' => $source->client_name,
             'client_ice' => $source->client_ice,

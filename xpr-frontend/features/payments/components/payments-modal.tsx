@@ -28,6 +28,8 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { cashKeys } from "@/features/cash/api/cash";
+import { dashboardKeys } from "@/features/dashboard/api/dashboard";
 import { documentKeys } from "@/features/documents/api/documents";
 import {
   createPayment,
@@ -110,14 +112,29 @@ export function PaymentsModal({
   });
 
   /**
-   * Après chaque écriture, DEUX caches sont invalidés : celui des règlements et
-   * celui des documents. Le second n'est pas cosmétique — le statut et le solde
-   * de la facture viennent de changer, et la liste qui reste ouverte derrière
-   * la modale afficherait sinon un badge périmé.
+   * Après chaque écriture, TROIS caches sont invalidés.
+   *
+   *  - les RÈGLEMENTS, évidemment ;
+   *  - les DOCUMENTS : le statut et le solde de la facture viennent de changer,
+   *    et la liste restée ouverte derrière la modale afficherait sinon un badge
+   *    périmé ;
+   *  - la CAISSE : le règlement y écrit son mouvement (`PaymentCashMirror`),
+   *    donc le total encaissé et le solde net de l'écran Caisses changent à
+   *    l'instant même ;
+   *  - le TABLEAU DE BORD (2026-08-26). Ses cartes « encaissé » et « restant
+   *    dû » se lisent sur les règlements, et « solde caisse » sur le mouvement
+   *    que celui-ci vient d'écrire. Une seule requête les alimente toutes :
+   *    invalider la racine suffit à remettre l'écran d'accueil d'aplomb.
+   *
+   * Invalidé depuis ICI et non depuis l'écran Caisses : c'est l'écriture qui
+   * sait ce qu'elle vient de changer. Un écran ne peut pas deviner qu'une
+   * modale ouverte ailleurs a modifié ce qu'il affiche.
    */
   const settle = async () => {
     await queryClient.invalidateQueries({ queryKey: paymentKeys.all });
     await queryClient.invalidateQueries({ queryKey: documentKeys.all });
+    await queryClient.invalidateQueries({ queryKey: cashKeys.all });
+    await queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     setActionError(null);
   };
 

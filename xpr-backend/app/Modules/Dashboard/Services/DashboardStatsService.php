@@ -10,6 +10,7 @@ use App\Modules\Documents\Enums\DocumentStatus;
 use App\Modules\Documents\Models\Document;
 use App\Modules\Partners\Enums\PartnerType;
 use App\Modules\Partners\Models\Partner;
+use App\Modules\Payments\Models\Payment;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -80,8 +81,40 @@ final class DashboardStatsService
             ->whereBetween('issued_at', [$previousFrom->toDateString(), $previousTo->toDateString()])
             ->sum('total_cents');
 
-        $collectedCents = (int) $invoices->whereIn('status', [DocumentStatus::Paid, DocumentStatus::Partial])->sum('total_cents');
-        $outstandingCents = (int) $invoices->whereIn('status', [DocumentStatus::Sent, DocumentStatus::Partial, DocumentStatus::Overdue])->sum('total_cents');
+        // ── ENCAISSÉ et RESTANT DÛ : des RÈGLEMENTS, pas des factures ──────
+        //
+        // Les deux sommaient le `total_cents` des factures selon leur STATUT
+        // jusqu'au 2026-08-26, ce qui donnait deux chiffres faux :
+        //
+        //  - « encaissé » retenait le total des factures payées OU
+        //    PARTIELLEMENT payées. Une facture de 240 MAD réglée à 140
+        //    affichait donc 240 encaissés — la carte annonçait de la
+        //    trésorerie qui n'était pas rentrée ;
+        //  - « restant dû » retenait, symétriquement, le total des factures
+        //    non soldées : 240 MAD dus sur une facture dont 140 avaient déjà
+        //    été payés.
+        //
+        // Les deux se lisent maintenant sur les RÈGLEMENTS RÉELLEMENT
+        // ENREGISTRÉS, ventilés par facture.
+        $collectedByInvoice = $this->collectedByInvoice($invoices);
+        $collectedCents = (int) $collectedByInvoice->sum();
+
+        // Le reste à payer est calculé PAR FACTURE puis additionné, et non par
+        // une soustraction globale « CA − encaissé ». Deux raisons :
+        //
+        //  1. les BROUILLONS entrent dans le chiffre d'affaires (la requête
+        //     ci-dessus les retient) mais ne sont dus par personne : ils sont
+        //     écartés ici. Sur un portefeuille qui en compte, les trois cartes
+        //     ne s'additionnent donc plus à la main — c'est voulu, un brouillon
+        //     n'est pas une créance ;
+        //  2. `max(0, …)` par ligne : une facture surpayée — trop-perçu, avoir
+        //     à établir — ne doit pas venir effacer le dû d'une autre.
+        $outstandingCents = (int) $invoices
+            ->reject(fn (Document $invoice): bool => $invoice->status === DocumentStatus::Draft)
+            ->sum(fn (Document $invoice): int => max(
+                0,
+                $invoice->total_cents - (int) $collectedByInvoice->get($invoice->id, 0),
+            ));
         $overdueRows = $invoices->where('status', DocumentStatus::Overdue);
         $overdueCents = (int) $overdueRows->sum('total_cents');
         $overdueCount = $overdueRows->count();
@@ -98,7 +131,7 @@ final class DashboardStatsService
             'outstandingCents' => $outstandingCents,
             'overdueCents' => $overdueCents,
             'overdueCount' => $overdueCount,
-            'revenueSeries' => $this->revenueSeries($invoices, $from, $to),
+            'revenueSeries' => $this->revenueSeries($invoices, $from, $to, $collectedByInvoice),
             'statusBreakdown' => $this->statusBreakdown($invoices),
             // Le répertoire n'est PAS borné à la période : « clients actifs »
             // désigne l'état courant du portefeuille, pas ceux qui ont facturé
@@ -204,11 +237,60 @@ final class DashboardStatsService
     }
 
     /**
+     * Somme des RÈGLEMENTS reçus, ventilée par facture.
+     *
+     * Une seule requête agrégée, en base : ramener les règlements ligne à ligne
+     * pour les additionner ici coûterait autant de lignes que d'encaissements,
+     * quand seul leur total par facture est utilisé.
+     *
+     * ── Les règlements, et non `documents.paid_cents` ─────────────────────
+     *
+     * La colonne existe et vaut la même chose : `PaymentWriteService::
+     * refreshSettlement()` la recalcule à chaque écriture. Mais coïncider n'est
+     * pas être la même chose — le jour où un import, une reprise de données ou
+     * une écriture concurrente les fait diverger, c'est la table des règlements
+     * qui dit la vérité, parce qu'elle porte les pièces. Même arbitrage que
+     * `DocumentService::SETTLED_CENTS_SQL`, pour l'écran des situations.
+     *
+     * Le soft delete de `Payment` écarte d'office les règlements retirés : un
+     * chèque revenu impayé ne doit plus compter dans l'encaissé.
+     *
      * @param  Collection<int, Document>  $invoices
+     * @return Collection<string, int> identifiant de facture → centimes reçus
+     */
+    private function collectedByInvoice(Collection $invoices): Collection
+    {
+        $ids = $invoices->pluck('id')->all();
+
+        if ($ids === []) {
+            /** @var Collection<string, int> $empty */
+            $empty = new Collection;
+
+            return $empty;
+        }
+
+        /** @var Collection<string, int> $totals */
+        $totals = Payment::query()
+            ->whereIn('invoice_id', $ids)
+            ->groupBy('invoice_id')
+            ->selectRaw('invoice_id, SUM(amount_cents) AS collected')
+            ->pluck('collected', 'invoice_id')
+            ->map(static fn (mixed $value): int => (int) $value);
+
+        return $totals;
+    }
+
+    /**
+     * @param  Collection<int, Document>  $invoices
+     * @param  Collection<string, int>  $collectedByInvoice
      * @return list<array{month: string, invoicedCents: int, collectedCents: int}>
      */
-    private function revenueSeries(Collection $invoices, Carbon $from, Carbon $to): array
-    {
+    private function revenueSeries(
+        Collection $invoices,
+        Carbon $from,
+        Carbon $to,
+        Collection $collectedByInvoice,
+    ): array {
         $series = [];
         $cursor = $from->copy()->startOfMonth();
 
@@ -221,9 +303,15 @@ final class DashboardStatsService
             $series[] = [
                 'month' => $monthKey,
                 'invoicedCents' => (int) $monthRows->sum('total_cents'),
-                'collectedCents' => (int) $monthRows
-                    ->whereIn('status', [DocumentStatus::Paid, DocumentStatus::Partial])
-                    ->sum('total_cents'),
+                // Même correction que la carte « encaissé », et pour la même
+                // raison : la courbe sommait le total des factures payées ou
+                // partielles. Facturé et encaissé se superposaient donc dès
+                // qu'un mois n'avait que des factures soldées, et le graphique
+                // « facturé vs encaissé » ne montrait plus aucun écart — celui
+                // qu'on vient précisément y chercher.
+                'collectedCents' => (int) $monthRows->sum(
+                    fn (Document $invoice): int => (int) $collectedByInvoice->get($invoice->id, 0),
+                ),
             ];
 
             $cursor->addMonth();

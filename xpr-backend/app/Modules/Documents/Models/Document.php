@@ -140,11 +140,27 @@ final class Document extends Model
     /**
      * Document dont celui-ci découle : le devis pour une facture convertie.
      *
+     * `withTrashed()` depuis le 2026-08-24, date à laquelle la suppression d'un
+     * devis CONVERTI a été ouverte (cf. `DocumentType::deletableWhenConverted()`).
+     * Sans lui, supprimer le devis ferait disparaître de sa facture la mention
+     * de ce dont elle découle : `parent_document_id` continuerait de porter
+     * l'identifiant, mais la relation ne résoudrait plus rien et l'écran
+     * afficherait une facture sans origine.
+     *
+     * La ligne, elle, est toujours là — le dépôt ne pratique que le soft delete
+     * sur les documents. Aller la chercher est donc le seul moyen de préserver
+     * la traçabilité qui servait précisément d'argument pour interdire cette
+     * suppression.
+     *
+     * La portée reste la PARENTÉ : `children()` n'est pas modifiée. Une liste
+     * de documents issus de celui-ci doit continuer d'ignorer les pièces
+     * supprimées, sans quoi chaque écran devrait filtrer lui-même.
+     *
      * @return BelongsTo<self, $this>
      */
     public function parent(): BelongsTo
     {
-        return $this->belongsTo(self::class, 'parent_document_id');
+        return $this->belongsTo(self::class, 'parent_document_id')->withTrashed();
     }
 
     /**
