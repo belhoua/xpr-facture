@@ -6,6 +6,7 @@ namespace App\Modules\Tenancy\Providers;
 
 use App\Modules\Tenancy\Console\CreateAdminCommand;
 use App\Modules\Tenancy\Console\PurgeDataCommand;
+use App\Modules\Tenancy\Console\SyncLegalIdentityCommand;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -26,7 +27,11 @@ final class TenancyServiceProvider extends ServiceProvider
         // Enregistrées seulement en CLI : une commande n'a rien à faire dans le
         // conteneur d'une requête HTTP, la purge moins que toute autre.
         if ($this->app->runningInConsole()) {
-            $this->commands([CreateAdminCommand::class, PurgeDataCommand::class]);
+            $this->commands([
+                CreateAdminCommand::class,
+                PurgeDataCommand::class,
+                SyncLegalIdentityCommand::class,
+            ]);
         }
 
         // Limite par société ET par utilisateur (§10) : une invitation en

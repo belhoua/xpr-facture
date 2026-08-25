@@ -174,7 +174,9 @@ portant l'ICE d'une entreprise tierce n'est pas un défaut d'affichage mais un
 faux document. Les coordonnées de l'exploitant sont posées par
 `AdminSeeder::fillLegalIdentity` et par la migration
 `2026_08_15_000001_fill_bcat_legal_identity`, puis modifiables depuis les
-paramètres.
+paramètres. Ces deux-là ne **comblent que les vides** ; pour corriger une
+mention déjà renseignée mais fausse, `php artisan xpr:sync-legal-identity`
+(cf. `docs/architecture/08-exploitation.md`).
 
 **Écart au modèle de la charte** : la ligne 1 imprime le RC **sans la ville du
 tribunal**, alors que `companies.rc_city` la porte (« Oujda ») et que
