@@ -240,11 +240,17 @@ if [ ! -f "$ENV_PROD" ]; then
     log "génération de ${ENV_PROD} (APP_KEY et mots de passe DB aléatoires)"
     cp "/srv/bcat/repo/xpr-infrastructure/.env.prod.example" "$ENV_PROD"
     APP_KEY="base64:$(openssl rand -base64 32)"
+    # Un seul mot de passe : DB_USERNAME vaut encore DB_OWNER_USERNAME
+    # (xpr_owner) dans .env.prod.example — le rôle xpr_app séparé n'est pas
+    # câblé côté Laravel (reliquat P0-09, cf. CLAUDE.md §15). Générer deux
+    # secrets distincts pour DB_OWNER_PASSWORD et DB_PASSWORD casserait la
+    # connexion : Laravel s'authentifierait en xpr_owner avec le mot de passe
+    # d'un autre rôle. À séparer réellement le jour où DB_USERNAME bascule
+    # sur xpr_app.
     DB_OWNER_PW="$(openssl rand -hex 24)"
-    DB_APP_PW="$(openssl rand -hex 24)"
     sed -i "s#^APP_KEY=.*#APP_KEY=${APP_KEY}#" "$ENV_PROD"
     sed -i "s#^DB_OWNER_PASSWORD=.*#DB_OWNER_PASSWORD=${DB_OWNER_PW}#" "$ENV_PROD"
-    sed -i "s#^DB_PASSWORD=.*#DB_PASSWORD=${DB_APP_PW}#" "$ENV_PROD"
+    sed -i "s#^DB_PASSWORD=.*#DB_PASSWORD=${DB_OWNER_PW}#" "$ENV_PROD"
     sed -i "s#votre-domaine\.ma#${DOMAIN}#g" "$ENV_PROD"
     chown "${DEPLOY_USER}:${DEPLOY_USER}" "$ENV_PROD"
     chmod 600 "$ENV_PROD"
