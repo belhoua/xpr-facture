@@ -224,7 +224,13 @@ if [ ! -d /srv/bcat/repo/.git ]; then
         exit 1
     fi
 else
-    log "dépôt déjà cloné dans /srv/bcat/repo, on saute"
+    # Un clone précédent (potentiellement raté plus loin, ou juste antérieur à
+    # un push) peut exister sans être à jour — sauter silencieusement laisserait
+    # provisionner avec du code obsolète. Même logique que deploy.sh : fetch +
+    # reset --hard, jamais de merge sur un checkout qui n'est pas un espace de
+    # travail.
+    log "dépôt déjà présent dans /srv/bcat/repo — mise à jour vers ${BRANCH}"
+    su - "$DEPLOY_USER" -c "cd /srv/bcat/repo && git fetch --quiet origin '${BRANCH}' && git reset --hard 'origin/${BRANCH}'"
 fi
 
 # --- 9. .env.prod — généré avec des secrets forts, jamais commité --------
