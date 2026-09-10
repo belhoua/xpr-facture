@@ -10,6 +10,22 @@ const backendOrigin = process.env.BACKEND_ORIGIN ?? "http://localhost:8080";
 
 const nextConfig: NextConfig = {
   /**
+   * Build autoportant (server.js + node_modules strictement nécessaires) :
+   * c'est ce qui est transféré sur le VPS et lancé par PM2
+   * (xpr-frontend/ecosystem.config.js), sans `npm install` ni `next build`
+   * sur place — la boîte n'a qu'1 vCPU/4 Go, un build sur place concurrent au
+   * reste de la stack y ferait facilement de l'OOM.
+   *
+   * Sur ce déploiement précis, Nginx-hôte route /api/* et /sanctum/*
+   * directement vers le conteneur Laravel (cf. xpr-infrastructure/nginx/bcat.conf)
+   * AVANT que la requête n'atteigne Next : le rewrite ci-dessous ne s'exécute
+   * donc jamais pour ces deux préfixes en production. Il reste utile tel quel
+   * pour le dev local et la démo Ngrok (commentaire plus bas), où c'est Next
+   * qui tient le rôle de proxy.
+   */
+  output: "standalone",
+
+  /**
    * Masque la pastille « N » que Next affiche en bas de page en développement.
    *
    * Ce n'est PAS un composant du layout : Next l'injecte lui-même sous
