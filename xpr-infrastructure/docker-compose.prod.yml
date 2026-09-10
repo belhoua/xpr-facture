@@ -122,6 +122,17 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # Le HEALTHCHECK hérité de l'image FrankenPHP (`curl localhost:2019`,
+    # l'API d'admin de Caddy) ne s'applique qu'à `app` : ce conteneur ne lance
+    # ni Caddy ni FrankenPHP, rien n'écoute jamais sur 2019 — d'où un
+    # « unhealthy » permanent malgré un worker qui tourne normalement. On le
+    # remplace par un check propre au process réellement supervisé ici.
+    healthcheck:
+      test: ["CMD-SHELL", "php artisan horizon:status | grep -q running"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     deploy:
       resources:
         limits:
