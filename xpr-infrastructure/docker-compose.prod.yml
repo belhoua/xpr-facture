@@ -1,0 +1,148 @@
+name: bcat-prod
+
+# Environnement de PRODUCTION — VPS KVM 1 (1 vCPU, 4 Go RAM), self-hosted.
+# Le frontend Next.js NE tourne PAS ici : il est géré par PM2 directement sur
+# l'hôte (cf. xpr-frontend/ecosystem.config.js) et Nginx-hôte fait le
+# reverse-proxy final (cf. xpr-infrastructure/nginx/bcat.conf).
+#
+# Budget mémoire (4096 Mo) — à garder en tête à chaque ajustement :
+#   postgres 768 + redis 256 + gotenberg 768 + app 512 + horizon 384
+#   = 2688 Mo conteneurs, + PM2 Next (≤400) + Nginx hôte (~50) + OS/Docker
+#   daemon (~500) ≈ 3638 Mo. Marge volontairement courte : voir la recommandation
+#   de swap dans deploy.sh. Chaque limite ci-dessous est un plafond dur — un
+#   service qui le dépasse est tué par le cgroup et redémarré (restart policy),
+#   jamais un OOM-kill aveugle du noyau sur un autre process du VPS.
+#
+# `deploy.resources.limits` est appliqué par `docker compose` (Compose V2, le
+# plugin `docker compose`, pas le vieux binaire `docker-compose` v1) même hors
+# Swarm depuis la Compose Specification. Vérifier `docker compose version`
+# (>= v2.20) sur le VPS avant le premier déploiement.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-bcat}
+      POSTGRES_USER: ${DB_OWNER_USERNAME:-xpr_owner}
+      POSTGRES_PASSWORD: ${DB_OWNER_PASSWORD:?DB_OWNER_PASSWORD manquant}
+      # Rôle applicatif sans BYPASSRLS, créé par l'init (cf. docker/postgres/init).
+      XPR_APP_USER: ${DB_USERNAME:-xpr_app}
+      XPR_APP_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant}
+    # Réglages conservateurs : un cgroup à 768M n'empêche pas Postgres de
+    # TENTER d'allouer plus (shared_buffers + max_connections * work_mem) et de
+    # se faire tuer en boucle. On borde donc aussi côté configuration.
+    command: >
+      postgres
+      -c shared_buffers=192MB
+      -c effective_cache_size=384MB
+      -c max_connections=50
+      -c work_mem=4MB
+      -c maintenance_work_mem=32MB
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_OWNER_USERNAME:-xpr_owner} -d ${DB_DATABASE:-bcat}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+    restart: unless-stopped
+    networks: [bcat]
+
+  redis:
+    image: redis:7-alpine
+    # allkeys-lru : Redis ne sert ici que de cache + file d'attente Horizon,
+    # aucune clé n'a vocation à être irremplaçable — évincer la moins
+    # récemment utilisée plutôt que refuser l'écriture (policy par défaut) est
+    # le bon compromis sur 256 Mo. appendonly reste actif : perdre les jobs
+    # en vol (relances, PDF) à un redémarrage serait plus coûteux que le Mo
+    # de disque que ça consomme.
+    command: redis-server --maxmemory 200mb --maxmemory-policy allkeys-lru --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    restart: unless-stopped
+    networks: [bcat]
+
+  app:
+    build:
+      context: ../xpr-backend
+      dockerfile: Dockerfile
+    env_file: .env.prod
+    environment:
+      PORT: "8080"
+    volumes:
+      - laravel_storage:/app/storage/app
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      gotenberg:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    restart: unless-stopped
+    networks: [bcat]
+
+  horizon:
+    build:
+      context: ../xpr-backend
+      dockerfile: Dockerfile
+    env_file: .env.prod
+    # Conteneur distinct de `app`, donc son propre bootstrap/cache : on y
+    # rejoue config:cache pour ne pas tourner en config non mise en cache.
+    # Idempotent, sans effet sur les migrations (déjà jouées par l'entrypoint
+    # de `app`). `exec` avant `php artisan horizon` : sans lui, `sh` reste
+    # PID 1 et ne relaie pas SIGTERM à son enfant — `horizon:terminate` et
+    # `docker compose stop` attendraient le timeout puis un SIGKILL au lieu
+    # d'un arrêt propre (jobs en cours finis avant sortie).
+    entrypoint: []
+    command: sh -c "php artisan config:cache && exec php artisan horizon"
+    volumes:
+      - laravel_storage:/app/storage/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    restart: unless-stopped
+    networks: [bcat]
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+    restart: unless-stopped
+    networks: [bcat]
+
+volumes:
+  postgres_data:
+  redis_data:
+  laravel_storage:
+
+networks:
+  bcat:
+    driver: bridge

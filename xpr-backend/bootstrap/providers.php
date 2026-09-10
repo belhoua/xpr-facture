@@ -14,9 +14,14 @@ use App\Modules\Projects\Providers\ProjectsServiceProvider;
 use App\Modules\Services\Providers\ServicesServiceProvider;
 use App\Modules\Tenancy\Providers\TenancyServiceProvider;
 use App\Providers\AppServiceProvider;
+use App\Providers\HorizonServiceProvider;
 
 return [
     AppServiceProvider::class,
+    // Package Horizon absent en environnement sans Redis (Vercel/Render
+    // gratuit) : ce provider ne fait rien de dangereux dans ce cas, mais
+    // n'a de sens qu'avec QUEUE_CONNECTION=redis (cf. VPS prod).
+    HorizonServiceProvider::class,
     AuthenticationServiceProvider::class,
     TenancyServiceProvider::class,
     AccountingServiceProvider::class,

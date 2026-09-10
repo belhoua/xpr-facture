@@ -4,6 +4,7 @@
 .idea/
 .vscode/
 xpr-infrastructure/.env
+xpr-infrastructure/.env.prod
 
 # Modèles de documents fournis par le client (docs/*.docx).
 #
