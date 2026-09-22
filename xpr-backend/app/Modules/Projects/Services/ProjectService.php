@@ -125,7 +125,11 @@ final class ProjectService
      */
     public function paginate(array $filters): LengthAwarePaginator
     {
-        $perPage = min(max($filters['perPage'] ?? 25, 1), 100);
+        // 5000 et non 100 depuis le 2026-09-22 : « perPage=all » doit renvoyer
+        // tous les chantiers plutôt que de les découper (cf. DocumentService,
+        // même changement, même raison). Plafond réel conservé — jamais
+        // PHP_INT_MAX — pour borner le pire cas sur le VPS 1 vCPU (§16).
+        $perPage = min(max($filters['perPage'] ?? 25, 1), 5000);
 
         return $this->filtered($filters)
             ->with(['partner', 'service', 'deliverables'])

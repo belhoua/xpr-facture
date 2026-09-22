@@ -29,6 +29,9 @@ export async function fetchDocuments(
       type: filters.type,
       search: filters.search || undefined,
       status: filters.status === "all" ? undefined : filters.status,
+      // Pas de découpage à l'écran : l'API borne quand même à sa limite
+      // haute (DocumentService::paginate()).
+      perPage: "all",
     },
   });
 

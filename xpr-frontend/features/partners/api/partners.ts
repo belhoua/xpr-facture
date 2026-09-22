@@ -29,7 +29,9 @@ export async function fetchPartners(
       // l'envoie pas, sans quoi l'API rejetterait une valeur d'enum inconnue.
       type: filters.type && filters.type !== "all" ? filters.type : undefined,
       search: filters.search?.trim() || undefined,
-      perPage: 100,
+      // Pas de découpage à l'écran : l'API borne quand même à sa limite
+      // haute (PartnerService::paginate()).
+      perPage: "all",
     },
   });
 

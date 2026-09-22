@@ -21,7 +21,7 @@ final class PartnerListController
             // `has` et non `boolean` : sans le paramètre, on ne filtre pas —
             // `boolean()` rendrait false et masquerait les fiches actives.
             'active' => $request->has('active') ? $request->boolean('active') : null,
-            'perPage' => $request->integer('perPage', 25),
+            'perPage' => $this->resolvePerPage($request),
         ]);
 
         return response()->json([
@@ -32,5 +32,19 @@ final class PartnerListController
                 'perPage' => $paginator->perPage(),
             ],
         ]);
+    }
+
+    /**
+     * `perPage=all` demande l'intégralité du répertoire — pas de découpage à
+     * l'écran. `PartnerService::paginate()` la borne quand même à sa limite
+     * haute (§16 CLAUDE.md, VPS 1 vCPU) : jamais une valeur réellement illimitée.
+     */
+    private function resolvePerPage(Request $request): int
+    {
+        $raw = $request->query('perPage');
+
+        return is_string($raw) && mb_strtolower($raw) === 'all'
+            ? PHP_INT_MAX
+            : $request->integer('perPage', 25);
     }
 }

@@ -45,7 +45,15 @@ function toParams(filters: ProjectFilters): Record<string, string | undefined> {
 export async function fetchProjects(
   filters: ProjectFilters,
 ): Promise<ProjectList> {
-  const { data } = await api.get("/projects", { params: toParams(filters) });
+  const { data } = await api.get("/projects", {
+    params: {
+      ...toParams(filters),
+      // Pas de découpage à l'écran : l'API borne quand même à sa limite
+      // haute (ProjectService::paginate()). Absent de `toParams()`, partagée
+      // avec /projects/summary, qui n'est pas paginé.
+      perPage: "all",
+    },
+  });
 
   return projectListSchema.parse(data);
 }
