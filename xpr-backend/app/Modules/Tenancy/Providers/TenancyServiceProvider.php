@@ -7,7 +7,6 @@ namespace App\Modules\Tenancy\Providers;
 use App\Modules\Tenancy\Console\CreateAdminCommand;
 use App\Modules\Tenancy\Console\PurgeDataCommand;
 use App\Modules\Tenancy\Console\ResyncSequencesCommand;
-use App\Modules\Tenancy\Console\SyncLegalIdentityCommand;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -32,7 +31,6 @@ final class TenancyServiceProvider extends ServiceProvider
                 CreateAdminCommand::class,
                 PurgeDataCommand::class,
                 ResyncSequencesCommand::class,
-                SyncLegalIdentityCommand::class,
             ]);
         }
 
