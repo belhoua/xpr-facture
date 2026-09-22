@@ -231,7 +231,14 @@ final class DocumentService
     {
         $query = $this->filtered($filters);
 
-        $perPage = min(max($filters['perPage'] ?? 25, 1), 100);
+        // 5000 et non 100 depuis le 2026-09-22, à la demande de l'exploitant :
+        // « perPage=all » (DocumentListController::resolvePerPage()) doit
+        // renvoyer l'historique complet plutôt que de découper à l'écran. Le
+        // plafond reste néanmoins réel — jamais PHP_INT_MAX — pour borner le
+        // pire cas sur le VPS 1 vCPU (§16 CLAUDE.md) : au rythme actuel de
+        // BCAT (quelques centaines de pièces par an), il ne sera pas atteint
+        // avant des années.
+        $perPage = min(max($filters['perPage'] ?? 25, 1), 5000);
 
         // Les RÈGLEMENTS sont chargés, pas les lignes de détail : l'écran
         // « situations par client » affiche l'historique d'encaissement de

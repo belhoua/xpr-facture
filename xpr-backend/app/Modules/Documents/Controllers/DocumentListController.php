@@ -36,7 +36,7 @@ final class DocumentListController
                 ?: ($request->string('project_id')->toString() ?: null),
             'from' => $request->string('from')->toString() ?: null,
             'to' => $request->string('to')->toString() ?: null,
-            'perPage' => $request->integer('perPage', 25),
+            'perPage' => $this->resolvePerPage($request),
             'page' => $request->integer('page', 1),
         ]);
 
@@ -48,5 +48,21 @@ final class DocumentListController
                 'perPage' => $paginator->perPage(),
             ],
         ]);
+    }
+
+    /**
+     * `perPage=all` demande l'intégralité des lignes — pas de découpage à
+     * l'écran. On ne renvoie pas une valeur réellement illimitée pour autant :
+     * `DocumentService::paginate()` la borne quand même à sa limite haute, seul
+     * garde-fou entre « tout afficher » et une requête qui charge une société
+     * entière en mémoire sur le VPS 1 vCPU (§16 CLAUDE.md).
+     */
+    private function resolvePerPage(Request $request): int
+    {
+        $raw = $request->query('perPage');
+
+        return is_string($raw) && mb_strtolower($raw) === 'all'
+            ? PHP_INT_MAX
+            : $request->integer('perPage', 25);
     }
 }
