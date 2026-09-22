@@ -223,6 +223,32 @@ it('n autorise pas une société à heurter le numéro d une AUTRE', function ()
     expect(Document::query()->where('number', $ofA)->count())->toBe(1);
 });
 
+it('fait avancer le compteur quand la renumérotation dépasse la séquence', function (): void {
+    [$user] = workspaceAccount();
+
+    $created = actingAs($user)
+        ->postJson('/api/v1/documents', renumberablePayload(['type' => 'quote']))
+        ->assertCreated()
+        ->json();
+
+    $year = substr((string) $created['number'], 4, 4);
+
+    // Reproduit le scénario signalé : un devis renuméroté loin devant la
+    // séquence (import, correction manuelle) ne doit plus jamais être heurté
+    // par l'automatique — DocumentNumberService::syncFromManualNumber().
+    actingAs($user)
+        ->patchJson("/api/v1/documents/{$created['id']}", ['number' => "DEV-{$year}-0150"])
+        ->assertOk()
+        ->assertJsonPath('number', "DEV-{$year}-0150");
+
+    $next = actingAs($user)
+        ->postJson('/api/v1/documents', renumberablePayload(['type' => 'quote']))
+        ->assertCreated()
+        ->json('number');
+
+    expect($next)->toBe("DEV-{$year}-0151");
+});
+
 it('rend un numéro libéré réutilisable par une autre pièce', function (): void {
     [$user] = workspaceAccount();
 

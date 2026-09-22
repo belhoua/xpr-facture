@@ -110,6 +110,58 @@ final class DocumentNumberService
     }
 
     /**
+     * Fait avancer le compteur au-delà d'un numéro attribué HORS séquence —
+     * saisi à la main à la création, ou posé par une renumérotation
+     * (`DocumentType::allowsNumberEdit()`).
+     *
+     * Les deux levées documentées dans `DocumentWriteService::resolveNumber()`
+     * et `DocumentType::allowsNumberEdit()` créent le même risque : le
+     * compteur reste où il était pendant qu'un numéro plus haut circule déjà,
+     * et l'automatique finit par le heurter — pas au moment de la saisie
+     * manuelle, mais des mois plus tard, sur un document sans rapport. Cette
+     * méthode ferme ce risque en gardant une seule invariante : le compteur
+     * n'attribuera plus jamais un rang déjà VU sur cette séquence, qu'il ait
+     * été posé par elle ou à côté d'elle.
+     *
+     * Ce qu'elle NE fait PAS, volontairement :
+     *  - elle ne comble AUCUN trou. Saisir « 0150 » avance le compteur à 151 ;
+     *    les rangs 48 à 149 restent des trous si personne ne les a occupés —
+     *    exactement le coût déjà assumé par les deux levées ci-dessus ;
+     *  - elle ne recule JAMAIS le compteur. Un numéro dont le rang est
+     *    INFÉRIEUR au `next_number` courant ne change rien — c'est le cas
+     *    ordinaire d'une renumérotation qui libère un numéro bas pour qu'une
+     *    autre pièce le reprenne (§3, test « rend un numéro libéré
+     *    réutilisable »).
+     *
+     * Silencieuse quand le numéro ne suit pas le format de la séquence
+     * (`Sequence::parseNumber()` rend alors `null`) : rien à synchroniser sur
+     * un numéro qu'on ne peut pas rattacher à un rang.
+     */
+    public function syncFromManualNumber(DocumentType $type, Carbon $issuedAt, string $number): void
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new NumberingOutsideTransaction($type);
+        }
+
+        $fiscalYear = FiscalYear::query()->covering($issuedAt)->first();
+
+        if (! $fiscalYear instanceof FiscalYear) {
+            return;
+        }
+
+        $sequence = $this->lockSequence($type, $fiscalYear);
+        $rank = $sequence->parseNumber($number, $fiscalYear);
+
+        if ($rank === null || $rank < $sequence->next_number) {
+            return;
+        }
+
+        Sequence::query()
+            ->whereKey($sequence->id)
+            ->update(['next_number' => $rank + 1, 'updated_at' => now()]);
+    }
+
+    /**
      * Numéro qui SERAIT attribué, sans rien consommer — pour un aperçu dans
      * l'interface. Ne jamais persister ce résultat : entre l'aperçu et la
      * validation, une autre validation peut passer devant.

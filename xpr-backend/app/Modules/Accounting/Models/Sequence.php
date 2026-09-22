@@ -74,6 +74,46 @@ final class Sequence extends Model
         );
     }
 
+    /**
+     * Rang numérique porté par un numéro déjà attribué, ou `null` s'il ne suit
+     * pas le format de cette séquence.
+     *
+     * Contrepartie de `formatNumber()` : reconstitue le motif attendu pour cet
+     * exercice (mêmes substitutions {YYYY}/{YY}/{MM}) et capture le groupe de
+     * chiffres. `\d+` et non une largeur figée sur celle du format : un numéro
+     * qui a dépassé le remplissage (10000 sur un format à 4 zéros) reste
+     * reconnu, `formatNumber()` ne tronque jamais, il ne fait qu'étendre.
+     *
+     * Un numéro saisi à la main hors de ce format (préfixe différent,
+     * millésime d'un autre exercice) rend `null` : on ne devine pas un rang
+     * pour un numéro qu'on ne sait pas rattacher à cette séquence.
+     */
+    public function parseNumber(string $number, FiscalYear $fiscalYear): ?int
+    {
+        $pattern = preg_quote($this->format, '/');
+        $pattern = str_replace(
+            [preg_quote('{YYYY}', '/'), preg_quote('{YY}', '/'), preg_quote('{MM}', '/')],
+            [
+                preg_quote($fiscalYear->numberingYear(), '/'),
+                preg_quote(substr($fiscalYear->numberingYear(), -2), '/'),
+                preg_quote($fiscalYear->starts_on->format('m'), '/'),
+            ],
+            $pattern,
+        );
+
+        $pattern = preg_replace('/\\\{0+\\\}/', '(\d+)', $pattern, 1);
+
+        if (! is_string($pattern) || ! str_contains($pattern, '(\d+)')) {
+            return null;
+        }
+
+        if (preg_match('/^'.$pattern.'$/', $number, $matches) !== 1) {
+            return null;
+        }
+
+        return (int) $matches[1];
+    }
+
     protected function casts(): array
     {
         return [

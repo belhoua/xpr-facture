@@ -187,6 +187,70 @@ it('ouvre un exercice sur l année civile à la création d une société', func
         ->and(Sequence::query()->count())->toBe(3);
 });
 
+// ── Synchronisation depuis un numéro posé HORS séquence ─────────────────────
+// (saisie manuelle à la création, renumérotation — DocumentWriteService)
+
+it('fait avancer le compteur derrière un numéro plus haut', function (): void {
+    numberingCompany();
+    $date = Carbon::today();
+    $year = $date->format('Y');
+
+    expect(allocate(DocumentType::Quote, $date))->toBe("DEV-{$year}-0001");
+
+    DB::transaction(function () use ($date, $year): void {
+        app(DocumentNumberService::class)->syncFromManualNumber(
+            DocumentType::Quote,
+            $date,
+            "DEV-{$year}-0150",
+        );
+    });
+
+    // L'automatique reprend APRÈS le numéro posé à côté d'elle, sans le heurter.
+    expect(allocate(DocumentType::Quote, $date))->toBe("DEV-{$year}-0151");
+});
+
+it('ne recule jamais le compteur sur un numéro plus bas', function (): void {
+    numberingCompany();
+    $date = Carbon::today();
+    $year = $date->format('Y');
+
+    allocate(DocumentType::Quote, $date);
+    allocate(DocumentType::Quote, $date);
+    allocate(DocumentType::Quote, $date);
+
+    DB::transaction(function () use ($date, $year): void {
+        // Rang 1, déjà dépassé par le compteur à 4 : ne doit rien changer — le
+        // test « rend un numéro libéré réutilisable » de DocumentRenumberingTest
+        // dépend de cette non-régression.
+        app(DocumentNumberService::class)->syncFromManualNumber(
+            DocumentType::Quote,
+            $date,
+            "DEV-{$year}-0001",
+        );
+    });
+
+    expect(allocate(DocumentType::Quote, $date))->toBe("DEV-{$year}-0004");
+});
+
+it('ignore un numéro qui ne suit pas le format de la séquence', function (): void {
+    numberingCompany();
+    $date = Carbon::today();
+    $year = $date->format('Y');
+
+    allocate(DocumentType::Quote, $date);
+
+    DB::transaction(function () use ($date): void {
+        // Ni le préfixe DEV- ni le millésime attendu : rien à rattacher à un rang.
+        app(DocumentNumberService::class)->syncFromManualNumber(
+            DocumentType::Quote,
+            $date,
+            'BON-ACHAT-42',
+        );
+    });
+
+    expect(allocate(DocumentType::Quote, $date))->toBe("DEV-{$year}-0002");
+});
+
 it('interdit deux exercices qui se chevauchent', function (): void {
     numberingCompany();
     $today = Carbon::today();

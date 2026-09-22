@@ -291,6 +291,13 @@ final class DocumentWriteService
         ?string $manualNumber,
     ): string {
         if ($manualNumber !== null) {
+            // Le compteur ne DOIT PAS avancer sur un numéro saisi (cf. le
+            // docblock ci-dessus) : il doit en revanche ne plus jamais en
+            // attribuer un plus bas, sans quoi l'automatique heurte ce numéro
+            // des mois plus tard, sur une pièce sans rapport
+            // (DocumentNumberService::syncFromManualNumber()).
+            $this->numbers->syncFromManualNumber($document->type, $issuedAt, $manualNumber);
+
             return $manualNumber;
         }
 
@@ -431,6 +438,15 @@ final class DocumentWriteService
         }
 
         $document->number = $number;
+
+        // Même garantie qu'à la création : la renumérotation ne comble pas les
+        // trous qu'elle crée (assumé par `allowsNumberEdit()`), mais elle ne
+        // doit plus laisser l'automatique retomber sur ce numéro plus tard.
+        $this->numbers->syncFromManualNumber(
+            $document->type,
+            $document->issued_at ?? Carbon::now(),
+            $number,
+        );
     }
 
     /**
